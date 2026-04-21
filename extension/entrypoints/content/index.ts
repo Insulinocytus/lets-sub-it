@@ -1,0 +1,164 @@
+import {
+  BRIDGE_READY_ATTRIBUTE,
+  LOAD_EVENT,
+  READY_EVENT,
+} from '../page-bridge';
+import { getSelectedMode, getSubtitleUrlForMode } from '../../src/lib/subtitleState';
+import { extractVideoId } from '../../src/lib/youtube';
+import type { LocalCacheEntry, SubtitleLoadPayload } from '../../src/types';
+
+export { BRIDGE_READY_ATTRIBUTE, LOAD_EVENT, READY_EVENT } from '../page-bridge';
+
+export function injectPageBridge(
+  doc: Document = document,
+  runtime: Pick<typeof chrome.runtime, 'getURL'> = chrome.runtime,
+) {
+  const existing = doc.querySelector('script[data-lets-sub-it-bridge]');
+  if (existing) {
+    return existing as HTMLScriptElement;
+  }
+
+  const script = doc.createElement('script');
+  script.dataset.letsSubItBridge = 'true';
+  script.src = runtime.getURL('/page-bridge.js');
+  script.onload = () => {
+    script.remove();
+  };
+  (doc.head ?? doc.documentElement).append(script);
+  return script;
+}
+
+export function buildSubtitleLoadPayload(
+  entry: LocalCacheEntry,
+  videoId: string,
+): SubtitleLoadPayload | undefined {
+  const mode = getSelectedMode(entry);
+  const subtitleUrl = getSubtitleUrlForMode(entry, mode);
+  if (!subtitleUrl) {
+    return undefined;
+  }
+
+  return {
+    videoId,
+    mode,
+    subtitleUrl,
+  };
+}
+
+export function createBridgeMessenger(
+  win: Window = window,
+  doc: Document = document,
+) {
+  let pendingPayload: SubtitleLoadPayload | undefined;
+  let bridgeReady = doc.documentElement.getAttribute(BRIDGE_READY_ATTRIBUTE) === 'true';
+
+  function postPayload(payload: SubtitleLoadPayload) {
+    win.postMessage({ type: LOAD_EVENT, payload }, win.location.origin);
+  }
+
+  function flushPending() {
+    if (!bridgeReady || !pendingPayload) {
+      return;
+    }
+
+    postPayload(pendingPayload);
+    pendingPayload = undefined;
+  }
+
+  function markReady() {
+    bridgeReady = true;
+    doc.documentElement.setAttribute(BRIDGE_READY_ATTRIBUTE, 'true');
+    flushPending();
+  }
+
+  function queuePayload(payload: SubtitleLoadPayload) {
+    pendingPayload = payload;
+    flushPending();
+  }
+
+  function handleWindowMessage(event: MessageEvent) {
+    if (event.source !== win || event.data?.type !== READY_EVENT) {
+      return;
+    }
+
+    markReady();
+  }
+
+  win.addEventListener('message', handleWindowMessage);
+
+  return {
+    markReady,
+    queuePayload,
+    dispose() {
+      win.removeEventListener('message', handleWindowMessage);
+    },
+  };
+}
+
+export function loadSubtitle(
+  entry: LocalCacheEntry,
+  videoId: string,
+  bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
+) {
+  const payload = buildSubtitleLoadPayload(entry, videoId);
+  if (!payload) {
+    return;
+  }
+
+  bridgeMessenger.queuePayload(payload);
+}
+
+export async function loadCachedSubtitle(
+  videoId: string,
+  runtime: Pick<typeof chrome.runtime, 'sendMessage'>,
+  bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
+) {
+  const entry = (await runtime.sendMessage({
+    type: 'subtitle-cache:get',
+    videoId,
+  })) as LocalCacheEntry | undefined;
+
+  if (entry) {
+    loadSubtitle(entry, videoId, bridgeMessenger);
+  }
+}
+
+export function addModeChangeListener(
+  videoId: string,
+  runtime: Pick<typeof chrome.runtime, 'onMessage'>,
+  bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
+) {
+  const listener = (message: unknown) => {
+    const typedMessage = message as { type?: string; payload?: LocalCacheEntry };
+    if (typedMessage.type !== 'subtitle-mode-changed') {
+      return;
+    }
+
+    const entry = typedMessage.payload;
+    if (!entry || entry.videoId !== videoId) {
+      return;
+    }
+
+    loadSubtitle(entry, videoId, bridgeMessenger);
+  };
+
+  runtime.onMessage.addListener(listener);
+  return listener;
+}
+
+export default defineContentScript({
+  matches: ['https://www.youtube.com/watch*'],
+  runAt: 'document_idle',
+  main() {
+    const videoId = extractVideoId(window.location.href);
+    if (!videoId) {
+      return;
+    }
+
+    injectPageBridge();
+    const bridgeMessenger = createBridgeMessenger();
+
+    void loadCachedSubtitle(videoId, chrome.runtime, bridgeMessenger);
+    addModeChangeListener(videoId, chrome.runtime, bridgeMessenger);
+  },
+});
