@@ -7,3 +7,6 @@
 
 # Worktrees
 .worktrees/
+
+# Superpowers
+docs/superpowers/
