@@ -1,0 +1,14 @@
+[
+  {
+    "start": "00:00:01.000",
+    "end": "00:00:03.000",
+    "sourceText": "Hello world",
+    "translatedText": "你好，世界"
+  },
+  {
+    "start": "00:00:03.000",
+    "end": "00:00:05.000",
+    "sourceText": "How are you",
+    "translatedText": "你好吗"
+  }
+]

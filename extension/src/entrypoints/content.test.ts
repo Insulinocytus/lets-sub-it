@@ -2,9 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-function createCacheEntry() {
+function createCacheEntry(videoId = 'abc123xyz00') {
   return {
-    videoId: 'abc123xyz00',
+    videoId,
     jobId: 'job-1',
     selectedMode: 'translated' as const,
     lastSyncedAt: '2026-04-20T09:00:00.000Z',
@@ -17,6 +17,7 @@ function createCacheEntry() {
 
 describe('content subtitle loading', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     document.documentElement.removeAttribute('data-lets-sub-it-bridge-ready');
@@ -90,5 +91,69 @@ describe('content subtitle loading', () => {
       },
       window.location.origin,
     );
+  });
+
+  it('reloads subtitle cache and mode listeners after YouTube SPA navigation', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('defineContentScript', (definition: unknown) => definition);
+    vi.stubGlobal('defineUnlistedScript', (main: () => void) => main);
+
+    const listeners = new Map<string, EventListener[]>();
+    const fakeWindow = {
+      location: {
+        href: 'https://www.youtube.com/watch?v=abc123xyz00',
+        origin: 'https://www.youtube.com',
+      },
+      postMessage: vi.fn(),
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      }),
+      removeEventListener: vi.fn((type: string, listener: EventListener) => {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((registeredListener) => registeredListener !== listener),
+        );
+      }),
+      setInterval: window.setInterval.bind(window),
+      clearInterval: window.clearInterval.bind(window),
+    } as unknown as Window;
+
+    const runtime = {
+      getURL: vi.fn().mockReturnValue('chrome-extension://test/page-bridge.js'),
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createCacheEntry('abc123xyz00'))
+        .mockResolvedValueOnce(createCacheEntry('new456video9')),
+      onMessage: {
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      },
+    };
+
+    const { initializeContentScript } = await import('../../entrypoints/content/index');
+
+    const controller = initializeContentScript(fakeWindow, document, runtime, 25);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: 'subtitle-cache:get',
+        videoId: 'abc123xyz00',
+      });
+      expect(runtime.onMessage.addListener).toHaveBeenCalledTimes(1);
+    });
+
+    fakeWindow.location.href = 'https://www.youtube.com/watch?v=new456video9';
+    vi.advanceTimersByTime(25);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: 'subtitle-cache:get',
+        videoId: 'new456video9',
+      });
+      expect(runtime.onMessage.removeListener).toHaveBeenCalledTimes(1);
+      expect(runtime.onMessage.addListener).toHaveBeenCalledTimes(2);
+    });
+
+    controller.dispose();
   });
 });

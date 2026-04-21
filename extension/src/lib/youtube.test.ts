@@ -11,6 +11,10 @@ describe('extractVideoId', () => {
     expect(extractVideoId('https://youtube.com/watch?v=abc123xyz00')).toBe('abc123xyz00');
   });
 
+  it('accepts youtu.be short links', () => {
+    expect(extractVideoId('https://youtu.be/abc123xyz00?t=42')).toBe('abc123xyz00');
+  });
+
   it('rejects non-youtube domains that happen to use /watch?v=', () => {
     expect(extractVideoId('https://example.com/watch?v=abc123xyz00')).toBe('');
   });

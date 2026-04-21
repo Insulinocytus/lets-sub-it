@@ -9,6 +9,13 @@ import type { LocalCacheEntry, SubtitleLoadPayload } from '../../src/types';
 
 export { BRIDGE_READY_ATTRIBUTE, LOAD_EVENT, READY_EVENT } from '../page-bridge';
 
+type RuntimeMessaging = {
+  sendMessage: typeof chrome.runtime.sendMessage;
+  onMessage: Pick<typeof chrome.runtime.onMessage, 'addListener' | 'removeListener'>;
+};
+
+type ContentRuntime = RuntimeMessaging & Pick<typeof chrome.runtime, 'getURL'>;
+
 export function injectPageBridge(
   doc: Document = document,
   runtime: Pick<typeof chrome.runtime, 'getURL'> = chrome.runtime,
@@ -110,7 +117,7 @@ export function loadSubtitle(
 
 export async function loadCachedSubtitle(
   videoId: string,
-  runtime: Pick<typeof chrome.runtime, 'sendMessage'>,
+  runtime: Pick<RuntimeMessaging, 'sendMessage'>,
   bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
 ) {
   const entry = (await runtime.sendMessage({
@@ -125,7 +132,7 @@ export async function loadCachedSubtitle(
 
 export function addModeChangeListener(
   videoId: string,
-  runtime: Pick<typeof chrome.runtime, 'onMessage'>,
+  runtime: Pick<RuntimeMessaging, 'onMessage'>,
   bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
 ) {
   const listener = (message: unknown) => {
@@ -143,22 +150,89 @@ export function addModeChangeListener(
   };
 
   runtime.onMessage.addListener(listener);
-  return listener;
+  return () => {
+    runtime.onMessage.removeListener(listener);
+  };
+}
+
+export function observeVideoPageNavigation(
+  onNavigate: () => void | Promise<void>,
+  win: Window = window,
+  navigationPollIntervalMs = 500,
+) {
+  let lastHref = win.location.href;
+
+  const checkForNavigation = () => {
+    const nextHref = win.location.href;
+    if (nextHref === lastHref) {
+      return;
+    }
+
+    lastHref = nextHref;
+    void onNavigate();
+  };
+
+  win.addEventListener('yt-navigate-finish', checkForNavigation);
+  win.addEventListener('popstate', checkForNavigation);
+
+  const intervalId = win.setInterval(checkForNavigation, navigationPollIntervalMs);
+
+  return () => {
+    win.removeEventListener('yt-navigate-finish', checkForNavigation);
+    win.removeEventListener('popstate', checkForNavigation);
+    win.clearInterval(intervalId);
+  };
+}
+
+export function initializeContentScript(
+  win: Window = window,
+  doc: Document = document,
+  runtime: ContentRuntime = chrome.runtime,
+  navigationPollIntervalMs = 500,
+) {
+  injectPageBridge(doc, runtime);
+  const bridgeMessenger = createBridgeMessenger(win, doc);
+  let currentVideoId = '';
+  let removeModeChangeListener: (() => void) | undefined;
+
+  const syncToCurrentVideo = async () => {
+    const nextVideoId = extractVideoId(win.location.href);
+    if (nextVideoId === currentVideoId) {
+      return;
+    }
+
+    currentVideoId = nextVideoId;
+    removeModeChangeListener?.();
+    removeModeChangeListener = undefined;
+
+    if (!nextVideoId) {
+      return;
+    }
+
+    await loadCachedSubtitle(nextVideoId, runtime, bridgeMessenger);
+    removeModeChangeListener = addModeChangeListener(nextVideoId, runtime, bridgeMessenger);
+  };
+
+  void syncToCurrentVideo();
+  const stopObservingNavigation = observeVideoPageNavigation(
+    syncToCurrentVideo,
+    win,
+    navigationPollIntervalMs,
+  );
+
+  return {
+    dispose() {
+      stopObservingNavigation();
+      removeModeChangeListener?.();
+      bridgeMessenger.dispose();
+    },
+  };
 }
 
 export default defineContentScript({
   matches: ['https://www.youtube.com/watch*'],
   runAt: 'document_idle',
   main() {
-    const videoId = extractVideoId(window.location.href);
-    if (!videoId) {
-      return;
-    }
-
-    injectPageBridge();
-    const bridgeMessenger = createBridgeMessenger();
-
-    void loadCachedSubtitle(videoId, chrome.runtime, bridgeMessenger);
-    addModeChangeListener(videoId, chrome.runtime, bridgeMessenger);
+    initializeContentScript();
   },
 });

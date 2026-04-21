@@ -16,6 +16,7 @@
 
 !README.md
 !LICENSE
+!testdata/transcript_segments.json
 
 # !Makefile
 
