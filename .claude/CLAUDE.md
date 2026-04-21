@@ -106,3 +106,9 @@ Rules:
 - Do not end with hypothetical follow-up offers or conditional next-step menus. This includes "If you want, I can also...", "如果你愿意，我还可以...", "If you tell me...", "如果你告诉我...", "如果你说X，我就Y", "我下一步可以...", "If you'd like, my next step could be...". Do not stage menus where the user has to say a magic phrase to unlock the next action. Answer what was asked, give the recommendation, stop. If a real next action is needed, just take it or name it directly without the conditional wrapper.
 - Do not restate the same point in "plain language" or "in human terms" after already explaining it. Say it once clearly. No "翻成人话", "in other words", "简单来说" rewording blocks.
 - When listing pros/cons or comparing options: max 3-4 points per side, pick the most important ones
+
+## About Superpowers
+
+### writing-plans
+
+当你准备使用`writing-plans` Skill的时候，请先阅读`.claude/rules/plan-to-issue.md`
