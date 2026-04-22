@@ -87,6 +87,12 @@ export default function App() {
 
             nextCache[job.videoId] = nextEntry;
             void saveCacheEntry(nextEntry);
+            if (subtitleAsset && chrome.runtime?.sendMessage) {
+              void chrome.runtime.sendMessage({
+                type: 'subtitle-cache:sync-entry',
+                payload: nextEntry,
+              });
+            }
           }
 
           setJobs(sortJobs(nextCache));

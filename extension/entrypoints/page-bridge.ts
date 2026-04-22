@@ -1,9 +1,16 @@
 import type { SubtitleLoadPayload } from '../src/types';
 
 export const LOAD_EVENT = 'LETS_SUB_IT_LOAD';
+export const CLEAR_EVENT = 'LETS_SUB_IT_CLEAR';
 export const READY_EVENT = 'LETS_SUB_IT_BRIDGE_READY';
 export const TRACK_ID = 'lets-sub-it-track';
 export const BRIDGE_READY_ATTRIBUTE = 'data-lets-sub-it-bridge-ready';
+
+export function removeSubtitleTrack(root: ParentNode = document) {
+  const existing =
+    root instanceof Document ? root.getElementById(TRACK_ID) : root.querySelector(`#${TRACK_ID}`);
+  existing?.remove();
+}
 
 export function mountSubtitleTrack(payload: SubtitleLoadPayload, root: ParentNode = document) {
   const video = root.querySelector('video');
@@ -11,9 +18,7 @@ export function mountSubtitleTrack(payload: SubtitleLoadPayload, root: ParentNod
     return false;
   }
 
-  const existing =
-    root instanceof Document ? root.getElementById(TRACK_ID) : root.querySelector(`#${TRACK_ID}`);
-  existing?.remove();
+  removeSubtitleTrack(root);
 
   const ownerDocument = root instanceof Document ? root : root.ownerDocument ?? document;
   const track = ownerDocument.createElement('track');
@@ -62,7 +67,21 @@ export function initializePageBridge(
   win.postMessage({ type: READY_EVENT }, win.location.origin);
 
   win.addEventListener('message', (event) => {
-    if (event.source !== win || event.data?.type !== LOAD_EVENT) {
+    if (event.source !== win) {
+      return;
+    }
+
+    if (event.data?.type === CLEAR_EVENT) {
+      pendingPayload = undefined;
+      if (retryTimeoutId !== undefined) {
+        win.clearTimeout(retryTimeoutId);
+        retryTimeoutId = undefined;
+      }
+      removeSubtitleTrack(doc);
+      return;
+    }
+
+    if (event.data?.type !== LOAD_EVENT) {
       return;
     }
 

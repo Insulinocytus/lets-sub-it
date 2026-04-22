@@ -156,4 +156,67 @@ describe('content subtitle loading', () => {
 
     controller.dispose();
   });
+
+  it('clears stale subtitle tracks after navigating to an uncached video', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('defineContentScript', (definition: unknown) => definition);
+    vi.stubGlobal('defineUnlistedScript', (main: () => void) => main);
+    document.documentElement.setAttribute('data-lets-sub-it-bridge-ready', 'true');
+
+    const fakeWindow = {
+      location: {
+        href: 'https://www.youtube.com/watch?v=abc123xyz00',
+        origin: 'https://www.youtube.com',
+      },
+      postMessage: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setInterval: window.setInterval.bind(window),
+      clearInterval: window.clearInterval.bind(window),
+    } as unknown as Window;
+
+    const runtime = {
+      getURL: vi.fn().mockReturnValue('chrome-extension://test/page-bridge.js'),
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createCacheEntry('abc123xyz00'))
+        .mockResolvedValueOnce(undefined),
+      onMessage: {
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      },
+    };
+
+    const { CLEAR_EVENT, LOAD_EVENT, initializeContentScript } = await import(
+      '../../entrypoints/content/index'
+    );
+
+    const controller = initializeContentScript(fakeWindow, document, runtime, 25);
+
+    await vi.waitFor(() => {
+      expect(fakeWindow.postMessage).toHaveBeenCalledWith(
+        {
+          type: LOAD_EVENT,
+          payload: {
+            videoId: 'abc123xyz00',
+            mode: 'translated',
+            subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+          },
+        },
+        'https://www.youtube.com',
+      );
+    });
+
+    fakeWindow.location.href = 'https://www.youtube.com/watch?v=new456video9';
+    vi.advanceTimersByTime(25);
+
+    await vi.waitFor(() => {
+      expect(fakeWindow.postMessage).toHaveBeenCalledWith(
+        { type: CLEAR_EVENT },
+        'https://www.youtube.com',
+      );
+    });
+
+    controller.dispose();
+  });
 });

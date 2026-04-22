@@ -628,6 +628,81 @@ func TestWorkerRunPendingLoopProcessesQueuedJobs(t *testing.T) {
 	}
 }
 
+func TestWorkerRunPendingLoopRequeuesInterruptedRunningJobs(t *testing.T) {
+	repo := jobs.NewMemoryRepositoryForTest()
+	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
+	svc := jobs.NewService(repo, func() time.Time { return now })
+	worker := pipeline.NewWorker(
+		svc,
+		pipeline.FakeDownloader("/tmp/video.mp4"),
+		pipeline.FakeTranscriber([]pipeline.Segment{{
+			Start:      "00:00:01.000",
+			End:        "00:00:03.000",
+			SourceText: "Hello",
+		}}),
+		pipeline.FakeTranslator([]pipeline.Segment{{
+			Start:          "00:00:01.000",
+			End:            "00:00:03.000",
+			SourceText:     "Hello",
+			TranslatedText: "你好",
+		}}),
+		t.TempDir(),
+	)
+
+	job, err := svc.CreateJob(context.Background(), jobs.CreateJobInput{
+		VideoID:        "abc123xyz00",
+		YouTubeURL:     "https://www.youtube.com/watch?v=abc123xyz00",
+		TargetLanguage: "zh-CN",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	if err := svc.UpdateProgress(context.Background(), job.ID, jobs.ProgressUpdate{
+		Status:   jobs.StatusRunning,
+		Stage:    jobs.StageDownloading,
+		Progress: 10,
+	}); err != nil {
+		t.Fatalf("UpdateProgress returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- worker.RunPendingLoop(ctx)
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		stored, getErr := svc.GetJob(context.Background(), job.ID)
+		if getErr != nil {
+			t.Fatalf("GetJob returned error: %v", getErr)
+		}
+
+		if stored.Status == jobs.StatusCompleted {
+			cancel()
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for interrupted running job %q to complete", job.ID)
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context cancellation from RunPendingLoop, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for RunPendingLoop to exit")
+	}
+}
+
 func TestClaimQueuedJobsClaimsEachJobOnce(t *testing.T) {
 	repo := jobs.NewMemoryRepositoryForTest()
 	svc := jobs.NewService(repo, func() time.Time {

@@ -12,6 +12,7 @@ import (
 
 type JobService interface {
 	GetJob(ctx context.Context, id string) (jobs.Job, error)
+	ListJobsByStatus(ctx context.Context, status jobs.Status) ([]jobs.Job, error)
 	ClaimQueuedJobs(ctx context.Context) ([]jobs.Job, error)
 	UpdateProgress(ctx context.Context, jobID string, update jobs.ProgressUpdate) error
 	SaveAsset(ctx context.Context, asset jobs.SubtitleAsset) error
@@ -121,6 +122,10 @@ func (w *Worker) RunPendingLoop(ctx context.Context) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
+	if err := w.requeueInterruptedJobs(ctx); err != nil {
+		return err
+	}
+
 	for {
 		queuedJobs, err := w.jobs.ClaimQueuedJobs(ctx)
 		if err != nil {
@@ -139,6 +144,25 @@ func (w *Worker) RunPendingLoop(ctx context.Context) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func (w *Worker) requeueInterruptedJobs(ctx context.Context) error {
+	runningJobs, err := w.jobs.ListJobsByStatus(ctx, jobs.StatusRunning)
+	if err != nil {
+		return err
+	}
+
+	for _, job := range runningJobs {
+		if err := w.jobs.UpdateProgress(ctx, job.ID, jobs.ProgressUpdate{
+			Status:   jobs.StatusQueued,
+			Stage:    jobs.StageQueued,
+			Progress: 0,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (w *Worker) fail(ctx context.Context, jobID string, stage jobs.Stage, progress int, err error) error {

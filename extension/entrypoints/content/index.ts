@@ -1,4 +1,5 @@
 import {
+  CLEAR_EVENT,
   BRIDGE_READY_ATTRIBUTE,
   LOAD_EVENT,
   READY_EVENT,
@@ -7,7 +8,7 @@ import { getSelectedMode, getSubtitleUrlForMode } from '../../src/lib/subtitleSt
 import { extractVideoId } from '../../src/lib/youtube';
 import type { LocalCacheEntry, SubtitleLoadPayload } from '../../src/types';
 
-export { BRIDGE_READY_ATTRIBUTE, LOAD_EVENT, READY_EVENT } from '../page-bridge';
+export { BRIDGE_READY_ATTRIBUTE, CLEAR_EVENT, LOAD_EVENT, READY_EVENT } from '../page-bridge';
 
 type RuntimeMessaging = {
   sendMessage: typeof chrome.runtime.sendMessage;
@@ -56,20 +57,32 @@ export function createBridgeMessenger(
   win: Window = window,
   doc: Document = document,
 ) {
-  let pendingPayload: SubtitleLoadPayload | undefined;
+  let pendingEvent:
+    | { type: 'clear' }
+    | { type: 'load'; payload: SubtitleLoadPayload }
+    | undefined;
   let bridgeReady = doc.documentElement.getAttribute(BRIDGE_READY_ATTRIBUTE) === 'true';
 
   function postPayload(payload: SubtitleLoadPayload) {
     win.postMessage({ type: LOAD_EVENT, payload }, win.location.origin);
   }
 
+  function postClear() {
+    win.postMessage({ type: CLEAR_EVENT }, win.location.origin);
+  }
+
   function flushPending() {
-    if (!bridgeReady || !pendingPayload) {
+    if (!bridgeReady || !pendingEvent) {
       return;
     }
 
-    postPayload(pendingPayload);
-    pendingPayload = undefined;
+    if (pendingEvent.type === 'clear') {
+      postClear();
+    } else {
+      postPayload(pendingEvent.payload);
+    }
+
+    pendingEvent = undefined;
   }
 
   function markReady() {
@@ -79,7 +92,12 @@ export function createBridgeMessenger(
   }
 
   function queuePayload(payload: SubtitleLoadPayload) {
-    pendingPayload = payload;
+    pendingEvent = { type: 'load', payload };
+    flushPending();
+  }
+
+  function clear() {
+    pendingEvent = { type: 'clear' };
     flushPending();
   }
 
@@ -94,6 +112,7 @@ export function createBridgeMessenger(
   win.addEventListener('message', handleWindowMessage);
 
   return {
+    clear,
     markReady,
     queuePayload,
     dispose() {
@@ -199,6 +218,10 @@ export function initializeContentScript(
     const nextVideoId = extractVideoId(win.location.href);
     if (nextVideoId === currentVideoId) {
       return;
+    }
+
+    if (currentVideoId) {
+      bridgeMessenger.clear();
     }
 
     currentVideoId = nextVideoId;

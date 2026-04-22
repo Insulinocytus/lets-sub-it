@@ -17,6 +17,9 @@ function createChromeStorage(initialCache: Record<string, unknown> = {}) {
   let store = { ...initialCache };
 
   return {
+    runtime: {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    },
     storage: {
       local: {
         get: vi.fn(async (key: string) => ({ [key]: store[key] })),
@@ -60,29 +63,27 @@ describe('popup App cache integration', () => {
 
   it('polls active jobs and refreshes the popup list', async () => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'chrome',
-      createChromeStorage({
-        'subtitle-cache': {
-          abc123xyz00: {
+    const chromeMock = createChromeStorage({
+      'subtitle-cache': {
+        abc123xyz00: {
+          videoId: 'abc123xyz00',
+          jobId: 'job-1',
+          selectedMode: 'translated',
+          lastSyncedAt: '2026-04-20T09:00:00.000Z',
+          recentJob: {
+            id: 'job-1',
             videoId: 'abc123xyz00',
-            jobId: 'job-1',
-            selectedMode: 'translated',
-            lastSyncedAt: '2026-04-20T09:00:00.000Z',
-            recentJob: {
-              id: 'job-1',
-              videoId: 'abc123xyz00',
-              youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
-              targetLanguage: 'zh-CN',
-              status: 'running',
-              stage: 'transcribing',
-              progress: 25,
-              errorMessage: '',
-            },
+            youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+            targetLanguage: 'zh-CN',
+            status: 'running',
+            stage: 'transcribing',
+            progress: 25,
+            errorMessage: '',
           },
         },
-      }),
-    );
+      },
+    });
+    vi.stubGlobal('chrome', chromeMock);
     vi.mocked(getJobs).mockResolvedValue([
       {
         id: 'job-1',
@@ -117,6 +118,29 @@ describe('popup App cache integration', () => {
 
     expect(getJobs).toHaveBeenCalledWith(['job-1']);
     expect(getSubtitleAsset).toHaveBeenCalledWith('abc123xyz00');
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'subtitle-cache:sync-entry',
+      payload: {
+        videoId: 'abc123xyz00',
+        jobId: 'job-1',
+        selectedMode: 'translated',
+        lastSyncedAt: expect.any(String),
+        subtitleUrls: {
+          translated: 'http://localhost:8080/assets/abc123xyz00/translated.vtt',
+          bilingual: 'http://localhost:8080/assets/abc123xyz00/bilingual.vtt',
+        },
+        recentJob: {
+          id: 'job-1',
+          videoId: 'abc123xyz00',
+          youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+          targetLanguage: 'zh-CN',
+          status: 'completed',
+          stage: 'completed',
+          progress: 100,
+          errorMessage: '',
+        },
+      },
+    });
     expect(container.textContent).toContain('completed');
     expect(container.textContent).toContain('100%');
 

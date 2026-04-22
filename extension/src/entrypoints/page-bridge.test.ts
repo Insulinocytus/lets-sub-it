@@ -54,4 +54,24 @@ describe('page bridge', () => {
     const track = document.getElementById(TRACK_ID) as HTMLTrackElement | null;
     expect(track?.src).toBe('http://localhost:8080/assets/translated.vtt');
   });
+
+  it('removes the existing subtitle track when asked to clear it', async () => {
+    vi.stubGlobal('defineUnlistedScript', (main: () => void) => main);
+
+    const { initializePageBridge, CLEAR_EVENT, TRACK_ID } = await import('../../entrypoints/page-bridge');
+
+    document.body.innerHTML = '<video><track id="lets-sub-it-track" kind="subtitles"></video>';
+    initializePageBridge(window, document);
+
+    expect(document.getElementById(TRACK_ID)).not.toBeNull();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: window,
+        data: { type: CLEAR_EVENT },
+      }),
+    );
+
+    expect(document.getElementById(TRACK_ID)).toBeNull();
+  });
 });
