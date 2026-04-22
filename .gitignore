@@ -2,11 +2,8 @@
 .DS_Store
 ._*
 
-# Claude Code
-.claude/settings.local.json
-
 # Worktrees
 .worktrees/
 
 # Superpowers
-docs/superpowers/
+.superpowers/
