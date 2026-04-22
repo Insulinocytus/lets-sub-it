@@ -12,6 +12,16 @@ function createCacheEntry(videoId = 'abc123xyz00') {
       translated: 'http://localhost:8080/assets/translated.vtt',
       bilingual: 'http://localhost:8080/assets/bilingual.vtt',
     },
+    recentJob: {
+      id: 'job-1',
+      videoId,
+      youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      targetLanguage: 'zh-CN',
+      status: 'completed' as const,
+      stage: 'completed' as const,
+      progress: 100,
+      errorMessage: '',
+    },
   };
 }
 
@@ -57,6 +67,7 @@ describe('content subtitle loading', () => {
           videoId: 'abc123xyz00',
           mode: 'translated',
           subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+          targetLanguage: 'zh-CN',
         },
       },
       window.location.origin,
@@ -87,6 +98,7 @@ describe('content subtitle loading', () => {
           videoId: 'abc123xyz00',
           mode: 'translated',
           subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+          targetLanguage: 'zh-CN',
         },
       },
       window.location.origin,
@@ -201,6 +213,7 @@ describe('content subtitle loading', () => {
             videoId: 'abc123xyz00',
             mode: 'translated',
             subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+            targetLanguage: 'zh-CN',
           },
         },
         'https://www.youtube.com',
@@ -216,6 +229,81 @@ describe('content subtitle loading', () => {
         'https://www.youtube.com',
       );
     });
+
+    controller.dispose();
+  });
+
+  it('ignores stale cached subtitle responses after a second navigation wins the race', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('defineContentScript', (definition: unknown) => definition);
+    vi.stubGlobal('defineUnlistedScript', (main: () => void) => main);
+    document.documentElement.setAttribute('data-lets-sub-it-bridge-ready', 'true');
+
+    let resolveFirstRequest = (_value: unknown) => {};
+    const firstRequest = new Promise((resolve) => {
+      resolveFirstRequest = resolve;
+    });
+
+    const fakeWindow = {
+      location: {
+        href: 'https://www.youtube.com/watch?v=abc123xyz00',
+        origin: 'https://www.youtube.com',
+      },
+      postMessage: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setInterval: window.setInterval.bind(window),
+      clearInterval: window.clearInterval.bind(window),
+    } as unknown as Window;
+
+    const runtime = {
+      getURL: vi.fn().mockReturnValue('chrome-extension://test/page-bridge.js'),
+      sendMessage: vi
+        .fn()
+        .mockReturnValueOnce(firstRequest)
+        .mockResolvedValueOnce(createCacheEntry('new456video9')),
+      onMessage: {
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      },
+    };
+
+    const { LOAD_EVENT, initializeContentScript } = await import('../../entrypoints/content/index');
+
+    const controller = initializeContentScript(fakeWindow, document, runtime, 25);
+
+    fakeWindow.location.href = 'https://www.youtube.com/watch?v=new456video9';
+    vi.advanceTimersByTime(25);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: 'subtitle-cache:get',
+        videoId: 'new456video9',
+      });
+    });
+
+    resolveFirstRequest(createCacheEntry('abc123xyz00'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const loadCalls = vi
+      .mocked(fakeWindow.postMessage)
+      .mock.calls.filter(([message]) => (message as { type?: string }).type === LOAD_EVENT);
+
+    expect(loadCalls).toEqual([
+      [
+        {
+          type: LOAD_EVENT,
+          payload: {
+            videoId: 'new456video9',
+            mode: 'translated',
+            subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+            targetLanguage: 'zh-CN',
+          },
+        },
+        'https://www.youtube.com',
+      ],
+    ]);
 
     controller.dispose();
   });

@@ -16,7 +16,7 @@ describe('background mode rebroadcast', () => {
     };
 
     const deps = {
-      getCacheEntry: vi.fn(),
+      getLatestCacheEntryForVideo: vi.fn(),
       setSelectedMode: vi.fn().mockResolvedValue(entry),
       tabs: {
         query: vi.fn().mockResolvedValue([{ id: 10 }, { id: 11 }]),
@@ -32,7 +32,7 @@ describe('background mode rebroadcast', () => {
       handler(
         {
           type: 'subtitle-cache:set-mode',
-          videoId: 'abc123xyz00',
+          jobId: 'job-1',
           mode: 'bilingual',
         },
         {} as chrome.runtime.MessageSender,
@@ -80,7 +80,7 @@ describe('background mode rebroadcast', () => {
     };
 
     const deps = {
-      getCacheEntry: vi.fn(),
+      getLatestCacheEntryForVideo: vi.fn(),
       setSelectedMode: vi.fn(),
       tabs: {
         query: vi.fn().mockResolvedValue([{ id: 10 }, { id: 11 }]),

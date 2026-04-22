@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getCache, saveCacheEntry, setSelectedMode } from './storage';
+import { getCache, getLatestCacheEntryForVideo, saveCacheEntry, setSelectedMode } from './storage';
 
 function createChromeStorage(initialCache: Record<string, unknown> = {}) {
   let store = structuredClone(initialCache);
@@ -70,7 +70,7 @@ describe('storage helpers', () => {
 
     expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
       'subtitle-cache': {
-        abc123xyz00: {
+        'job-1': {
           videoId: 'abc123xyz00',
           jobId: 'job-1',
           selectedMode: 'bilingual',
@@ -88,7 +88,7 @@ describe('storage helpers', () => {
         },
       },
     });
-    expect(cache.abc123xyz00.selectedMode).toBe('bilingual');
+    expect(cache['job-1']?.selectedMode).toBe('bilingual');
   });
 
   it('merges new cache data with an existing entry', async () => {
@@ -128,12 +128,12 @@ describe('storage helpers', () => {
 
     const cache = await getCache();
 
-    expect(cache.abc123xyz00.subtitleUrls).toEqual({
+    expect(cache['job-1']?.subtitleUrls).toEqual({
       translated: 'http://localhost:8080/assets/translated.vtt',
       bilingual: 'http://localhost:8080/assets/bilingual.vtt',
     });
-    expect(cache.abc123xyz00.recentJob?.stage).toBe('transcribing');
-    expect(cache.abc123xyz00.lastSyncedAt).toBe('2026-04-20T01:00:00Z');
+    expect(cache['job-1']?.recentJob?.stage).toBe('transcribing');
+    expect(cache['job-1']?.lastSyncedAt).toBe('2026-04-20T01:00:00Z');
   });
 
   it('updates selectedMode without dropping cached subtitle urls', async () => {
@@ -154,12 +154,12 @@ describe('storage helpers', () => {
 
     vi.stubGlobal('chrome', chromeMock);
 
-    await setSelectedMode('abc123xyz00', 'bilingual');
+    await setSelectedMode('job-1', 'bilingual');
 
     const cache = await getCache();
 
-    expect(cache.abc123xyz00.selectedMode).toBe('bilingual');
-    expect(cache.abc123xyz00.subtitleUrls).toEqual({
+    expect(cache['job-1']?.selectedMode).toBe('bilingual');
+    expect(cache['job-1']?.subtitleUrls).toEqual({
       translated: 'http://localhost:8080/assets/translated.vtt',
       bilingual: 'http://localhost:8080/assets/bilingual.vtt',
     });
@@ -256,7 +256,7 @@ describe('storage helpers', () => {
     });
 
     let modeUpdateResolved = false;
-    const modeUpdate = setSelectedMode('abc123xyz00', 'bilingual').then(() => {
+    const modeUpdate = setSelectedMode('job-1', 'bilingual').then(() => {
       modeUpdateResolved = true;
     });
 
@@ -269,8 +269,102 @@ describe('storage helpers', () => {
 
     const cache = await getCache();
 
-    expect(cache.abc123xyz00.selectedMode).toBe('bilingual');
-    expect(cache.abc123xyz00.lastSyncedAt).toBe('2026-04-20T01:00:00Z');
-    expect(cache.abc123xyz00.recentJob?.status).toBe('completed');
+    expect(cache['job-1']?.selectedMode).toBe('bilingual');
+    expect(cache['job-1']?.lastSyncedAt).toBe('2026-04-20T01:00:00Z');
+    expect(cache['job-1']?.recentJob?.status).toBe('completed');
+  });
+
+  it('stores multiple jobs for the same video without overwriting earlier entries', async () => {
+    const chromeMock = createChromeStorage({ 'subtitle-cache': {} });
+
+    vi.stubGlobal('chrome', chromeMock);
+
+    await saveCacheEntry({
+      videoId: 'abc123xyz00',
+      jobId: 'job-1',
+      selectedMode: 'translated',
+      lastSyncedAt: '2026-04-20T00:00:00Z',
+      recentJob: {
+        id: 'job-1',
+        videoId: 'abc123xyz00',
+        youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+        targetLanguage: 'zh-CN',
+        status: 'completed',
+        stage: 'completed',
+        progress: 100,
+        errorMessage: '',
+      },
+    });
+
+    await saveCacheEntry({
+      videoId: 'abc123xyz00',
+      jobId: 'job-2',
+      selectedMode: 'translated',
+      lastSyncedAt: '2026-04-20T01:00:00Z',
+      recentJob: {
+        id: 'job-2',
+        videoId: 'abc123xyz00',
+        youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+        targetLanguage: 'ja-JP',
+        status: 'completed',
+        stage: 'completed',
+        progress: 100,
+        errorMessage: '',
+      },
+    });
+
+    const cache = await getCache();
+
+    expect(Object.keys(cache)).toEqual(['job-1', 'job-2']);
+    expect(cache['job-1']?.recentJob?.targetLanguage).toBe('zh-CN');
+    expect(cache['job-2']?.recentJob?.targetLanguage).toBe('ja-JP');
+  });
+
+  it('returns the most recently synced cache entry for a video', async () => {
+    const chromeMock = createChromeStorage({
+      'subtitle-cache': {
+        'job-1': {
+          videoId: 'abc123xyz00',
+          jobId: 'job-1',
+          selectedMode: 'translated',
+          lastSyncedAt: '2026-04-20T00:00:00Z',
+          recentJob: {
+            id: 'job-1',
+            videoId: 'abc123xyz00',
+            youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+            targetLanguage: 'zh-CN',
+            status: 'completed',
+            stage: 'completed',
+            progress: 100,
+            errorMessage: '',
+          },
+        },
+        'job-2': {
+          videoId: 'abc123xyz00',
+          jobId: 'job-2',
+          selectedMode: 'translated',
+          lastSyncedAt: '2026-04-20T01:00:00Z',
+          recentJob: {
+            id: 'job-2',
+            videoId: 'abc123xyz00',
+            youtubeUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
+            targetLanguage: 'ja-JP',
+            status: 'completed',
+            stage: 'completed',
+            progress: 100,
+            errorMessage: '',
+          },
+        },
+      },
+    });
+
+    vi.stubGlobal('chrome', chromeMock);
+
+    await expect(getLatestCacheEntryForVideo('abc123xyz00')).resolves.toMatchObject({
+      jobId: 'job-2',
+      recentJob: {
+        targetLanguage: 'ja-JP',
+      },
+    });
   });
 });

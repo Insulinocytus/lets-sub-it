@@ -96,7 +96,7 @@ func (w *Worker) Run(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	sourcePath, translatedPath, bilingualPath, err := writeAssets(w.storageDir, job.VideoID, segments, translated)
+	sourcePath, translatedPath, bilingualPath, err := writeAssetsForJob(w.storageDir, job.VideoID, job.ID, segments, translated)
 	if err != nil {
 		return w.fail(ctx, jobID, jobs.StagePackaging, 90, err)
 	}
@@ -181,7 +181,15 @@ func (w *Worker) fail(ctx context.Context, jobID string, stage jobs.Stage, progr
 }
 
 func writeAssets(storageDir string, videoID string, sourceSegments []Segment, translatedSegments []Segment) (string, string, string, error) {
-	dir := filepath.Join(storageDir, videoID)
+	return writeAssetsForJob(storageDir, videoID, "", sourceSegments, translatedSegments)
+}
+
+func writeAssetsForJob(storageDir string, videoID string, jobID string, sourceSegments []Segment, translatedSegments []Segment) (string, string, string, error) {
+	dirParts := []string{storageDir, videoID}
+	if strings.TrimSpace(jobID) != "" {
+		dirParts = append(dirParts, jobID)
+	}
+	dir := filepath.Join(dirParts...)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", "", err
 	}
@@ -216,7 +224,7 @@ func writeAssets(storageDir string, videoID string, sourceSegments []Segment, tr
 		return "", "", "", err
 	}
 
-	return sourcePath, translatedPath, bilingualPath, nil
+	return trimStoragePrefix(storageDir, sourcePath), trimStoragePrefix(storageDir, translatedPath), trimStoragePrefix(storageDir, bilingualPath), nil
 }
 
 func sourceOnlySegments(segments []Segment) []Segment {
@@ -264,4 +272,13 @@ func cleanupDownloadedMedia(mediaPath string) {
 	}
 
 	_ = os.RemoveAll(downloadDir)
+}
+
+func trimStoragePrefix(storageDir string, assetPath string) string {
+	relativePath, err := filepath.Rel(storageDir, assetPath)
+	if err != nil {
+		return assetPath
+	}
+
+	return filepath.ToSlash(relativePath)
 }

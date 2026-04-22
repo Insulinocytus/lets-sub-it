@@ -21,6 +21,7 @@ type Repository interface {
 	ListJobsByStatus(ctx context.Context, status Status) ([]Job, error)
 	ClaimQueuedJobs(ctx context.Context) ([]Job, error)
 	SaveAsset(ctx context.Context, asset SubtitleAsset) error
+	GetAssetByJobID(ctx context.Context, jobID string) (SubtitleAsset, error)
 	GetAssetByVideoID(ctx context.Context, videoID string) (SubtitleAsset, error)
 }
 
@@ -118,20 +119,41 @@ func (r *inMemoryRepository) SaveAsset(_ context.Context, asset SubtitleAsset) e
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.assets[asset.VideoID] = asset
+	r.assets[asset.JobID] = asset
 	return nil
+}
+
+func (r *inMemoryRepository) GetAssetByJobID(_ context.Context, jobID string) (SubtitleAsset, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	asset, ok := r.assets[jobID]
+	if !ok {
+		return SubtitleAsset{}, ErrAssetNotFound
+	}
+
+	return asset, nil
 }
 
 func (r *inMemoryRepository) GetAssetByVideoID(_ context.Context, videoID string) (SubtitleAsset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	asset, ok := r.assets[videoID]
-	if !ok {
+	var latest SubtitleAsset
+	found := false
+	for _, asset := range r.assets {
+		if asset.VideoID != videoID {
+			continue
+		}
+
+		latest = asset
+		found = true
+	}
+	if !found {
 		return SubtitleAsset{}, ErrAssetNotFound
 	}
 
-	return asset, nil
+	return latest, nil
 }
 
 type sqliteRepository struct {
@@ -162,14 +184,15 @@ func (r *sqliteRepository) migrate() error {
 			updated_at TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS subtitle_assets (
-			video_id TEXT PRIMARY KEY,
-			job_id TEXT NOT NULL,
+			job_id TEXT PRIMARY KEY,
+			video_id TEXT NOT NULL,
 			source_vtt_path TEXT NOT NULL,
 			translated_vtt_path TEXT NOT NULL,
 			bilingual_vtt_path TEXT NOT NULL,
 			source_language TEXT NOT NULL,
 			target_language TEXT NOT NULL
 		)`,
+		`CREATE INDEX IF NOT EXISTS subtitle_assets_video_id_idx ON subtitle_assets(video_id)`,
 	}
 
 	for _, statement := range statements {
@@ -360,17 +383,17 @@ func (r *sqliteRepository) SaveAsset(ctx context.Context, asset SubtitleAsset) e
 	_, err := r.db.ExecContext(
 		ctx,
 		`INSERT INTO subtitle_assets (
-			video_id, job_id, source_vtt_path, translated_vtt_path, bilingual_vtt_path, source_language, target_language
+			job_id, video_id, source_vtt_path, translated_vtt_path, bilingual_vtt_path, source_language, target_language
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(video_id) DO UPDATE SET
-			job_id = excluded.job_id,
+		ON CONFLICT(job_id) DO UPDATE SET
+			video_id = excluded.video_id,
 			source_vtt_path = excluded.source_vtt_path,
 			translated_vtt_path = excluded.translated_vtt_path,
 			bilingual_vtt_path = excluded.bilingual_vtt_path,
 			source_language = excluded.source_language,
 			target_language = excluded.target_language`,
-		asset.VideoID,
 		asset.JobID,
+		asset.VideoID,
 		asset.SourceVTTPath,
 		asset.TranslatedVTTPath,
 		asset.BilingualVTTPath,
@@ -381,13 +404,46 @@ func (r *sqliteRepository) SaveAsset(ctx context.Context, asset SubtitleAsset) e
 	return err
 }
 
+func (r *sqliteRepository) GetAssetByJobID(ctx context.Context, jobID string) (SubtitleAsset, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT
+			job_id, video_id, source_vtt_path, translated_vtt_path, bilingual_vtt_path, source_language, target_language
+		FROM subtitle_assets
+		WHERE job_id = ?`,
+		jobID,
+	)
+
+	var asset SubtitleAsset
+	err := row.Scan(
+		&asset.JobID,
+		&asset.VideoID,
+		&asset.SourceVTTPath,
+		&asset.TranslatedVTTPath,
+		&asset.BilingualVTTPath,
+		&asset.SourceLanguage,
+		&asset.TargetLanguage,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SubtitleAsset{}, ErrAssetNotFound
+		}
+
+		return SubtitleAsset{}, err
+	}
+
+	return asset, nil
+}
+
 func (r *sqliteRepository) GetAssetByVideoID(ctx context.Context, videoID string) (SubtitleAsset, error) {
 	row := r.db.QueryRowContext(
 		ctx,
 		`SELECT
 			job_id, video_id, source_vtt_path, translated_vtt_path, bilingual_vtt_path, source_language, target_language
 		FROM subtitle_assets
-		WHERE video_id = ?`,
+		WHERE video_id = ?
+		ORDER BY rowid DESC
+		LIMIT 1`,
 		videoID,
 	)
 

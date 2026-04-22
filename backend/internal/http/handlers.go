@@ -5,7 +5,6 @@ import (
 	"fmt"
 	stdhttp "net/http"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -81,22 +80,41 @@ func (h *Handler) getAssetByVideoID(c *gin.Context) {
 		return
 	}
 
-	videoID := asset.VideoID
 	c.JSON(stdhttp.StatusOK, toSubtitleAssetResponse(
 		asset,
-		buildAssetURL(c, videoID, filepath.Base(asset.SourceVTTPath)),
-		buildAssetURL(c, videoID, filepath.Base(asset.TranslatedVTTPath)),
-		buildAssetURL(c, videoID, filepath.Base(asset.BilingualVTTPath)),
+		buildAssetURL(c, asset.SourceVTTPath),
+		buildAssetURL(c, asset.TranslatedVTTPath),
+		buildAssetURL(c, asset.BilingualVTTPath),
 	))
 }
 
-func buildAssetURL(c *gin.Context, videoID string, fileName string) string {
+func (h *Handler) getAssetByJobID(c *gin.Context) {
+	asset, err := h.jobs.GetAssetByJobID(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		status := stdhttp.StatusInternalServerError
+		if errors.Is(err, jobs.ErrAssetNotFound) {
+			status = stdhttp.StatusNotFound
+		}
+
+		c.JSON(status, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(stdhttp.StatusOK, toSubtitleAssetResponse(
+		asset,
+		buildAssetURL(c, asset.SourceVTTPath),
+		buildAssetURL(c, asset.TranslatedVTTPath),
+		buildAssetURL(c, asset.BilingualVTTPath),
+	))
+}
+
+func buildAssetURL(c *gin.Context, relativePath string) string {
 	scheme := "http"
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
 
-	return fmt.Sprintf("%s://%s/assets/%s/%s", scheme, c.Request.Host, videoID, fileName)
+	return fmt.Sprintf("%s://%s/assets/%s", scheme, c.Request.Host, strings.TrimLeft(relativePath, "/"))
 }
 
 func extractVideoID(rawURL string) (string, error) {

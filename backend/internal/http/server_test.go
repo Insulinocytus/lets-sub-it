@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -178,9 +179,9 @@ func TestGetAssetByVideoID(t *testing.T) {
 	if err := svc.SaveAsset(context.Background(), jobs.SubtitleAsset{
 		JobID:             "job-1",
 		VideoID:           "abc123xyz00",
-		SourceVTTPath:     "/tmp/assets/abc123xyz00/source.vtt",
-		TranslatedVTTPath: "/tmp/assets/abc123xyz00/translated.vtt",
-		BilingualVTTPath:  "/tmp/assets/abc123xyz00/bilingual.vtt",
+		SourceVTTPath:     "abc123xyz00/job-1/source.vtt",
+		TranslatedVTTPath: "abc123xyz00/job-1/translated.vtt",
+		BilingualVTTPath:  "abc123xyz00/job-1/bilingual.vtt",
 		SourceLanguage:    "en",
 		TargetLanguage:    "zh-CN",
 	}); err != nil {
@@ -212,11 +213,88 @@ func TestGetAssetByVideoID(t *testing.T) {
 		t.Fatalf("expected subtitleUrls object, got %#v", body["subtitleUrls"])
 	}
 
-	if got := subtitleURLs["translated"]; got != "http://localhost:8080/assets/abc123xyz00/translated.vtt" {
+	if got := subtitleURLs["translated"]; got != "http://localhost:8080/assets/abc123xyz00/job-1/translated.vtt" {
 		t.Fatalf("unexpected translated subtitle url: %#v", got)
 	}
-	if got := subtitleURLs["bilingual"]; got != "http://localhost:8080/assets/abc123xyz00/bilingual.vtt" {
+	if got := subtitleURLs["bilingual"]; got != "http://localhost:8080/assets/abc123xyz00/job-1/bilingual.vtt" {
 		t.Fatalf("unexpected bilingual subtitle url: %#v", got)
+	}
+}
+
+func TestGetAssetByJobID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := jobs.NewService(jobs.NewMemoryRepositoryForTest(), testNow)
+	if err := svc.SaveAsset(context.Background(), jobs.SubtitleAsset{
+		JobID:             "job-1",
+		VideoID:           "abc123xyz00",
+		SourceVTTPath:     "abc123xyz00/job-1/source.vtt",
+		TranslatedVTTPath: "abc123xyz00/job-1/translated.vtt",
+		BilingualVTTPath:  "abc123xyz00/job-1/bilingual.vtt",
+		SourceLanguage:    "en",
+		TargetLanguage:    "zh-CN",
+	}); err != nil {
+		t.Fatalf("SaveAsset returned error: %v", err)
+	}
+
+	router := NewRouter(svc)
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/jobs/job-1/subtitles", nil)
+	req.Host = "localhost:8080"
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid asset json body, got error: %v", err)
+	}
+
+	if got := body["jobId"]; got != "job-1" {
+		t.Fatalf("expected jobId %q, got %#v", "job-1", got)
+	}
+
+	subtitleURLs, ok := body["subtitleUrls"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected subtitleUrls object, got %#v", body["subtitleUrls"])
+	}
+
+	if got := subtitleURLs["translated"]; got != "http://localhost:8080/assets/abc123xyz00/job-1/translated.vtt" {
+		t.Fatalf("unexpected translated subtitle url: %#v", got)
+	}
+	if got := subtitleURLs["bilingual"]; got != "http://localhost:8080/assets/abc123xyz00/job-1/bilingual.vtt" {
+		t.Fatalf("unexpected bilingual subtitle url: %#v", got)
+	}
+}
+
+func TestStaticAssetsIncludeCORSHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	assetsDir := t.TempDir()
+	assetPath := assetsDir + "/abc123xyz00/job-1"
+	if err := os.MkdirAll(assetPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(assetPath+"/translated.vtt", []byte("WEBVTT\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	router := NewRouter(jobs.NewService(jobs.NewMemoryRepositoryForTest(), testNow))
+	router.StaticFS("/assets", gin.Dir(assetsDir, false))
+
+	req := httptest.NewRequest(stdhttp.MethodGet, "/assets/abc123xyz00/job-1/translated.vtt", nil)
+	req.Header.Set("Origin", "https://www.youtube.com")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "https://www.youtube.com" {
+		t.Fatalf("expected CORS origin header, got %q", got)
 	}
 }
 

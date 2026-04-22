@@ -62,9 +62,9 @@ export interface SubtitleAsset {
   subtitleUrls: SubtitleUrls;
 }
 
-export async function getSubtitleAsset(videoId: string): Promise<SubtitleAsset> {
+export async function getSubtitleAsset(jobId: string): Promise<SubtitleAsset> {
   try {
-    const response = await fetch(`${API_BASE}/api/videos/${videoId}/subtitles`);
+    const response = await fetch(`${API_BASE}/api/jobs/${jobId}/subtitles`);
     return (await parseJobResponse(response)) as SubtitleAsset;
   } catch (error) {
     if (error instanceof Error) {

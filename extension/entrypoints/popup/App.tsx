@@ -57,7 +57,7 @@ export default function App() {
             }
 
             try {
-              return await getSubtitleAsset(job.videoId);
+              return await getSubtitleAsset(job.id);
             } catch (assetError) {
               const message =
                 assetError instanceof Error
@@ -74,7 +74,7 @@ export default function App() {
           const refreshedAt = new Date().toISOString();
 
           for (const [index, job] of refreshedJobs.entries()) {
-            const existing = nextCache[job.videoId];
+            const existing = nextCache[job.id];
             const subtitleAsset = subtitleAssets[index];
             const nextEntry: LocalCacheEntry = {
               videoId: job.videoId,
@@ -85,7 +85,7 @@ export default function App() {
               recentJob: job,
             };
 
-            nextCache[job.videoId] = nextEntry;
+            nextCache[job.id] = nextEntry;
             void saveCacheEntry(nextEntry);
             if (subtitleAsset && chrome.runtime?.sendMessage) {
               void chrome.runtime.sendMessage({
@@ -132,7 +132,7 @@ export default function App() {
       await saveCacheEntry(nextEntry);
       setCache((current) => ({
         ...current,
-        [videoId]: nextEntry,
+        [job.id]: nextEntry,
       }));
       setJobs((current) => [job, ...current]);
       setYoutubeUrl('');
@@ -145,21 +145,21 @@ export default function App() {
     }
   }
 
-  async function handleModeChange(videoId: string, mode: SubtitleMode) {
-    const updated = await setSelectedMode(videoId, mode);
+  async function handleModeChange(jobId: string, mode: SubtitleMode) {
+    const updated = await setSelectedMode(jobId, mode);
     if (!updated) {
       return;
     }
 
     setCache((current) => ({
       ...current,
-      [videoId]: updated,
+      [jobId]: updated,
     }));
 
     if (chrome.runtime?.sendMessage) {
       void chrome.runtime.sendMessage({
         type: 'subtitle-cache:set-mode',
-        videoId,
+        jobId,
         mode,
       });
     }
@@ -192,11 +192,13 @@ export default function App() {
       {Object.values(cache)
         .filter((entry) => entry.recentJob)
         .map((entry) => (
-          <section key={entry.videoId}>
-            <p>Mode for {entry.videoId}</p>
+          <section key={entry.jobId}>
+            <p>
+              Mode for {entry.videoId} · {entry.recentJob?.targetLanguage}
+            </p>
             <ModeToggle
               mode={entry.selectedMode}
-              onChange={(mode) => void handleModeChange(entry.videoId, mode)}
+              onChange={(mode) => void handleModeChange(entry.jobId, mode)}
             />
           </section>
         ))}

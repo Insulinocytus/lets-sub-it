@@ -289,7 +289,11 @@ func TestInMemoryRepositoryInsertJobReturnsErrJobAlreadyExists(t *testing.T) {
 func TestWorkerRunCompletesJobAndStoresAssets(t *testing.T) {
 	repo := jobs.NewMemoryRepositoryForTest()
 	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
-	svc := jobs.NewService(repo, func() time.Time { return now })
+	nowCalls := 0
+	svc := jobs.NewService(repo, func() time.Time {
+		nowCalls++
+		return now.Add(time.Duration(nowCalls-1) * time.Nanosecond)
+	})
 	storageDir := t.TempDir()
 	worker := pipeline.NewWorker(
 		svc,
@@ -351,18 +355,18 @@ func TestWorkerRunCompletesJobAndStoresAssets(t *testing.T) {
 		t.Fatalf("expected source language unknown, got %q", asset.SourceLanguage)
 	}
 
-	expectedDir := filepath.Join(storageDir, job.VideoID)
-	if asset.SourceVTTPath != filepath.Join(expectedDir, "source.vtt") {
+	expectedRelativeDir := filepath.ToSlash(filepath.Join(job.VideoID, job.ID))
+	if asset.SourceVTTPath != expectedRelativeDir+"/source.vtt" {
 		t.Fatalf("unexpected source path %q", asset.SourceVTTPath)
 	}
-	if asset.TranslatedVTTPath != filepath.Join(expectedDir, "translated.vtt") {
+	if asset.TranslatedVTTPath != expectedRelativeDir+"/translated.vtt" {
 		t.Fatalf("unexpected translated path %q", asset.TranslatedVTTPath)
 	}
-	if asset.BilingualVTTPath != filepath.Join(expectedDir, "bilingual.vtt") {
+	if asset.BilingualVTTPath != expectedRelativeDir+"/bilingual.vtt" {
 		t.Fatalf("unexpected bilingual path %q", asset.BilingualVTTPath)
 	}
 
-	sourceBody, err := os.ReadFile(asset.SourceVTTPath)
+	sourceBody, err := os.ReadFile(filepath.Join(storageDir, asset.SourceVTTPath))
 	if err != nil {
 		t.Fatalf("ReadFile(source) returned error: %v", err)
 	}
@@ -370,7 +374,7 @@ func TestWorkerRunCompletesJobAndStoresAssets(t *testing.T) {
 		t.Fatalf("expected source VTT to contain source text, got %q", string(sourceBody))
 	}
 
-	translatedBody, err := os.ReadFile(asset.TranslatedVTTPath)
+	translatedBody, err := os.ReadFile(filepath.Join(storageDir, asset.TranslatedVTTPath))
 	if err != nil {
 		t.Fatalf("ReadFile(translated) returned error: %v", err)
 	}
@@ -378,7 +382,7 @@ func TestWorkerRunCompletesJobAndStoresAssets(t *testing.T) {
 		t.Fatalf("expected translated VTT to contain translated text, got %q", string(translatedBody))
 	}
 
-	bilingualBody, err := os.ReadFile(asset.BilingualVTTPath)
+	bilingualBody, err := os.ReadFile(filepath.Join(storageDir, asset.BilingualVTTPath))
 	if err != nil {
 		t.Fatalf("ReadFile(bilingual) returned error: %v", err)
 	}
@@ -390,7 +394,11 @@ func TestWorkerRunCompletesJobAndStoresAssets(t *testing.T) {
 func TestWorkerRunMarksJobFailedWhenDownloadFails(t *testing.T) {
 	repo := jobs.NewMemoryRepositoryForTest()
 	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
-	svc := jobs.NewService(repo, func() time.Time { return now })
+	nowCalls := 0
+	svc := jobs.NewService(repo, func() time.Time {
+		nowCalls++
+		return now.Add(time.Duration(nowCalls-1) * time.Nanosecond)
+	})
 	worker := pipeline.NewWorker(
 		svc,
 		failingDownloader{err: errors.New("download failed")},
@@ -713,6 +721,86 @@ func TestWorkerRunPendingLoopProcessesQueuedJobs(t *testing.T) {
 	}
 	if asset.TranslatedVTTPath == "" {
 		t.Fatal("expected pending loop to persist translated subtitle asset")
+	}
+}
+
+func TestWorkerRunPersistsAssetsPerJobForSameVideo(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "jobs.db"))
+	if err != nil {
+		t.Fatalf("db.Open returned error: %v", err)
+	}
+	defer sqlDB.Close()
+
+	repo, err := jobs.NewSQLiteRepository(sqlDB)
+	if err != nil {
+		t.Fatalf("NewSQLiteRepository returned error: %v", err)
+	}
+
+	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
+	nowCalls := 0
+	svc := jobs.NewService(repo, func() time.Time {
+		nowCalls++
+		return now.Add(time.Duration(nowCalls-1) * time.Nanosecond)
+	})
+	worker := pipeline.NewWorker(
+		svc,
+		pipeline.FakeDownloader("/tmp/video.mp4"),
+		pipeline.FakeTranscriber([]pipeline.Segment{{
+			Start:      "00:00:01.000",
+			End:        "00:00:03.000",
+			SourceText: "Hello",
+		}}),
+		pipeline.FakeTranslator([]pipeline.Segment{{
+			Start:          "00:00:01.000",
+			End:            "00:00:03.000",
+			SourceText:     "Hello",
+			TranslatedText: "你好",
+		}}),
+		t.TempDir(),
+	)
+
+	firstJob, err := svc.CreateJob(context.Background(), jobs.CreateJobInput{
+		VideoID:        "abc123xyz00",
+		YouTubeURL:     "https://www.youtube.com/watch?v=abc123xyz00",
+		TargetLanguage: "zh-CN",
+	})
+	if err != nil {
+		t.Fatalf("first CreateJob returned error: %v", err)
+	}
+
+	secondJob, err := svc.CreateJob(context.Background(), jobs.CreateJobInput{
+		VideoID:        "abc123xyz00",
+		YouTubeURL:     "https://www.youtube.com/watch?v=abc123xyz00",
+		TargetLanguage: "ja-JP",
+	})
+	if err != nil {
+		t.Fatalf("second CreateJob returned error: %v", err)
+	}
+
+	if err := worker.Run(context.Background(), firstJob.ID); err != nil {
+		t.Fatalf("first Run returned error: %v", err)
+	}
+	if err := worker.Run(context.Background(), secondJob.ID); err != nil {
+		t.Fatalf("second Run returned error: %v", err)
+	}
+
+	firstAsset, err := svc.GetAssetByJobID(context.Background(), firstJob.ID)
+	if err != nil {
+		t.Fatalf("GetAssetByJobID for first job returned error: %v", err)
+	}
+	secondAsset, err := svc.GetAssetByJobID(context.Background(), secondJob.ID)
+	if err != nil {
+		t.Fatalf("GetAssetByJobID for second job returned error: %v", err)
+	}
+
+	if firstAsset.TargetLanguage != "zh-CN" {
+		t.Fatalf("expected first asset target language %q, got %q", "zh-CN", firstAsset.TargetLanguage)
+	}
+	if secondAsset.TargetLanguage != "ja-JP" {
+		t.Fatalf("expected second asset target language %q, got %q", "ja-JP", secondAsset.TargetLanguage)
+	}
+	if firstAsset.TranslatedVTTPath == secondAsset.TranslatedVTTPath {
+		t.Fatalf("expected distinct translated paths, got %q", firstAsset.TranslatedVTTPath)
 	}
 }
 

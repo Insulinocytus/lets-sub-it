@@ -74,4 +74,27 @@ describe('page bridge', () => {
 
     expect(document.getElementById(TRACK_ID)).toBeNull();
   });
+
+  it('sets srclang on mounted subtitle tracks', async () => {
+    vi.stubGlobal('defineUnlistedScript', (main: () => void) => main);
+
+    const { mountSubtitleTrack, TRACK_ID } = await import('../../entrypoints/page-bridge');
+
+    document.body.innerHTML = '<video></video>';
+
+    const mounted = mountSubtitleTrack(
+      {
+        videoId: 'abc123xyz00',
+        mode: 'translated',
+        subtitleUrl: 'http://localhost:8080/assets/translated.vtt',
+        targetLanguage: 'zh-CN',
+      },
+      document,
+    );
+
+    expect(mounted).toBe(true);
+
+    const track = document.getElementById(TRACK_ID) as HTMLTrackElement | null;
+    expect(track?.srclang).toBe('zh-CN');
+  });
 });

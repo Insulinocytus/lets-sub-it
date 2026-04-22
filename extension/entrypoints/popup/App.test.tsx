@@ -117,7 +117,7 @@ describe('popup App cache integration', () => {
     });
 
     expect(getJobs).toHaveBeenCalledWith(['job-1']);
-    expect(getSubtitleAsset).toHaveBeenCalledWith('abc123xyz00');
+    expect(getSubtitleAsset).toHaveBeenCalledWith('job-1');
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
       type: 'subtitle-cache:sync-entry',
       payload: {
@@ -321,7 +321,7 @@ describe('popup App cache integration', () => {
     expect(chromeMock.storage.local.set).toHaveBeenCalledTimes(1);
     expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
       'subtitle-cache': {
-        def456uvw99: {
+        'job-2': {
           videoId: 'def456uvw99',
           jobId: 'job-2',
           selectedMode: 'translated',
@@ -387,7 +387,7 @@ describe('popup App cache integration', () => {
 
     expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
       'subtitle-cache': {
-        abc123xyz00: {
+        'job-1': {
           videoId: 'abc123xyz00',
           jobId: 'job-1',
           selectedMode: 'bilingual',

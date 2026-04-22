@@ -1,9 +1,9 @@
-import { getCacheEntry, setSelectedMode } from '../src/lib/storage';
+import { getLatestCacheEntryForVideo, setSelectedMode } from '../src/lib/storage';
 import type { LocalCacheEntry, SubtitleMode } from '../src/types';
 
 type BackgroundMessage =
   | { type?: 'subtitle-cache:get'; videoId?: string }
-  | { type?: 'subtitle-cache:set-mode'; videoId?: string; mode?: SubtitleMode }
+  | { type?: 'subtitle-cache:set-mode'; jobId?: string; mode?: SubtitleMode }
   | { type?: 'subtitle-cache:sync-entry'; payload?: LocalCacheEntry };
 
 async function rebroadcastEntry(
@@ -30,11 +30,11 @@ async function rebroadcastEntry(
 
 export function createBackgroundMessageHandler(
   deps: {
-    getCacheEntry: typeof getCacheEntry;
+    getLatestCacheEntryForVideo: typeof getLatestCacheEntryForVideo;
     setSelectedMode: typeof setSelectedMode;
     tabs: Pick<typeof chrome.tabs, 'query' | 'sendMessage'>;
   } = {
-    getCacheEntry,
+    getLatestCacheEntryForVideo,
     setSelectedMode,
     tabs: chrome.tabs,
   },
@@ -45,12 +45,12 @@ export function createBackgroundMessageHandler(
     sendResponse: (response?: unknown) => void,
   ) => {
     if (message?.type === 'subtitle-cache:get' && message.videoId) {
-      void deps.getCacheEntry(message.videoId).then(sendResponse);
+      void deps.getLatestCacheEntryForVideo(message.videoId).then(sendResponse);
       return true;
     }
 
-    if (message?.type === 'subtitle-cache:set-mode' && message.videoId && message.mode) {
-      void deps.setSelectedMode(message.videoId, message.mode).then(async (entry) => {
+    if (message?.type === 'subtitle-cache:set-mode' && message.jobId && message.mode) {
+      void deps.setSelectedMode(message.jobId, message.mode).then(async (entry) => {
         if (entry) {
           await rebroadcastEntry(entry, deps.tabs);
         }

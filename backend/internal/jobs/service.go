@@ -116,3 +116,7 @@ func (s *Service) SaveAsset(ctx context.Context, asset SubtitleAsset) error {
 func (s *Service) GetAssetByVideoID(ctx context.Context, videoID string) (SubtitleAsset, error) {
 	return s.repo.GetAssetByVideoID(ctx, strings.TrimSpace(videoID))
 }
+
+func (s *Service) GetAssetByJobID(ctx context.Context, jobID string) (SubtitleAsset, error) {
+	return s.repo.GetAssetByJobID(ctx, strings.TrimSpace(jobID))
+}

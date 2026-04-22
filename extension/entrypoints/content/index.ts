@@ -50,6 +50,7 @@ export function buildSubtitleLoadPayload(
     videoId,
     mode,
     subtitleUrl,
+    targetLanguage: entry.recentJob?.targetLanguage ?? 'und',
   };
 }
 
@@ -137,16 +138,18 @@ export function loadSubtitle(
 export async function loadCachedSubtitle(
   videoId: string,
   runtime: Pick<RuntimeMessaging, 'sendMessage'>,
-  bridgeMessenger: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
-) {
+  bridgeMessenger?: Pick<ReturnType<typeof createBridgeMessenger>, 'queuePayload'>,
+): Promise<LocalCacheEntry | undefined> {
   const entry = (await runtime.sendMessage({
     type: 'subtitle-cache:get',
     videoId,
   })) as LocalCacheEntry | undefined;
 
-  if (entry) {
+  if (entry && bridgeMessenger) {
     loadSubtitle(entry, videoId, bridgeMessenger);
   }
+
+  return entry;
 }
 
 export function addModeChangeListener(
@@ -213,6 +216,7 @@ export function initializeContentScript(
   const bridgeMessenger = createBridgeMessenger(win, doc);
   let currentVideoId = '';
   let removeModeChangeListener: (() => void) | undefined;
+  let navigationVersion = 0;
 
   const syncToCurrentVideo = async () => {
     const nextVideoId = extractVideoId(win.location.href);
@@ -227,13 +231,21 @@ export function initializeContentScript(
     currentVideoId = nextVideoId;
     removeModeChangeListener?.();
     removeModeChangeListener = undefined;
+    navigationVersion += 1;
+    const currentNavigationVersion = navigationVersion;
 
     if (!nextVideoId) {
       return;
     }
 
-    await loadCachedSubtitle(nextVideoId, runtime, bridgeMessenger);
     removeModeChangeListener = addModeChangeListener(nextVideoId, runtime, bridgeMessenger);
+    const entry = await loadCachedSubtitle(nextVideoId, runtime);
+    if (currentNavigationVersion !== navigationVersion || currentVideoId !== nextVideoId) {
+      return;
+    }
+    if (entry) {
+      loadSubtitle(entry, nextVideoId, bridgeMessenger);
+    }
   };
 
   void syncToCurrentVideo();

@@ -170,27 +170,28 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/jobs/job-2');
   });
 
-  it('fetches subtitle assets by video id', async () => {
+  it('fetches subtitle assets by job id', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       createJsonResponse({
+        jobId: 'job-1',
         videoId: 'abc123xyz00',
         targetLanguage: 'zh-CN',
         subtitleUrls: {
-          translated: 'http://localhost:8080/assets/abc123xyz00/translated.vtt',
-          bilingual: 'http://localhost:8080/assets/abc123xyz00/bilingual.vtt',
+          translated: 'http://localhost:8080/assets/abc123xyz00/job-1/translated.vtt',
+          bilingual: 'http://localhost:8080/assets/abc123xyz00/job-1/bilingual.vtt',
         },
       }),
     );
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const asset = await getSubtitleAsset('abc123xyz00');
+    const asset = await getSubtitleAsset('job-1');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/videos/abc123xyz00/subtitles',
+      'http://localhost:8080/api/jobs/job-1/subtitles',
     );
     expect(asset.subtitleUrls.translated).toBe(
-      'http://localhost:8080/assets/abc123xyz00/translated.vtt',
+      'http://localhost:8080/assets/abc123xyz00/job-1/translated.vtt',
     );
   });
 });

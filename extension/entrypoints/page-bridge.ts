@@ -26,6 +26,7 @@ export function mountSubtitleTrack(payload: SubtitleLoadPayload, root: ParentNod
   track.kind = 'subtitles';
   track.label = payload.mode;
   track.src = payload.subtitleUrl;
+  track.srclang = payload.targetLanguage;
   track.default = true;
   video.append(track);
   return true;

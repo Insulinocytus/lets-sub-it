@@ -46,4 +46,5 @@ export interface SubtitleLoadPayload {
   videoId: string;
   mode: SubtitleMode;
   subtitleUrl: string;
+  targetLanguage: string;
 }
