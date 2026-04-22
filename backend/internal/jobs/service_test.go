@@ -553,6 +553,94 @@ func TestWorkerRunMarksJobFailedWhenSaveAssetFails(t *testing.T) {
 	}
 }
 
+func TestWorkerRunRemovesDownloadedMediaOnSuccess(t *testing.T) {
+	repo := jobs.NewMemoryRepositoryForTest()
+	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
+	svc := jobs.NewService(repo, func() time.Time { return now })
+	mediaPath, downloadDir := createDownloadedMedia(t)
+	worker := pipeline.NewWorker(
+		svc,
+		pipeline.FakeDownloader(mediaPath),
+		pipeline.FakeTranscriber([]pipeline.Segment{{
+			Start:      "00:00:01.000",
+			End:        "00:00:03.000",
+			SourceText: "Hello",
+		}}),
+		pipeline.FakeTranslator([]pipeline.Segment{{
+			Start:          "00:00:01.000",
+			End:            "00:00:03.000",
+			SourceText:     "Hello",
+			TranslatedText: "你好",
+		}}),
+		t.TempDir(),
+	)
+
+	job, err := svc.CreateJob(context.Background(), jobs.CreateJobInput{
+		VideoID:        "abc123xyz00",
+		YouTubeURL:     "https://www.youtube.com/watch?v=abc123xyz00",
+		TargetLanguage: "zh-CN",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	if err := worker.Run(context.Background(), job.ID); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	if _, err := os.Stat(downloadDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected download dir %q to be removed, got %v", downloadDir, err)
+	}
+}
+
+func TestWorkerRunRemovesDownloadedMediaOnFailure(t *testing.T) {
+	repo := jobs.NewMemoryRepositoryForTest()
+	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
+	svc := jobs.NewService(repo, func() time.Time { return now })
+	mediaPath, downloadDir := createDownloadedMedia(t)
+	worker := pipeline.NewWorker(
+		svc,
+		pipeline.FakeDownloader(mediaPath),
+		pipeline.FakeTranscriber([]pipeline.Segment{
+			{
+				Start:      "00:00:01.000",
+				End:        "00:00:03.000",
+				SourceText: "Hello",
+			},
+			{
+				Start:      "00:00:03.000",
+				End:        "00:00:05.000",
+				SourceText: "World",
+			},
+		}),
+		pipeline.FakeTranslator([]pipeline.Segment{{
+			Start:          "00:00:01.000",
+			End:            "00:00:03.000",
+			SourceText:     "Hello",
+			TranslatedText: "你好",
+		}}),
+		t.TempDir(),
+	)
+
+	job, err := svc.CreateJob(context.Background(), jobs.CreateJobInput{
+		VideoID:        "abc123xyz00",
+		YouTubeURL:     "https://www.youtube.com/watch?v=abc123xyz00",
+		TargetLanguage: "zh-CN",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	err = worker.Run(context.Background(), job.ID)
+	if err == nil {
+		t.Fatal("expected Run to fail for misaligned translation output")
+	}
+
+	if _, err := os.Stat(downloadDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected download dir %q to be removed, got %v", downloadDir, err)
+	}
+}
+
 func TestWorkerRunPendingLoopProcessesQueuedJobs(t *testing.T) {
 	repo := jobs.NewMemoryRepositoryForTest()
 	now := time.Date(2026, 4, 20, 10, 0, 0, 123456789, time.UTC)
@@ -626,6 +714,22 @@ func TestWorkerRunPendingLoopProcessesQueuedJobs(t *testing.T) {
 	if asset.TranslatedVTTPath == "" {
 		t.Fatal("expected pending loop to persist translated subtitle asset")
 	}
+}
+
+func createDownloadedMedia(t *testing.T) (string, string) {
+	t.Helper()
+
+	downloadDir, err := os.MkdirTemp("", "lets-sub-it-download-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp returned error: %v", err)
+	}
+
+	mediaPath := filepath.Join(downloadDir, "job-1.mp4")
+	if err := os.WriteFile(mediaPath, []byte("media"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	return mediaPath, downloadDir
 }
 
 func TestWorkerRunPendingLoopRequeuesInterruptedRunningJobs(t *testing.T) {

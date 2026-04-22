@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"lets-sub-it/backend/internal/jobs"
@@ -54,6 +55,7 @@ func (w *Worker) Run(ctx context.Context, jobID string) error {
 	if err != nil {
 		return w.fail(ctx, jobID, jobs.StageDownloading, 10, err)
 	}
+	defer cleanupDownloadedMedia(mediaPath)
 
 	if err := w.jobs.UpdateProgress(ctx, jobID, jobs.ProgressUpdate{
 		Status:   jobs.StatusRunning,
@@ -246,4 +248,20 @@ func alignTranslatedSegments(sourceSegments []Segment, translatedSegments []Segm
 	}
 
 	return result, nil
+}
+
+func cleanupDownloadedMedia(mediaPath string) {
+	if strings.TrimSpace(mediaPath) == "" {
+		return
+	}
+
+	downloadDir := filepath.Clean(filepath.Dir(mediaPath))
+	if filepath.Dir(downloadDir) != filepath.Clean(os.TempDir()) {
+		return
+	}
+	if !strings.HasPrefix(filepath.Base(downloadDir), "lets-sub-it-download-") {
+		return
+	}
+
+	_ = os.RemoveAll(downloadDir)
 }

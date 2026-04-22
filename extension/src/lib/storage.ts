@@ -1,20 +1,17 @@
 import type { LocalCacheEntry, SubtitleMode } from '../types';
 
 const KEY = 'subtitle-cache';
+let cacheWriteQueue: Promise<void> = Promise.resolve();
 
-export async function getCache(): Promise<Record<string, LocalCacheEntry>> {
+async function readCache(): Promise<Record<string, LocalCacheEntry>> {
   const result = await chrome.storage.local.get(KEY);
   return (result[KEY] as Record<string, LocalCacheEntry> | undefined) ?? {};
 }
 
-export async function getCacheEntry(videoId: string): Promise<LocalCacheEntry | undefined> {
-  const cache = await getCache();
-  return cache[videoId];
-}
-
-export async function saveCacheEntry(entry: LocalCacheEntry): Promise<void> {
-  const current = await getCache();
-  const existing = current[entry.videoId];
+function buildMergedEntry(
+  existing: LocalCacheEntry | undefined,
+  entry: LocalCacheEntry,
+): LocalCacheEntry {
   const subtitleUrls =
     existing?.subtitleUrls || entry.subtitleUrls
       ? {
@@ -23,30 +20,60 @@ export async function saveCacheEntry(entry: LocalCacheEntry): Promise<void> {
         }
       : undefined;
 
-  current[entry.videoId] = {
+  return {
     ...existing,
     ...entry,
     ...(subtitleUrls ? { subtitleUrls } : {}),
   };
+}
 
-  await chrome.storage.local.set({ [KEY]: current });
+function enqueueCacheWrite<T>(
+  update: (current: Record<string, LocalCacheEntry>) => Promise<T> | T,
+): Promise<T> {
+  const run = cacheWriteQueue.then(async () => update(await readCache()));
+  cacheWriteQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+export async function getCache(): Promise<Record<string, LocalCacheEntry>> {
+  await cacheWriteQueue;
+  return readCache();
+}
+
+export async function getCacheEntry(videoId: string): Promise<LocalCacheEntry | undefined> {
+  const cache = await getCache();
+  return cache[videoId];
+}
+
+export async function saveCacheEntry(entry: LocalCacheEntry): Promise<void> {
+  await enqueueCacheWrite(async (current) => {
+    const nextCache = { ...current };
+    nextCache[entry.videoId] = buildMergedEntry(nextCache[entry.videoId], entry);
+    await chrome.storage.local.set({ [KEY]: nextCache });
+  });
 }
 
 export async function setSelectedMode(
   videoId: string,
   selectedMode: SubtitleMode,
 ): Promise<LocalCacheEntry | undefined> {
-  const existing = await getCacheEntry(videoId);
-  if (!existing) {
-    return undefined;
-  }
+  return enqueueCacheWrite(async (current) => {
+    const existing = current[videoId];
+    if (!existing) {
+      return undefined;
+    }
 
-  const updatedEntry: LocalCacheEntry = {
-    ...existing,
-    selectedMode,
-  };
+    const nextCache = { ...current };
+    const updatedEntry: LocalCacheEntry = {
+      ...existing,
+      selectedMode,
+    };
 
-  await saveCacheEntry(updatedEntry);
-
-  return updatedEntry;
+    nextCache[videoId] = buildMergedEntry(existing, updatedEntry);
+    await chrome.storage.local.set({ [KEY]: nextCache });
+    return nextCache[videoId];
+  });
 }
