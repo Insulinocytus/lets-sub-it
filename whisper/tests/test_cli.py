@@ -278,7 +278,7 @@ def test_cli_writes_output_with_explicit_utf8_encoding(
     assert "こんにちは" in output_path.read_text(encoding="utf-8")
 
 
-def test_cli_returns_code_4_when_output_path_is_directory(
+def test_cli_returns_code_2_when_output_path_is_directory(
     tmp_path, monkeypatch, capsys
 ):
     input_path = tmp_path / "audio.mp3"
@@ -303,8 +303,8 @@ def test_cli_returns_code_4_when_output_path_is_directory(
 
     captured = capsys.readouterr()
 
-    assert exit_code == 4
-    assert "output validation failed:" in captured.err
+    assert exit_code == 2
+    assert "input validation failed:" in captured.err
 
 
 def test_cli_returns_code_2_when_creating_output_directory_fails(

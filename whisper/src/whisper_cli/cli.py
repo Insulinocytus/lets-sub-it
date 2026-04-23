@@ -67,7 +67,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         output_path.write_text(content, encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
+    except OSError as exc:
+        print(f"input validation failed: {exc}", file=sys.stderr)
+        return 2
+    except UnicodeError as exc:
         print(f"output validation failed: {exc}", file=sys.stderr)
         return 4
 
