@@ -11,3 +11,10 @@
 ## Test
 
 `uv run pytest`
+
+## Output Contract
+
+- `0`: success
+- `2`: input validation
+- `3`: transcription
+- `4`: output validation
