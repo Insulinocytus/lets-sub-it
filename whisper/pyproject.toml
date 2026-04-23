@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "whisper-cli"
+version = "0.1.0"
+description = "Local faster-whisper CLI that writes validated VTT output"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["faster-whisper>=1.1.1"]
+
+[dependency-groups]
+dev = ["pytest>=8.3.5"]
+
+[project.scripts]
+whisper-cli = "whisper_cli.cli:main_entry"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
