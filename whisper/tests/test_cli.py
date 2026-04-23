@@ -116,6 +116,48 @@ def test_cli_returns_code_3_when_transcriber_fails(tmp_path, monkeypatch, capsys
     assert "transcription failed: model download error" in captured.err
 
 
+def test_cli_returns_code_2_when_input_file_is_not_readable(
+    tmp_path, monkeypatch, capsys
+):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    output_path = tmp_path / "result.vtt"
+    transcribe_called = False
+    original_open = Path.open
+
+    def fake_open(self, *args, **kwargs):
+        if self == input_path:
+            raise PermissionError("permission denied")
+        return original_open(self, *args, **kwargs)
+
+    def fake_transcribe(**_):
+        nonlocal transcribe_called
+        transcribe_called = True
+        return fake_result()
+
+    monkeypatch.setattr(Path, "open", fake_open)
+    monkeypatch.setattr("whisper_cli.cli.transcribe_audio", fake_transcribe)
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--model",
+            "small",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "input validation failed:" in captured.err
+    assert transcribe_called is False
+
+
 def test_cli_writes_output_with_explicit_utf8_encoding(
     tmp_path, monkeypatch, capsys
 ):

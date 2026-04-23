@@ -34,6 +34,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     try:
+        with input_path.open("rb"):
+            pass
+    except OSError as exc:
+        print(f"input validation failed: {exc}", file=sys.stderr)
+        return 2
+
+    try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         print(f"input validation failed: {exc}", file=sys.stderr)
