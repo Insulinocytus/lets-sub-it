@@ -1,14 +1,16 @@
-# Whisper CLI 设计
+# Whisper SDK CLI 设计
 
 ## 背景
 
-本文定义 [PRD.md](/Users/demo/.codex/worktrees/789b/lets-sub-it/PRD.md) 中 `fast-whisper cli` 子任务的 MVP 设计。
+本文定义 [PRD.md](/Users/demo/.codex/worktrees/789b/lets-sub-it/PRD.md) 中本地转写 CLI 子任务的 MVP 设计。
 
 当前实现范围保持很小：
 
+- 在 monorepo 根目录用 `mise use` 生成并维护统一的 `.mise.toml`
 - 在仓库根目录新建独立 Python CLI 项目：`whisper/`
-- 用 `mise` 管理 Python 和 `uv` 版本
+- 由根目录 `.mise.toml` 统一管理 Python 和 `uv` 版本
 - 用 `uv` 管理 Python 依赖和锁文件
+- 自己实现一个 `whisper-cli` 命令，命令内部直接调用 `faster-whisper` Python SDK
 - 接收本地音频文件路径作为输入
 - 生成经过基础校验的 `source.vtt`
 
@@ -32,61 +34,49 @@ Go runner、API 集成、下载链路、翻译链路归入后续设计。
 
 ## 约束
 
+- 这是一个 monorepo，工具链版本由仓库根目录统一管理
 - 项目目录固定为仓库根目录下的 `whisper/`
-- `mise` 负责本地工具链版本
+- 根目录 `.mise.toml` 负责本地工具链版本
 - `uv` 负责依赖和锁文件
 - CLI 保持小接口，方便后续 Go `exec` 集成
 - 实现方式对齐 PRD：runner 通过退出码和输出文件判断转写阶段结果
 
-## 推荐方案
+## 方案选择
 
-### 方案 A：本地 Python CLI 直接使用 `faster-whisper`
+当前设计固定采用一条路径：在 `whisper/` 里实现一个小型 Python package，并注册 console entrypoint `whisper-cli`。这个命令内部直接 import `faster_whisper` SDK，加载 `WhisperModel`，转写本地音频文件，把 SDK 返回的 segments 序列化成 WebVTT，校验输出文件，再用稳定退出码结束。
 
-推荐采用。
-
-实现一个小型 Python package，并注册一个 console entrypoint。CLI 加载 `faster-whisper`，转写本地音频文件，把返回的 segments 序列化成 WebVTT，校验输出文件，再用稳定退出码结束。
-
-适配点：
+这条路径的理由：
 
 - 命令行接口和输出格式由项目控制
 - 错误处理和退出码映射由项目控制
+- 进程边界只存在于 Go runner 调用 `whisper-cli` 这一层
 - 后续 Go 集成只依赖一个稳定命令契约
-
-### 方案 B：Python wrapper 转调系统里的 `fast-whisper` 命令
-
-备选方案。
-
-实现时间更短。参数形状、stdout 格式和错误行为会跟随外部命令版本变化。
-
-### 方案 C：独立转写服务
-
-后续阶段方案。
-
-它适合模型复用、队列调度和更复杂的并发处理。当前 MVP 采用本地命令形态，部署和调试路径更短。
 
 ## 项目结构
 
 ```text
-whisper/
+repo/
   .mise.toml
-  pyproject.toml
-  uv.lock
-  README.md
-  src/
-    whisper_cli/
-      __init__.py
-      cli.py
-      transcribe.py
-      vtt.py
-  tests/
-    test_cli.py
-    test_vtt.py
+  whisper/
+    pyproject.toml
+    uv.lock
+    README.md
+    src/
+      whisper_cli/
+        __init__.py
+        cli.py
+        transcribe.py
+        vtt.py
+    tests/
+      test_cli.py
+      test_vtt.py
 ```
 
 ## 文件职责
 
-- `whisper/.mise.toml`
-  - 固定 `python` 和 `uv` 版本
+- `/.mise.toml`
+  - 在 monorepo 根目录统一固定 `python` 和 `uv` 版本
+  - 由仓库维护者在根目录执行 `mise use` 生成和更新
 - `whisper/pyproject.toml`
   - 定义项目元数据、依赖和 `whisper-cli` 脚本入口
 - `whisper/uv.lock`
@@ -94,7 +84,7 @@ whisper/
 - `whisper/src/whisper_cli/cli.py`
   - 解析参数、执行转写流程、输出机器可读的成功结果、把异常映射成退出码
 - `whisper/src/whisper_cli/transcribe.py`
-  - 封装 `faster-whisper` 模型加载和转写调用
+  - 封装 `faster-whisper` SDK 的模型加载和转写调用
 - `whisper/src/whisper_cli/vtt.py`
   - 把 segments 序列化成标准 WebVTT，并做基础校验
 - `whisper/tests/test_cli.py`
@@ -108,9 +98,11 @@ whisper/
 
 ### 命令
 
+前提：仓库根目录已经通过 `mise use` 固定好工具链版本。
+
 ```bash
-cd whisper
 mise install
+cd whisper
 uv sync
 uv run whisper-cli \
   --input /path/to/audio.mp3 \
@@ -143,7 +135,7 @@ uv run whisper-cli \
 1. 解析 CLI 参数
 2. 校验必填参数和输入文件可读性
 3. 创建输出文件的父目录
-4. 加载配置的 `faster-whisper` 模型
+4. 通过 `faster-whisper` SDK 加载配置的模型
 5. 把本地音频转写成有序 segments
 6. 把 segments 序列化成 WebVTT
 7. 校验生成的 VTT 结构
@@ -225,7 +217,7 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 
 ### `transcribe.py`
 
-这个模块负责库边界。它把 CLI 参数转换成 `faster-whisper` 调用，并返回最小内存结构：
+这个模块负责 SDK 边界。它把 CLI 参数转换成 `faster-whisper` SDK 调用，并返回最小内存结构：
 
 - 检测到或用户指定的语言
 - 有序 segments
@@ -286,8 +278,8 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 ## 假设
 
 - 调用方提供可读的本地音频文件
-- 主机环境可以通过 `mise` 安装 Python 和 `uv`
-- 主机环境可以安装并运行 `faster-whisper` 所需依赖
+- 主机环境可以在仓库根目录通过 `mise` 安装 Python 和 `uv`
+- 主机环境可以安装并运行 `faster-whisper` Python SDK 所需依赖
 - 第一版沿用库默认的模型下载和缓存行为
 
 ## 风险
@@ -302,8 +294,9 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 为了降低实现歧义，第一版固定以下选择：
 
 - package 作为仓库根目录下的独立项目：`whisper/`
+- monorepo 根目录统一持有 `.mise.toml`
 - 依赖管理使用 `uv`
-- 工具链版本管理使用 `mise`
+- 工具链版本管理通过根目录 `mise` 完成
 - 命令只暴露 4 个用户参数
 - 成功运行会覆盖目标输出文件
 - 成功输出使用 stdout 单行 JSON
@@ -314,7 +307,8 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 
 该子项目满足以下条件时视为完成：
 
-- 在 `whisper/` 内执行 `mise install` 和 `uv sync` 可以准备环境
+- 在仓库根目录执行 `mise install` 可以准备统一工具链环境
+- 在 `whisper/` 内执行 `uv sync` 可以准备 Python 依赖
 - `uv run whisper-cli --input ... --output ...` 可以生成有效 `source.vtt`
 - CLI 成功和失败路径返回预期退出码
 - 必需测试在本地通过
