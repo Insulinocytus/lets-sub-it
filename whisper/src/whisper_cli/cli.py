@@ -6,7 +6,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from whisper_cli.transcribe import transcribe_audio
+from whisper_cli.transcribe import InputValidationError, transcribe_audio
 from whisper_cli.vtt import render_vtt
 
 
@@ -52,6 +52,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             model_name=args.model,
             language=args.language,
         )
+    except InputValidationError as exc:
+        print(f"input validation failed: {exc}", file=sys.stderr)
+        return 2
     except Exception as exc:
         print(f"transcription failed: {exc}", file=sys.stderr)
         return 3

@@ -17,7 +17,7 @@ class FakeModel:
         self.model_name = model_name
 
     def transcribe(self, input_path: str, language: str):
-        info = SimpleNamespace(language=language)
+        info = SimpleNamespace(language=language, duration=2.5)
         segments = [
             FakeSegment(0.0, 1.25, "hello"),
             FakeSegment(1.25, 2.5, "world"),
@@ -41,6 +41,33 @@ def test_transcribe_audio_uses_sdk_and_builds_result(monkeypatch, tmp_path):
     assert result.language == "ja"
     assert result.duration_seconds == 2.5
     assert [segment.text for segment in result.segments] == ["hello", "world"]
+
+
+def test_transcribe_audio_uses_sdk_reported_duration(monkeypatch, tmp_path):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_bytes(b"audio")
+
+    class DurationModel:
+        def __init__(self, model_name: str) -> None:
+            self.model_name = model_name
+
+        def transcribe(self, input_path: str, language: str):
+            info = SimpleNamespace(language=language, duration=3.75)
+            segments = [
+                FakeSegment(0.0, 1.25, "hello"),
+                FakeSegment(1.25, 2.5, "world"),
+            ]
+            return iter(segments), info
+
+    monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", DurationModel)
+
+    result = transcribe_audio(
+        input_path=input_path,
+        model_name="small",
+        language="ja",
+    )
+
+    assert result.duration_seconds == 3.75
 
 
 def test_transcribe_audio_rejects_empty_segment_output(monkeypatch, tmp_path):
