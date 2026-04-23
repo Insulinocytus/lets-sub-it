@@ -21,3 +21,13 @@ def test_vtt_writes_header_and_cues():
 def test_vtt_rejects_empty_segments():
     with pytest.raises(ValueError, match="segments must not be empty"):
         render_vtt([])
+
+
+def test_vtt_rejects_zero_duration_after_millisecond_rounding():
+    with pytest.raises(ValueError, match="segment end must be greater than segment start"):
+        render_vtt([Segment(start=1.0004, end=1.0005, text="x")])
+
+
+def test_vtt_rejects_negative_timestamps():
+    with pytest.raises(ValueError, match="segment timestamps must be non-negative"):
+        render_vtt([Segment(start=-0.1, end=0.5, text="x")])
