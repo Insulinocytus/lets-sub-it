@@ -36,8 +36,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        print(f"output validation failed: {exc}", file=sys.stderr)
-        return 4
+        print(f"input validation failed: {exc}", file=sys.stderr)
+        return 2
 
     try:
         result = transcribe_audio(

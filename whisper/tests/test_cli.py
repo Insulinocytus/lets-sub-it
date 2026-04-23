@@ -193,3 +193,34 @@ def test_cli_returns_code_4_when_output_path_is_directory(
 
     assert exit_code == 4
     assert "output validation failed:" in captured.err
+
+
+def test_cli_returns_code_2_when_creating_output_directory_fails(
+    tmp_path, monkeypatch, capsys
+):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    output_path = tmp_path / "nested" / "result.vtt"
+
+    def raise_mkdir_error(self, parents=False, exist_ok=False):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "mkdir", raise_mkdir_error)
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--model",
+            "small",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "input validation failed:" in captured.err
