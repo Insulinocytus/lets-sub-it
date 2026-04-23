@@ -6,9 +6,9 @@
 
 当前实现范围保持很小：
 
-- 在 monorepo 根目录用 `mise use` 生成并维护统一的 `.mise.toml`
+- 在 monorepo 根目录用 `mise use` 生成并维护统一的 `mise.toml`
 - 在仓库根目录新建独立 Python CLI 项目：`whisper/`
-- 由根目录 `.mise.toml` 统一管理 Python 和 `uv` 版本
+- 由根目录 `mise.toml` 统一管理 Python 和 `uv` 版本
 - 用 `uv` 管理 Python 依赖和锁文件
 - 自己实现一个 `whisper-cli` 命令，命令内部直接调用 `faster-whisper` Python SDK
 - 接收本地音频文件路径作为输入
@@ -36,7 +36,7 @@ Go runner、API 集成、下载链路、翻译链路归入后续设计。
 
 - 这是一个 monorepo，工具链版本由仓库根目录统一管理
 - 项目目录固定为仓库根目录下的 `whisper/`
-- 根目录 `.mise.toml` 负责本地工具链版本
+- 根目录 `mise.toml` 负责本地工具链版本
 - `uv` 负责依赖和锁文件
 - CLI 保持小接口，方便后续 Go `exec` 集成
 - 实现方式对齐 PRD：runner 通过退出码和输出文件判断转写阶段结果
@@ -56,7 +56,7 @@ Go runner、API 集成、下载链路、翻译链路归入后续设计。
 
 ```text
 repo/
-  .mise.toml
+  mise.toml
   whisper/
     pyproject.toml
     uv.lock
@@ -74,7 +74,7 @@ repo/
 
 ## 文件职责
 
-- `/.mise.toml`
+- `/mise.toml`
   - 在 monorepo 根目录统一固定 `python` 和 `uv` 版本
   - 由仓库维护者在根目录执行 `mise use` 生成和更新
 - `whisper/pyproject.toml`
@@ -98,7 +98,7 @@ repo/
 
 ### 命令
 
-前提：仓库根目录已经通过 `mise use` 固定好工具链版本。
+前提：仓库根目录已经通过 `mise use` 固定好 `mise.toml` 里的工具链版本。
 
 ```bash
 mise install
@@ -120,13 +120,11 @@ uv run whisper-cli \
   - 必填
   - 目标 VTT 文件路径
 - `--model`
-  - 可选
+  - 必填
   - Whisper 模型名
-  - 默认值：`small`
 - `--language`
-  - 可选
+  - 必填
   - 源语言代码
-  - 省略时由库自动检测语言
 
 第一版只暴露这 4 个参数，保持接口稳定，减少预测式配置。
 
@@ -160,7 +158,7 @@ uv run whisper-cli \
 - `output`
   - 解析后的输出路径
 - `language`
-  - 检测到或用户指定的源语言
+  - 用户指定的源语言
 - `duration_seconds`
   - 转写得到的总时长，数字类型
 - `segments`
@@ -219,7 +217,7 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 
 这个模块负责 SDK 边界。它把 CLI 参数转换成 `faster-whisper` SDK 调用，并返回最小内存结构：
 
-- 检测到或用户指定的语言
+- 用户指定的语言
 - 有序 segments
 - 聚合时长元数据
 
@@ -252,9 +250,19 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 
 每种错误类型映射一个退出码。CLI 打印错误摘要后退出，让人读起来清楚，也让后续 Go runner 容易消费。
 
-## 测试策略
+## 测试与 TDD
 
-实现阶段按测试先行来做，先锁住 CLI 契约和 VTT 规则。
+实现阶段采用 TDD，先锁住 CLI 契约和 VTT 规则，再补最小实现。
+
+### TDD 执行约束
+
+每个实现点都按这个顺序推进：
+
+1. 先写一个失败测试，明确描述目标行为
+2. 运行该测试，确认失败原因符合预期
+3. 写最小实现让测试通过
+4. 重新运行相关测试，确认结果为绿色
+5. 保持重构范围只服务当前测试覆盖的行为
 
 ### 必需测试
 
@@ -262,14 +270,25 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
    - 验证 `WEBVTT`、时间轴和 cue 文本
 2. `test_vtt_rejects_empty_segments`
    - 验证空 segment 输出会被拒绝
-3. `test_cli_requires_input_and_output`
-   - 验证缺少参数时退出码为 `2`
+3. `test_cli_requires_all_required_arguments`
+   - 验证缺少任一必填参数时退出码为 `2`
 4. `test_cli_creates_parent_directory_for_output`
    - 验证嵌套输出路径会自动创建
 5. `test_cli_prints_json_on_success`
    - 验证成功 stdout 的 JSON 结构稳定
 6. `test_cli_returns_code_3_when_transcriber_fails`
    - 验证转写失败会映射到退出码 `3`
+
+### 首批失败测试顺序
+
+实现从以下失败测试开始：
+
+1. `test_cli_requires_all_required_arguments`
+2. `test_vtt_writes_header_and_cues`
+3. `test_vtt_rejects_empty_segments`
+4. `test_cli_creates_parent_directory_for_output`
+5. `test_cli_prints_json_on_success`
+6. `test_cli_returns_code_3_when_transcriber_fails`
 
 ### 后续测试
 
@@ -294,10 +313,11 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 为了降低实现歧义，第一版固定以下选择：
 
 - package 作为仓库根目录下的独立项目：`whisper/`
-- monorepo 根目录统一持有 `.mise.toml`
+- monorepo 根目录统一持有 `mise.toml`
 - 依赖管理使用 `uv`
 - 工具链版本管理通过根目录 `mise` 完成
-- 命令只暴露 4 个用户参数
+- 命令只暴露 4 个必填用户参数
+- 实现过程采用 TDD
 - 成功运行会覆盖目标输出文件
 - 成功输出使用 stdout 单行 JSON
 - 失败输出使用 stderr 单行纯文本
@@ -309,6 +329,7 @@ stderr 使用纯文本，便于直接进入 Go runner 日志和人工排障。
 
 - 在仓库根目录执行 `mise install` 可以准备统一工具链环境
 - 在 `whisper/` 内执行 `uv sync` 可以准备 Python 依赖
+- 首批失败测试按既定顺序落地，并在实现完成后通过
 - `uv run whisper-cli --input ... --output ...` 可以生成有效 `source.vtt`
 - CLI 成功和失败路径返回预期退出码
 - 必需测试在本地通过
