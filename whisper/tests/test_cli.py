@@ -155,6 +155,37 @@ def test_cli_returns_code_2_when_language_code_is_invalid(
     assert "valid language code" in captured.err
 
 
+def test_cli_returns_code_2_when_model_name_is_invalid(tmp_path, monkeypatch, capsys):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    output_path = tmp_path / "result.vtt"
+
+    class InvalidModelName:
+        def __init__(self, model_name: str) -> None:
+            raise ValueError(f"Invalid model size '{model_name}'")
+
+    monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", InvalidModelName)
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--model",
+            "not-a-real-model",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "input validation failed:" in captured.err
+    assert "Invalid model size" in captured.err
+
+
 def test_cli_returns_code_2_when_input_file_is_not_readable(
     tmp_path, monkeypatch, capsys
 ):

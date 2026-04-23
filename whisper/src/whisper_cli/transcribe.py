@@ -12,6 +12,12 @@ class InputValidationError(Exception):
     pass
 
 
+def _raise_input_validation_error(exc: ValueError) -> None:
+    message = str(exc)
+    if "Invalid model size" in message or "valid language code" in message:
+        raise InputValidationError(message) from exc
+
+
 @dataclass(frozen=True)
 class TranscriptionResult:
     language: str
@@ -25,12 +31,22 @@ def transcribe_audio(
     model_name: str,
     language: str,
 ) -> TranscriptionResult:
-    model = WhisperModel(model_name)
+    try:
+        model = WhisperModel(model_name)
+    except ValueError as exc:
+        _raise_input_validation_error(exc)
+        raise
+
+    if getattr(getattr(model, "model", None), "is_multilingual", True) is False:
+        if language != "en":
+            raise InputValidationError(
+                f"model '{model_name}' only supports language 'en'"
+            )
+
     try:
         raw_segments, info = model.transcribe(str(input_path), language=language)
     except ValueError as exc:
-        if "valid language code" in str(exc):
-            raise InputValidationError(str(exc)) from exc
+        _raise_input_validation_error(exc)
         raise
     segments = [
         Segment(start=segment.start, end=segment.end, text=segment.text)
@@ -40,7 +56,7 @@ def transcribe_audio(
         raise RuntimeError("transcription produced no segments")
 
     return TranscriptionResult(
-        language=info.language,
+        language=language,
         duration_seconds=info.duration,
         segments=segments,
     )

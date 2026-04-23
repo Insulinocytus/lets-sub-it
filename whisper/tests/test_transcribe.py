@@ -2,7 +2,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from whisper_cli.transcribe import TranscriptionResult, transcribe_audio
+from whisper_cli.transcribe import (
+    InputValidationError,
+    TranscriptionResult,
+    transcribe_audio,
+)
 
 
 class FakeSegment:
@@ -87,5 +91,31 @@ def test_transcribe_audio_rejects_empty_segment_output(monkeypatch, tmp_path):
         transcribe_audio(
             input_path=input_path,
             model_name="small",
+            language="ja",
+        )
+
+
+def test_transcribe_audio_rejects_english_only_model_with_non_english_language(
+    monkeypatch, tmp_path
+):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_bytes(b"audio")
+
+    class EnglishOnlyModel:
+        def __init__(self, model_name: str) -> None:
+            self.model_name = model_name
+            self.model = SimpleNamespace(is_multilingual=False)
+
+        def transcribe(self, input_path: str, language: str):
+            info = SimpleNamespace(language="en", duration=2.5)
+            segments = [FakeSegment(0.0, 1.0, "hello")]
+            return iter(segments), info
+
+    monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", EnglishOnlyModel)
+
+    with pytest.raises(InputValidationError, match="only supports language 'en'"):
+        transcribe_audio(
+            input_path=input_path,
+            model_name="small.en",
             language="ja",
         )
