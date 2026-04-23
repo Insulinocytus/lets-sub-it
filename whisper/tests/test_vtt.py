@@ -31,3 +31,8 @@ def test_vtt_rejects_zero_duration_after_millisecond_rounding():
 def test_vtt_rejects_negative_timestamps():
     with pytest.raises(ValueError, match="segment timestamps must be non-negative"):
         render_vtt([Segment(start=-0.1, end=0.5, text="x")])
+
+
+def test_vtt_rejects_near_zero_negative_timestamps():
+    with pytest.raises(ValueError, match="segment timestamps must be non-negative"):
+        render_vtt([Segment(start=-0.0004, end=0.5, text="x")])

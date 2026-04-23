@@ -41,6 +41,8 @@ def render_vtt(segments: Sequence[Segment]) -> str:
         text = segment.text.strip()
         if not text:
             raise ValueError("segment text must not be empty")
+        if segment.start < 0 or segment.end < 0:
+            raise ValueError("segment timestamps must be non-negative")
         start_ms = round(segment.start * 1000)
         end_ms = round(segment.end * 1000)
         if start_ms < 0 or end_ms < 0:
