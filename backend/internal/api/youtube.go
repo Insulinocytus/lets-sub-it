@@ -21,6 +21,9 @@ func ParseVideoID(rawURL string) (string, error) {
 
 	host := strings.ToLower(parsed.Host)
 	if host == "www.youtube.com" || host == "youtube.com" {
+		if parsed.Path != "/watch" {
+			return "", ErrInvalidYouTubeURL
+		}
 		videoID := parsed.Query().Get("v")
 		if videoID == "" {
 			return "", ErrInvalidYouTubeURL

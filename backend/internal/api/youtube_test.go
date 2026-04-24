@@ -33,3 +33,9 @@ func TestParseVideoIDRejectsUnsupportedScheme(t *testing.T) {
 		t.Fatal("ParseVideoID() expected error")
 	}
 }
+
+func TestParseVideoIDRejectsNonWatchYouTubeURL(t *testing.T) {
+	if _, err := ParseVideoID("https://www.youtube.com/embed/abc123?v=abc123"); err == nil {
+		t.Fatal("ParseVideoID() expected error")
+	}
+}
