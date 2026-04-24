@@ -46,6 +46,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"input validation failed: {exc}", file=sys.stderr)
         return 2
 
+    if input_path.resolve() == output_path.resolve():
+        print(
+            "input validation failed: output path must differ from input path",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         result = transcribe_audio(
             input_path=input_path,

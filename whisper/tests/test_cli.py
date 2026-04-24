@@ -263,6 +263,40 @@ def test_cli_returns_code_2_when_input_file_is_not_readable(
     assert transcribe_called is False
 
 
+def test_cli_rejects_output_path_matching_input_path(tmp_path, monkeypatch, capsys):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    transcribe_called = False
+
+    def fake_transcribe(**_):
+        nonlocal transcribe_called
+        transcribe_called = True
+        return fake_result()
+
+    monkeypatch.setattr("whisper_cli.cli.transcribe_audio", fake_transcribe)
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(input_path),
+            "--model",
+            "small",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "input validation failed:" in captured.err
+    assert "output path must differ from input path" in captured.err
+    assert input_path.read_text() == "audio"
+    assert transcribe_called is False
+
+
 def test_cli_writes_output_with_explicit_utf8_encoding(
     tmp_path, monkeypatch, capsys
 ):
