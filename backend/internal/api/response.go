@@ -31,6 +31,15 @@ type jobResponse struct {
 	UpdatedAt      string  `json:"updatedAt"`
 }
 
+type assetResponse struct {
+	JobID          string            `json:"jobId"`
+	VideoID        string            `json:"videoId"`
+	TargetLanguage string            `json:"targetLanguage"`
+	SourceLanguage string            `json:"sourceLanguage"`
+	Files          map[string]string `json:"files"`
+	CreatedAt      string            `json:"createdAt"`
+}
+
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -59,6 +68,21 @@ func toJobResponse(job store.Job) jobResponse {
 		ErrorMessage:   job.ErrorMessage,
 		CreatedAt:      formatTime(job.CreatedAt),
 		UpdatedAt:      formatTime(job.UpdatedAt),
+	}
+}
+
+func toAssetResponse(asset store.SubtitleAsset) assetResponse {
+	return assetResponse{
+		JobID:          asset.JobID,
+		VideoID:        asset.VideoID,
+		TargetLanguage: asset.TargetLanguage,
+		SourceLanguage: asset.SourceLanguage,
+		Files: map[string]string{
+			"source":     "/subtitle-files/" + asset.JobID + "/source",
+			"translated": "/subtitle-files/" + asset.JobID + "/translated",
+			"bilingual":  "/subtitle-files/" + asset.JobID + "/bilingual",
+		},
+		CreatedAt: formatTime(asset.CreatedAt),
 	}
 }
 
