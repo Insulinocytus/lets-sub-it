@@ -18,14 +18,14 @@ func NewMockRunner(store Store) *MockRunner {
 
 func (r *MockRunner) Start(ctx context.Context, job store.Job) error {
 	if err := r.set(job.ID, store.StatusDownloading, "准备 mock 媒体", ""); err != nil {
-		return err
+		return r.fail(job.ID, store.StatusDownloading, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return r.fail(job.ID, store.StatusDownloading, err)
 	}
 
 	if err := r.set(job.ID, store.StatusTranscribing, "生成 mock source.vtt", ""); err != nil {
-		return err
+		return r.fail(job.ID, store.StatusTranscribing, err)
 	}
 	if err := os.MkdirAll(job.WorkingDir, 0o755); err != nil {
 		return r.fail(job.ID, store.StatusTranscribing, err)
@@ -41,7 +41,7 @@ func (r *MockRunner) Start(ctx context.Context, job store.Job) error {
 
 	for _, progress := range []string{"1/3 segments", "2/3 segments", "3/3 segments"} {
 		if err := r.set(job.ID, store.StatusTranslating, progress, ""); err != nil {
-			return err
+			return r.fail(job.ID, store.StatusTranslating, err)
 		}
 	}
 
@@ -50,7 +50,7 @@ func (r *MockRunner) Start(ctx context.Context, job store.Job) error {
 	}
 
 	if err := r.set(job.ID, store.StatusPackaging, "生成字幕资产", ""); err != nil {
-		return err
+		return r.fail(job.ID, store.StatusPackaging, err)
 	}
 	if err := os.WriteFile(bilingualPath, []byte(mockBilingualVTT), 0o644); err != nil {
 		return r.fail(job.ID, store.StatusPackaging, err)

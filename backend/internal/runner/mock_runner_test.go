@@ -101,13 +101,15 @@ func TestMockRunnerMarksCanceledJobAsFailed(t *testing.T) {
 
 func TestMockRunnerFailsJobWhenCompletionUpdateFails(t *testing.T) {
 	fakeStore := &recordingStore{
-		failOnCompleted: errors.New("completed update failed"),
+		failOnStatus: map[string]error{
+			store.StatusCompleted: errors.New("completed update failed"),
+		},
 	}
 	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", t.TempDir())
 
 	err := NewMockRunner(fakeStore).Start(context.Background(), job)
-	if !errors.Is(err, fakeStore.failOnCompleted) {
-		t.Fatalf("Start() error = %v, want %v", err, fakeStore.failOnCompleted)
+	if !errors.Is(err, fakeStore.failOnStatus[store.StatusCompleted]) {
+		t.Fatalf("Start() error = %v, want %v", err, fakeStore.failOnStatus[store.StatusCompleted])
 	}
 
 	if len(fakeStore.calls) == 0 {
@@ -128,8 +130,8 @@ func TestMockRunnerFailsJobWhenCompletionUpdateFails(t *testing.T) {
 			if call.progressText != "处理失败" {
 				t.Fatalf("failed progressText = %q, want %q", call.progressText, "处理失败")
 			}
-			if call.errorMessage != fakeStore.failOnCompleted.Error() {
-				t.Fatalf("failed errorMessage = %q, want %q", call.errorMessage, fakeStore.failOnCompleted.Error())
+			if call.errorMessage != fakeStore.failOnStatus[store.StatusCompleted].Error() {
+				t.Fatalf("failed errorMessage = %q, want %q", call.errorMessage, fakeStore.failOnStatus[store.StatusCompleted].Error())
 			}
 		}
 	}
@@ -145,10 +147,51 @@ func TestMockRunnerFailsJobWhenCompletionUpdateFails(t *testing.T) {
 	}
 }
 
+func TestMockRunnerMarksFailedWhenTranscribingUpdateFails(t *testing.T) {
+	fakeStore := &recordingStore{
+		failOnStatus: map[string]error{
+			store.StatusTranscribing: errors.New("transcribing update failed"),
+		},
+	}
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", t.TempDir())
+
+	err := NewMockRunner(fakeStore).Start(context.Background(), job)
+	if !errors.Is(err, fakeStore.failOnStatus[store.StatusTranscribing]) {
+		t.Fatalf("Start() error = %v, want %v", err, fakeStore.failOnStatus[store.StatusTranscribing])
+	}
+
+	var sawTranscribingUpdate bool
+	var sawFailedUpdate bool
+	for _, call := range fakeStore.calls {
+		if call.status == store.StatusTranscribing {
+			sawTranscribingUpdate = true
+		}
+		if call.status == store.StatusFailed {
+			sawFailedUpdate = true
+			if call.stage != store.StatusTranscribing {
+				t.Fatalf("failed stage = %q, want %q", call.stage, store.StatusTranscribing)
+			}
+			if call.progressText != "处理失败" {
+				t.Fatalf("failed progressText = %q, want %q", call.progressText, "处理失败")
+			}
+			if call.errorMessage != fakeStore.failOnStatus[store.StatusTranscribing].Error() {
+				t.Fatalf("failed errorMessage = %q, want %q", call.errorMessage, fakeStore.failOnStatus[store.StatusTranscribing].Error())
+			}
+		}
+	}
+
+	if !sawTranscribingUpdate {
+		t.Fatal("expected transcribing status update attempt")
+	}
+	if !sawFailedUpdate {
+		t.Fatal("expected failed status update attempt")
+	}
+}
+
 type recordingStore struct {
-	calls           []updateCall
-	assets          []store.SubtitleAsset
-	failOnCompleted error
+	calls        []updateCall
+	assets       []store.SubtitleAsset
+	failOnStatus map[string]error
 }
 
 type updateCall struct {
@@ -167,8 +210,10 @@ func (s *recordingStore) UpdateJobStatus(id string, status string, stage string,
 		progressText: progressText,
 		errorMessage: errorMessage,
 	})
-	if status == store.StatusCompleted && s.failOnCompleted != nil {
-		return s.failOnCompleted
+	if s.failOnStatus != nil {
+		if err, ok := s.failOnStatus[status]; ok {
+			return err
+		}
 	}
 	return nil
 }
