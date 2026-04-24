@@ -115,6 +115,14 @@ func TestStoreFindsSubtitleAssetByJobID(t *testing.T) {
 	}
 }
 
+func TestStoreFindsSubtitleAssetByJobIDReturnsErrNotFound(t *testing.T) {
+	store := openTestStore(t)
+
+	if _, err := store.FindSubtitleAssetByJobID("missing-job"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindSubtitleAssetByJobID() error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestStoreReturnsErrNotFound(t *testing.T) {
 	store := openTestStore(t)
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -128,6 +129,49 @@ func TestSubtitleFileServing(t *testing.T) {
 	}
 }
 
+func TestSubtitleFileRejectsInvalidMode(t *testing.T) {
+	server := newTestServer(t)
+	request := httptest.NewRequest(http.MethodGet, "/subtitle-files/missing-job/invalid", nil)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSubtitleFileRejectsPathOutsideJobDir(t *testing.T) {
+	workingDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, "translated.vtt")
+	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	handler := NewHandler(handlerWithAssetPath{
+		job: store.Job{
+			ID:         "job_1",
+			WorkingDir: workingDir,
+		},
+		asset: store.SubtitleAsset{
+			JobID:             "job_1",
+			SourceVTTPath:     filepath.Join(workingDir, "source.vtt"),
+			TranslatedVTTPath: outsidePath,
+			BilingualVTTPath:  filepath.Join(workingDir, "bilingual.vtt"),
+		},
+	}, noopRunner{}, t.TempDir())
+	server := Routes(handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/subtitle-files/job_1/translated", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+}
+
 func waitForJobCompleted(t *testing.T, server http.Handler, jobID string) {
 	t.Helper()
 	var last *httptest.ResponseRecorder
@@ -173,3 +217,38 @@ func waitForAsset(t *testing.T, server http.Handler, jobID string) *httptest.Res
 	t.Fatalf("asset never became available, last response = %s", last.Body.String())
 	return nil
 }
+
+type handlerWithAssetPath struct {
+	job   store.Job
+	asset store.SubtitleAsset
+}
+
+func (h handlerWithAssetPath) CreateJob(job store.Job) error {
+	return nil
+}
+
+func (h handlerWithAssetPath) FindJob(id string) (store.Job, error) {
+	if id == h.job.ID {
+		return h.job, nil
+	}
+	return store.Job{}, store.ErrNotFound
+}
+
+func (h handlerWithAssetPath) FindReusableJob(videoID string, targetLanguage string) (store.Job, error) {
+	return store.Job{}, store.ErrNotFound
+}
+
+func (h handlerWithAssetPath) FindSubtitleAsset(videoID string, targetLanguage string) (store.SubtitleAsset, error) {
+	return store.SubtitleAsset{}, store.ErrNotFound
+}
+
+func (h handlerWithAssetPath) FindSubtitleAssetByJobID(jobID string) (store.SubtitleAsset, error) {
+	if jobID == h.asset.JobID {
+		return h.asset, nil
+	}
+	return store.SubtitleAsset{}, store.ErrNotFound
+}
+
+type noopRunner struct{}
+
+func (noopRunner) Start(ctx context.Context, job store.Job) error { return nil }

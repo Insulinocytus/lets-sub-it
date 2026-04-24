@@ -177,8 +177,14 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 
 	path := strings.TrimPrefix(r.URL.Path, "/subtitle-files/")
 	jobID, mode, ok := strings.Cut(path, "/")
-	if !ok || jobID == "" || mode == "" || strings.Contains(jobID, "/") || strings.Contains(mode, "/") {
+	if !ok || jobID == "" || strings.Contains(jobID, "/") || strings.Contains(mode, "/") {
 		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+
+	expectedFileName, ok := subtitleFileNameForMode(mode)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be source, translated, or bilingual")
 		return
 	}
 
@@ -192,6 +198,16 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	job, err := h.store.FindJob(jobID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query job")
+		return
+	}
+
 	var filePath string
 	switch mode {
 	case "source":
@@ -200,8 +216,10 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		filePath = asset.TranslatedVTTPath
 	case "bilingual":
 		filePath = asset.BilingualVTTPath
-	default:
-		writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be source, translated, or bilingual")
+	}
+
+	if !subtitleFilePathAllowed(job.WorkingDir, filePath, expectedFileName) {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
 		return
 	}
 
@@ -211,4 +229,34 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, filePath)
+}
+
+func subtitleFileNameForMode(mode string) (string, bool) {
+	switch mode {
+	case "source":
+		return "source.vtt", true
+	case "translated":
+		return "translated.vtt", true
+	case "bilingual":
+		return "bilingual.vtt", true
+	default:
+		return "", false
+	}
+}
+
+func subtitleFilePathAllowed(workingDir string, selectedPath string, expectedFileName string) bool {
+	cleanWorkingDir := filepath.Clean(workingDir)
+	cleanSelectedPath := filepath.Clean(selectedPath)
+	if filepath.Base(cleanSelectedPath) != expectedFileName {
+		return false
+	}
+
+	rel, err := filepath.Rel(cleanWorkingDir, cleanSelectedPath)
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
 }
