@@ -62,3 +62,38 @@ func TestMockRunnerCompletesJobAndWritesAssets(t *testing.T) {
 		t.Fatalf("JobID = %q", asset.JobID)
 	}
 }
+
+func TestMockRunnerMarksCanceledJobAsFailed(t *testing.T) {
+	testStore := openTestStore(t)
+	jobDir := t.TempDir()
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+
+	if err := testStore.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := NewMockRunner(testStore).Start(ctx, job)
+	if err == nil {
+		t.Fatal("Start() error = nil, want context canceled")
+	}
+
+	updatedJob, findErr := testStore.FindJob("job_1")
+	if findErr != nil {
+		t.Fatalf("FindJob() error = %v", findErr)
+	}
+	if updatedJob.Status != store.StatusFailed {
+		t.Fatalf("Status = %q, want %q", updatedJob.Status, store.StatusFailed)
+	}
+	if updatedJob.Stage != store.StatusDownloading {
+		t.Fatalf("Stage = %q, want %q", updatedJob.Stage, store.StatusDownloading)
+	}
+	if updatedJob.ProgressText != "处理失败" {
+		t.Fatalf("ProgressText = %q, want %q", updatedJob.ProgressText, "处理失败")
+	}
+	if updatedJob.ErrorMessage == nil {
+		t.Fatal("ErrorMessage = nil, want non-nil")
+	}
+}

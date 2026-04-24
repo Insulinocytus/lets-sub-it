@@ -77,7 +77,7 @@ func (r *MockRunner) set(jobID string, status string, progressText string, error
 }
 
 func (r *MockRunner) fail(jobID string, stage string, cause error) error {
-	if updateErr := r.store.UpdateJobStatus(jobID, store.StatusFailed, stage, "任务失败", cause.Error()); updateErr != nil {
+	if updateErr := r.store.UpdateJobStatus(jobID, store.StatusFailed, stage, "处理失败", cause.Error()); updateErr != nil {
 		return updateErr
 	}
 	return cause
