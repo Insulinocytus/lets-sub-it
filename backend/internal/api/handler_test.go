@@ -58,7 +58,7 @@ func TestPostJobsCreatesJobAndCompletesWithMockRunner(t *testing.T) {
 		t.Fatalf("payload = %+v", payload)
 	}
 
-	waitForAsset(t, server, payload.Job.ID)
+	waitForJobCompleted(t, server, payload.Job.ID)
 }
 
 func TestPostJobsRejectsMissingSourceLanguage(t *testing.T) {
@@ -87,10 +87,40 @@ func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 		t.Fatalf("Unmarshal create response error = %v", err)
 	}
 
+	waitForJobCompleted(t, server, createPayload.Job.ID)
 	assetResponse := waitForAsset(t, server, createPayload.Job.ID)
 	if !bytes.Contains(assetResponse.Body.Bytes(), []byte("/subtitle-files/"+createPayload.Job.ID+"/translated")) {
 		t.Fatalf("asset body = %s", assetResponse.Body.String())
 	}
+}
+
+func waitForJobCompleted(t *testing.T, server http.Handler, jobID string) {
+	t.Helper()
+	var last *httptest.ResponseRecorder
+	for range 20 {
+		request := httptest.NewRequest(http.MethodGet, "/jobs/"+jobID, nil)
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		last = response
+
+		if response.Code != http.StatusOK {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+
+		var payload struct {
+			Job jobResponse `json:"job"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("Unmarshal job response error = %v", err)
+		}
+		if payload.Job.Status == store.StatusCompleted {
+			return
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("job never became completed, last response = %s", last.Body.String())
 }
 
 func waitForAsset(t *testing.T, server http.Handler, jobID string) *httptest.ResponseRecorder {
