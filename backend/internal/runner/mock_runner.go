@@ -69,7 +69,10 @@ func (r *MockRunner) Start(ctx context.Context, job store.Job) error {
 		return r.fail(job.ID, store.StatusPackaging, err)
 	}
 
-	return r.set(job.ID, store.StatusCompleted, "处理完成", "")
+	if err := r.set(job.ID, store.StatusCompleted, "处理完成", ""); err != nil {
+		return r.fail(job.ID, store.StatusCompleted, err)
+	}
+	return nil
 }
 
 func (r *MockRunner) set(jobID string, status string, progressText string, errorMessage string) error {

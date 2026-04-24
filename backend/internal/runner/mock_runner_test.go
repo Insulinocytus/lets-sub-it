@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,4 +97,83 @@ func TestMockRunnerMarksCanceledJobAsFailed(t *testing.T) {
 	if updatedJob.ErrorMessage == nil {
 		t.Fatal("ErrorMessage = nil, want non-nil")
 	}
+}
+
+func TestMockRunnerFailsJobWhenCompletionUpdateFails(t *testing.T) {
+	fakeStore := &recordingStore{
+		failOnCompleted: errors.New("completed update failed"),
+	}
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", t.TempDir())
+
+	err := NewMockRunner(fakeStore).Start(context.Background(), job)
+	if !errors.Is(err, fakeStore.failOnCompleted) {
+		t.Fatalf("Start() error = %v, want %v", err, fakeStore.failOnCompleted)
+	}
+
+	if len(fakeStore.calls) == 0 {
+		t.Fatal("expected UpdateJobStatus calls")
+	}
+
+	var sawCompletedUpdate bool
+	var sawFailedUpdate bool
+	for _, call := range fakeStore.calls {
+		if call.status == store.StatusCompleted {
+			sawCompletedUpdate = true
+		}
+		if call.status == store.StatusFailed {
+			sawFailedUpdate = true
+			if call.stage != store.StatusCompleted {
+				t.Fatalf("failed stage = %q, want %q", call.stage, store.StatusCompleted)
+			}
+			if call.progressText != "处理失败" {
+				t.Fatalf("failed progressText = %q, want %q", call.progressText, "处理失败")
+			}
+			if call.errorMessage != fakeStore.failOnCompleted.Error() {
+				t.Fatalf("failed errorMessage = %q, want %q", call.errorMessage, fakeStore.failOnCompleted.Error())
+			}
+		}
+	}
+
+	if !sawCompletedUpdate {
+		t.Fatal("expected completed status update attempt")
+	}
+	if !sawFailedUpdate {
+		t.Fatal("expected failed status update attempt")
+	}
+	if len(fakeStore.assets) != 1 {
+		t.Fatalf("CreateSubtitleAsset calls = %d, want 1", len(fakeStore.assets))
+	}
+}
+
+type recordingStore struct {
+	calls           []updateCall
+	assets          []store.SubtitleAsset
+	failOnCompleted error
+}
+
+type updateCall struct {
+	id           string
+	status       string
+	stage        string
+	progressText string
+	errorMessage string
+}
+
+func (s *recordingStore) UpdateJobStatus(id string, status string, stage string, progressText string, errorMessage string) error {
+	s.calls = append(s.calls, updateCall{
+		id:           id,
+		status:       status,
+		stage:        stage,
+		progressText: progressText,
+		errorMessage: errorMessage,
+	})
+	if status == store.StatusCompleted && s.failOnCompleted != nil {
+		return s.failOnCompleted
+	}
+	return nil
+}
+
+func (s *recordingStore) CreateSubtitleAsset(asset store.SubtitleAsset) error {
+	s.assets = append(s.assets, asset)
+	return nil
 }
