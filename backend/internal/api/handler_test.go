@@ -172,6 +172,72 @@ func TestSubtitleFileRejectsPathOutsideJobDir(t *testing.T) {
 	}
 }
 
+func TestSubtitleFileRejectsSymlinkEscape(t *testing.T) {
+	workingDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, "translated.vtt")
+	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside symlink\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	symlinkPath := filepath.Join(workingDir, "translated.vtt")
+	if err := os.Symlink(outsidePath, symlinkPath); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	handler := NewHandler(handlerWithAssetPath{
+		job: store.Job{
+			ID:         "job_1",
+			WorkingDir: workingDir,
+		},
+		asset: store.SubtitleAsset{
+			JobID:             "job_1",
+			SourceVTTPath:     filepath.Join(workingDir, "source.vtt"),
+			TranslatedVTTPath: symlinkPath,
+			BilingualVTTPath:  filepath.Join(workingDir, "bilingual.vtt"),
+		},
+	}, noopRunner{}, t.TempDir())
+	server := Routes(handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/subtitle-files/job_1/translated", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSubtitleFileRejectsNonRegularFile(t *testing.T) {
+	workingDir := t.TempDir()
+	directoryPath := filepath.Join(workingDir, "translated.vtt")
+	if err := os.Mkdir(directoryPath, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+
+	handler := NewHandler(handlerWithAssetPath{
+		job: store.Job{
+			ID:         "job_1",
+			WorkingDir: workingDir,
+		},
+		asset: store.SubtitleAsset{
+			JobID:             "job_1",
+			SourceVTTPath:     filepath.Join(workingDir, "source.vtt"),
+			TranslatedVTTPath: directoryPath,
+			BilingualVTTPath:  filepath.Join(workingDir, "bilingual.vtt"),
+		},
+	}, noopRunner{}, t.TempDir())
+	server := Routes(handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/subtitle-files/job_1/translated", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+}
+
 func waitForJobCompleted(t *testing.T, server http.Handler, jobID string) {
 	t.Helper()
 	var last *httptest.ResponseRecorder

@@ -224,7 +224,18 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	if _, err := os.Stat(filePath); err != nil {
+	info, err := os.Lstat(filePath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+
+	info, err = os.Stat(filePath)
+	if err != nil || !info.Mode().IsRegular() {
 		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
 		return
 	}
