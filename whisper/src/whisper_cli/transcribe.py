@@ -52,8 +52,6 @@ def transcribe_audio(
         Segment(start=segment.start, end=segment.end, text=segment.text)
         for segment in raw_segments
     ]
-    if not segments:
-        raise RuntimeError("transcription produced no segments")
 
     return TranscriptionResult(
         language=language,

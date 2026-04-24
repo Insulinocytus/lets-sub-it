@@ -74,7 +74,7 @@ def test_transcribe_audio_uses_sdk_reported_duration(monkeypatch, tmp_path):
     assert result.duration_seconds == 3.75
 
 
-def test_transcribe_audio_rejects_empty_segment_output(monkeypatch, tmp_path):
+def test_transcribe_audio_allows_empty_segment_output(monkeypatch, tmp_path):
     input_path = tmp_path / "audio.mp3"
     input_path.write_bytes(b"audio")
 
@@ -83,16 +83,17 @@ def test_transcribe_audio_rejects_empty_segment_output(monkeypatch, tmp_path):
             self.model_name = model_name
 
         def transcribe(self, input_path: str, language: str):
-            return iter([]), SimpleNamespace(language=language)
+            return iter([]), SimpleNamespace(language=language, duration=0.0)
 
     monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", EmptyModel)
 
-    with pytest.raises(RuntimeError, match="transcription produced no segments"):
-        transcribe_audio(
-            input_path=input_path,
-            model_name="small",
-            language="ja",
-        )
+    result = transcribe_audio(
+        input_path=input_path,
+        model_name="small",
+        language="ja",
+    )
+
+    assert result.segments == []
 
 
 def test_transcribe_audio_rejects_english_only_model_with_non_english_language(

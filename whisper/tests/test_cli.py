@@ -116,6 +116,41 @@ def test_cli_returns_code_3_when_transcriber_fails(tmp_path, monkeypatch, capsys
     assert "transcription failed: model download error" in captured.err
 
 
+def test_cli_returns_code_4_when_transcriber_returns_no_segments(
+    tmp_path, monkeypatch, capsys
+):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    output_path = tmp_path / "result.vtt"
+
+    def empty_result() -> TranscriptionResult:
+        return TranscriptionResult(
+            language="ja",
+            duration_seconds=0.0,
+            segments=[],
+        )
+
+    monkeypatch.setattr("whisper_cli.cli.transcribe_audio", lambda **_: empty_result())
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--model",
+            "small",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 4
+    assert "output validation failed: segments must not be empty" in captured.err
+
+
 def test_cli_returns_code_2_when_language_code_is_invalid(
     tmp_path, monkeypatch, capsys
 ):

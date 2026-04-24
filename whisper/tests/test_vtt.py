@@ -36,3 +36,13 @@ def test_vtt_rejects_negative_timestamps():
 def test_vtt_rejects_near_zero_negative_timestamps():
     with pytest.raises(ValueError, match="segment timestamps must be non-negative"):
         render_vtt([Segment(start=-0.0004, end=0.5, text="x")])
+
+
+def test_vtt_rejects_blank_lines_in_cue_text():
+    with pytest.raises(ValueError, match="segment text must not contain blank lines"):
+        render_vtt([Segment(start=0.0, end=1.0, text="first\n\nsecond")])
+
+
+def test_vtt_rejects_timestamp_separator_in_cue_text():
+    with pytest.raises(ValueError, match="segment text must not contain -->"):
+        render_vtt([Segment(start=0.0, end=1.0, text="00:00:00.000 --> 00:00:01.000")])
