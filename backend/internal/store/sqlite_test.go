@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -82,5 +83,62 @@ func TestStoreCreatesAndFindsSubtitleAsset(t *testing.T) {
 	}
 	if found.JobID != "job_1" || found.SourceLanguage != "ja" {
 		t.Fatalf("asset = %+v", found)
+	}
+}
+
+func TestStoreReturnsErrNotFound(t *testing.T) {
+	store := openTestStore(t)
+
+	if _, err := store.FindJob("missing-job"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindJob() error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.FindSubtitleAsset("missing-video", "zh-CN"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindSubtitleAsset() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestStoreUpdatesJobStatusFields(t *testing.T) {
+	store := openTestStore(t)
+	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", "/tmp/job_1")
+	if err := store.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	if err := store.UpdateJobStatus("job_1", StatusFailed, StatusTranscribing, "失败", "boom"); err != nil {
+		t.Fatalf("UpdateJobStatus() error = %v", err)
+	}
+
+	updated, err := store.FindJob("job_1")
+	if err != nil {
+		t.Fatalf("FindJob() error = %v", err)
+	}
+	if updated.Status != StatusFailed {
+		t.Fatalf("Status = %q", updated.Status)
+	}
+	if updated.Stage != StatusTranscribing {
+		t.Fatalf("Stage = %q", updated.Stage)
+	}
+	if updated.ProgressText != "失败" {
+		t.Fatalf("ProgressText = %q", updated.ProgressText)
+	}
+	if updated.ErrorMessage == nil || *updated.ErrorMessage != "boom" {
+		t.Fatalf("ErrorMessage = %v", updated.ErrorMessage)
+	}
+}
+
+func TestStoreRejectsOrphanSubtitleAsset(t *testing.T) {
+	store := openTestStore(t)
+	asset := SubtitleAsset{
+		JobID:             "missing-job",
+		VideoID:           "abc123",
+		TargetLanguage:    "zh-CN",
+		SourceLanguage:    "ja",
+		SourceVTTPath:     "/tmp/job_1/source.vtt",
+		TranslatedVTTPath: "/tmp/job_1/translated.vtt",
+		BilingualVTTPath:  "/tmp/job_1/bilingual.vtt",
+	}
+
+	if err := store.CreateSubtitleAsset(asset); err == nil {
+		t.Fatal("CreateSubtitleAsset() expected foreign key error")
 	}
 }

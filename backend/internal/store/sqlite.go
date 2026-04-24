@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -14,11 +15,18 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(foreignKeyDSN(path)), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+func foreignKeyDSN(path string) string {
+	if strings.Contains(path, "?") {
+		return path + "&_foreign_keys=on"
+	}
+	return path + "?_foreign_keys=on"
 }
 
 func (s *Store) CreateJob(job Job) error {
