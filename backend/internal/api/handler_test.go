@@ -57,6 +57,8 @@ func TestPostJobsCreatesJobAndCompletesWithMockRunner(t *testing.T) {
 	if payload.Reused || payload.Job.VideoID != "abc123" || payload.Job.SourceLanguage != "ja" {
 		t.Fatalf("payload = %+v", payload)
 	}
+
+	waitForAsset(t, server, payload.Job.ID)
 }
 
 func TestPostJobsRejectsMissingSourceLanguage(t *testing.T) {
