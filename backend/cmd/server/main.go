@@ -13,5 +13,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("starting lets-sub-it-api on %s", config.Addr)
 	log.Fatal(http.ListenAndServe(config.Addr, handler))
 }
