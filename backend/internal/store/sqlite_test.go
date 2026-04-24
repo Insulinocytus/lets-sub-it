@@ -86,6 +86,35 @@ func TestStoreCreatesAndFindsSubtitleAsset(t *testing.T) {
 	}
 }
 
+func TestStoreFindsSubtitleAssetByJobID(t *testing.T) {
+	store := openTestStore(t)
+	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", "/tmp/job_1")
+	if err := store.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	asset := SubtitleAsset{
+		JobID:             "job_1",
+		VideoID:           "abc123",
+		TargetLanguage:    "zh-CN",
+		SourceLanguage:    "ja",
+		SourceVTTPath:     "/tmp/job_1/source.vtt",
+		TranslatedVTTPath: "/tmp/job_1/translated.vtt",
+		BilingualVTTPath:  "/tmp/job_1/bilingual.vtt",
+	}
+	if err := store.CreateSubtitleAsset(asset); err != nil {
+		t.Fatalf("CreateSubtitleAsset() error = %v", err)
+	}
+
+	found, err := store.FindSubtitleAssetByJobID("job_1")
+	if err != nil {
+		t.Fatalf("FindSubtitleAssetByJobID() error = %v", err)
+	}
+	if found.JobID != "job_1" || found.TranslatedVTTPath != "/tmp/job_1/translated.vtt" {
+		t.Fatalf("asset = %+v", found)
+	}
+}
+
 func TestStoreReturnsErrNotFound(t *testing.T) {
 	store := openTestStore(t)
 

@@ -94,3 +94,14 @@ func (s *Store) FindSubtitleAsset(videoID string, targetLanguage string) (Subtit
 	}
 	return asset, nil
 }
+
+func (s *Store) FindSubtitleAssetByJobID(jobID string) (SubtitleAsset, error) {
+	var asset SubtitleAsset
+	if err := s.db.First(&asset, "job_id = ?", jobID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return SubtitleAsset{}, ErrNotFound
+		}
+		return SubtitleAsset{}, err
+	}
+	return asset, nil
+}

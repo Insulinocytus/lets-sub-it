@@ -94,6 +94,40 @@ func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 	}
 }
 
+func TestSubtitleFileServing(t *testing.T) {
+	server := newTestServer(t)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh-CN"}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/jobs", body)
+	createResponse := httptest.NewRecorder()
+	server.ServeHTTP(createResponse, createRequest)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body = %s", createResponse.Code, createResponse.Body.String())
+	}
+
+	var createPayload struct {
+		Job jobResponse `json:"job"`
+	}
+	if err := json.Unmarshal(createResponse.Body.Bytes(), &createPayload); err != nil {
+		t.Fatalf("Unmarshal create response error = %v", err)
+	}
+
+	waitForJobCompleted(t, server, createPayload.Job.ID)
+
+	fileRequest := httptest.NewRequest(http.MethodGet, "/subtitle-files/"+createPayload.Job.ID+"/translated", nil)
+	fileResponse := httptest.NewRecorder()
+	server.ServeHTTP(fileResponse, fileRequest)
+
+	if fileResponse.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", fileResponse.Code, fileResponse.Body.String())
+	}
+	if got := fileResponse.Header().Get("Content-Type"); got != "text/vtt; charset=utf-8" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if !bytes.HasPrefix(fileResponse.Body.Bytes(), []byte("WEBVTT")) {
+		t.Fatalf("body = %s", fileResponse.Body.String())
+	}
+}
+
 func waitForJobCompleted(t *testing.T, server http.Handler, jobID string) {
 	t.Helper()
 	var last *httptest.ResponseRecorder

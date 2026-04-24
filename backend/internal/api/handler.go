@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,6 +19,7 @@ type Store interface {
 	FindJob(id string) (store.Job, error)
 	FindReusableJob(videoID string, targetLanguage string) (store.Job, error)
 	FindSubtitleAsset(videoID string, targetLanguage string) (store.SubtitleAsset, error)
+	FindSubtitleAssetByJobID(jobID string) (store.SubtitleAsset, error)
 }
 
 type Runner interface {
@@ -168,5 +170,45 @@ func (h *Handler) handleSubtitleAssets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotFound, "not_found", "subtitle file handler is added in Task 7")
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusNotFound, "not_found", "route not found")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/subtitle-files/")
+	jobID, mode, ok := strings.Cut(path, "/")
+	if !ok || jobID == "" || mode == "" || strings.Contains(jobID, "/") || strings.Contains(mode, "/") {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+
+	asset, err := h.store.FindSubtitleAssetByJobID(jobID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query subtitle asset")
+		return
+	}
+
+	var filePath string
+	switch mode {
+	case "source":
+		filePath = asset.SourceVTTPath
+	case "translated":
+		filePath = asset.TranslatedVTTPath
+	case "bilingual":
+		filePath = asset.BilingualVTTPath
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be source, translated, or bilingual")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	if _, err := os.Stat(filePath); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "subtitle file not found")
+		return
+	}
+	http.ServeFile(w, r, filePath)
 }
