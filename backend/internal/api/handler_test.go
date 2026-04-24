@@ -145,7 +145,7 @@ func TestSubtitleFileRejectsPathOutsideJobDir(t *testing.T) {
 	workingDir := t.TempDir()
 	outsideDir := t.TempDir()
 	outsidePath := filepath.Join(outsideDir, "translated.vtt")
-	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside\n"), 0o644); err != nil {
+	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside secret\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -170,13 +170,19 @@ func TestSubtitleFileRejectsPathOutsideJobDir(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
 	}
+	if bytes.Contains(response.Body.Bytes(), []byte(outsidePath)) {
+		t.Fatalf("body leaked outside path = %s", response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("outside secret")) {
+		t.Fatalf("body leaked secret content = %s", response.Body.String())
+	}
 }
 
 func TestSubtitleFileRejectsSymlinkEscape(t *testing.T) {
 	workingDir := t.TempDir()
 	outsideDir := t.TempDir()
 	outsidePath := filepath.Join(outsideDir, "translated.vtt")
-	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside symlink\n"), 0o644); err != nil {
+	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\noutside symlink secret\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -205,6 +211,12 @@ func TestSubtitleFileRejectsSymlinkEscape(t *testing.T) {
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(outsidePath)) {
+		t.Fatalf("body leaked outside path = %s", response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("outside symlink secret")) {
+		t.Fatalf("body leaked secret content = %s", response.Body.String())
 	}
 }
 
@@ -235,6 +247,51 @@ func TestSubtitleFileRejectsNonRegularFile(t *testing.T) {
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(directoryPath)) {
+		t.Fatalf("body leaked directory path = %s", response.Body.String())
+	}
+}
+
+func TestSubtitleFileRejectsSymlinkParentEscape(t *testing.T) {
+	workingDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, "translated.vtt")
+	if err := os.WriteFile(outsidePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nparent escape secret\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	linkPath := filepath.Join(workingDir, "link")
+	if err := os.Symlink(outsideDir, linkPath); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	handler := NewHandler(handlerWithAssetPath{
+		job: store.Job{
+			ID:         "job_1",
+			WorkingDir: workingDir,
+		},
+		asset: store.SubtitleAsset{
+			JobID:             "job_1",
+			SourceVTTPath:     filepath.Join(workingDir, "source.vtt"),
+			TranslatedVTTPath: filepath.Join(linkPath, "translated.vtt"),
+			BilingualVTTPath:  filepath.Join(workingDir, "bilingual.vtt"),
+		},
+	}, noopRunner{}, t.TempDir())
+	server := Routes(handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/subtitle-files/job_1/translated", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(outsidePath)) {
+		t.Fatalf("body leaked outside path = %s", response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("parent escape secret")) {
+		t.Fatalf("body leaked secret content = %s", response.Body.String())
 	}
 }
 

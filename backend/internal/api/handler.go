@@ -269,5 +269,24 @@ func subtitleFilePathAllowed(workingDir string, selectedPath string, expectedFil
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
+
+	realWorkingDir, err := filepath.EvalSymlinks(cleanWorkingDir)
+	if err != nil {
+		return false
+	}
+	realSelectedPath, err := filepath.EvalSymlinks(cleanSelectedPath)
+	if err != nil {
+		return false
+	}
+	if filepath.Base(realSelectedPath) != expectedFileName {
+		return false
+	}
+	realRel, err := filepath.Rel(filepath.Clean(realWorkingDir), filepath.Clean(realSelectedPath))
+	if err != nil {
+		return false
+	}
+	if realRel == ".." || strings.HasPrefix(realRel, ".."+string(filepath.Separator)) {
+		return false
+	}
 	return true
 }
