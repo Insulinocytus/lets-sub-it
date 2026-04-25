@@ -13,13 +13,12 @@ export default defineContentScript({
     // ── State ──
     let videoElement: HTMLVideoElement | null = null
     let shadowHost: HTMLDivElement | null = null
-    let shadowRoot: ShadowRoot | null = null
     let cueDisplayEl: HTMLSpanElement | null = null
     let subtitleCues: SubtitleCue[] = []
     let subtitleMode: SubtitleMode = 'translated'
     let currentCueText: string | null = null
     let retryCount = 0
-    let pendingFrame = false
+    let rAFHandle: number | null = null
     const cleanups: (() => void)[] = []
 
     // ── Shadow DOM creation and injection ──
@@ -42,7 +41,6 @@ export default defineContentScript({
       shadowHost = host
 
       const shadow = host.attachShadow({ mode: 'open' })
-      shadowRoot = shadow
 
       const style = document.createElement('style')
       style.textContent = `
@@ -102,13 +100,11 @@ export default defineContentScript({
     }
 
     function onTimeUpdate(): void {
-      if (!pendingFrame) {
-        pendingFrame = true
-        requestAnimationFrame(() => {
-          pendingFrame = false
-          renderCue()
-        })
-      }
+      if (rAFHandle !== null) return
+      rAFHandle = requestAnimationFrame(() => {
+        rAFHandle = null
+        renderCue()
+      })
     }
 
     // ── Subtitle data fetching ──
@@ -269,18 +265,20 @@ export default defineContentScript({
     }
 
     function teardown(): void {
+      if (rAFHandle !== null) {
+        cancelAnimationFrame(rAFHandle)
+        rAFHandle = null
+      }
       videoElement?.removeEventListener('timeupdate', onTimeUpdate)
       cleanups.forEach((fn) => fn())
       cleanups.length = 0
       shadowHost?.remove()
       shadowHost = null
-      shadowRoot = null
       cueDisplayEl = null
       videoElement = null
       subtitleCues = []
       currentCueText = null
       retryCount = 0
-      pendingFrame = false
     }
 
     function reinit(): void {
