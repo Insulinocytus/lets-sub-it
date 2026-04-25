@@ -12,17 +12,18 @@ beforeEach(() => {
       local: {
         get: vi.fn((keys: string | string[] | Record<string, unknown>) => {
           if (typeof keys === 'string') {
-            return { [keys]: mockStorage[keys] ?? null }
+            return Promise.resolve({ [keys]: mockStorage[keys] ?? null })
           }
           if (Array.isArray(keys)) {
             const result: Record<string, unknown> = {}
             for (const k of keys) result[k] = mockStorage[k] ?? null
-            return result
+            return Promise.resolve(result)
           }
-          return {}
+          return Promise.resolve({})
         }),
         set: vi.fn((items: Record<string, unknown>) => {
           Object.assign(mockStorage, items)
+          return Promise.resolve()
         }),
       },
     },
