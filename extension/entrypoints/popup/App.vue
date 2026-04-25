@@ -45,6 +45,8 @@ const currentJob = ref<Job | null>(null)
 const errorMessage = ref('')
 const isSubmitting = ref(false)
 const elapsedSeconds = ref(0)
+const activeJobId = ref<string | null>(null)
+const subtitleReady = ref(false)
 const pollTimer = ref<number | null>(null)
 const elapsedTimer = ref<number | null>(null)
 
@@ -86,16 +88,24 @@ const statusBadgeVariant = computed(() => {
 })
 
 onMounted(async () => {
-  const settingsResult = await sendExtensionMessage<Settings>({ type: 'settings:get' })
-  if (settingsResult.ok) {
-    backendBaseUrl.value = settingsResult.data.backendBaseUrl
-    sourceLanguage.value = settingsResult.data.sourceLanguage
-    targetLanguage.value = settingsResult.data.targetLanguage
+  try {
+    const settingsResult = await sendExtensionMessage<Settings>({ type: 'settings:get' })
+    if (settingsResult.ok) {
+      backendBaseUrl.value = settingsResult.data.backendBaseUrl
+      sourceLanguage.value = settingsResult.data.sourceLanguage
+      targetLanguage.value = settingsResult.data.targetLanguage
+    }
+  } catch {
+    // Keep defaults when extension storage is not available.
   }
 
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
-  if (tab?.url?.startsWith('https://www.youtube.com/watch')) {
-    youtubeUrl.value = tab.url
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (tab?.url?.startsWith('https://www.youtube.com/watch')) {
+      youtubeUrl.value = tab.url
+    }
+  } catch {
+    // Keep the URL field editable when active tab lookup is unavailable.
   }
 })
 
@@ -114,72 +124,104 @@ async function submitJob() {
   errorMessage.value = ''
   currentJob.value = null
   elapsedSeconds.value = 0
+  subtitleReady.value = false
   clearTimers()
 
-  const settingsResult = await sendExtensionMessage<Settings>({
-    type: 'settings:update',
-    payload: {
-      backendBaseUrl: backendBaseUrl.value.trim(),
-      sourceLanguage: sourceLanguage.value,
-      targetLanguage: targetLanguage.value,
-    },
-  })
-  if (!settingsResult.ok) {
-    stopWithError(settingsResult.error.message)
-    return
-  }
+  try {
+    const settingsResult = await sendExtensionMessage<Settings>({
+      type: 'settings:update',
+      payload: {
+        backendBaseUrl: backendBaseUrl.value.trim(),
+        sourceLanguage: sourceLanguage.value,
+        targetLanguage: targetLanguage.value,
+      },
+    })
+    if (!settingsResult.ok) {
+      stopWithError(settingsResult.error.message)
+      return
+    }
 
-  const createResult = await sendExtensionMessage<{ job: Job; reused: boolean }>({
-    type: 'job:create',
-    payload: {
-      youtubeUrl: youtubeUrl.value.trim(),
-      sourceLanguage: sourceLanguage.value,
-      targetLanguage: targetLanguage.value,
-    },
-  })
-  if (!createResult.ok) {
-    stopWithError(createResult.error.message)
-    return
-  }
+    const createResult = await sendExtensionMessage<{ job: Job; reused: boolean }>({
+      type: 'job:create',
+      payload: {
+        youtubeUrl: youtubeUrl.value.trim(),
+        sourceLanguage: sourceLanguage.value,
+        targetLanguage: targetLanguage.value,
+      },
+    })
+    if (!createResult.ok) {
+      stopWithError(createResult.error.message)
+      return
+    }
 
-  currentJob.value = createResult.data.job
-  startPolling(createResult.data.job.id)
+    currentJob.value = createResult.data.job
+    startPolling(createResult.data.job.id)
+  } catch (error) {
+    stopWithError(readableError(error))
+  }
 }
 
 async function pollJob(jobId: string) {
-  const result = await sendExtensionMessage<{ job: Job }>({
-    type: 'job:get',
-    payload: { jobId },
-  })
-  if (!result.ok) {
-    stopWithError(result.error.message)
-    return
-  }
-
-  currentJob.value = result.data.job
-  if (result.data.job.status === 'completed') {
-    const resolveResult = await sendExtensionMessage<SubtitleAsset | null>({
-      type: 'subtitle:resolve',
-      payload: { videoId: result.data.job.videoId },
-    })
-    clearTimers()
-    isSubmitting.value = false
-    if (!resolveResult.ok) {
-      errorMessage.value = resolveResult.error.message
+  try {
+    if (activeJobId.value !== jobId) {
+      return
     }
-    return
-  }
 
-  if (result.data.job.status === 'failed') {
-    stopWithError(result.data.job.errorMessage ?? '任务失败')
+    const result = await sendExtensionMessage<{ job: Job }>({
+      type: 'job:get',
+      payload: { jobId },
+    })
+    if (activeJobId.value !== jobId) {
+      return
+    }
+    if (!result.ok) {
+      stopWithError(result.error.message)
+      return
+    }
+
+    currentJob.value = result.data.job
+    if (result.data.job.status === 'completed') {
+      const resolveResult = await sendExtensionMessage<SubtitleAsset | null>({
+        type: 'subtitle:resolve',
+        payload: { videoId: result.data.job.videoId },
+      })
+      if (activeJobId.value !== jobId) {
+        return
+      }
+
+      clearTimers()
+      isSubmitting.value = false
+      if (!resolveResult.ok) {
+        errorMessage.value = resolveResult.error.message
+        subtitleReady.value = false
+        return
+      }
+      if (resolveResult.data === null) {
+        errorMessage.value = '字幕资源未找到'
+        subtitleReady.value = false
+        return
+      }
+
+      subtitleReady.value = true
+      return
+    }
+
+    if (result.data.job.status === 'failed') {
+      stopWithError(result.data.job.errorMessage ?? '任务失败')
+      return
+    }
+
+    scheduleNextPoll(jobId)
+  } catch (error) {
+    if (activeJobId.value === jobId) {
+      stopWithError(readableError(error))
+    }
   }
 }
 
 function startPolling(jobId: string) {
+  activeJobId.value = jobId
   void pollJob(jobId)
-  pollTimer.value = window.setInterval(() => {
-    void pollJob(jobId)
-  }, 1500)
   elapsedTimer.value = window.setInterval(() => {
     if (currentJob.value?.status === 'transcribing') {
       elapsedSeconds.value += 1
@@ -187,9 +229,23 @@ function startPolling(jobId: string) {
   }, 1000)
 }
 
-function clearTimers() {
+function scheduleNextPoll(jobId: string) {
+  if (activeJobId.value !== jobId) {
+    return
+  }
   if (pollTimer.value !== null) {
-    window.clearInterval(pollTimer.value)
+    window.clearTimeout(pollTimer.value)
+  }
+  pollTimer.value = window.setTimeout(() => {
+    pollTimer.value = null
+    void pollJob(jobId)
+  }, 1500)
+}
+
+function clearTimers() {
+  activeJobId.value = null
+  if (pollTimer.value !== null) {
+    window.clearTimeout(pollTimer.value)
     pollTimer.value = null
   }
   if (elapsedTimer.value !== null) {
@@ -201,7 +257,15 @@ function clearTimers() {
 function stopWithError(message: string) {
   errorMessage.value = message
   isSubmitting.value = false
+  subtitleReady.value = false
   clearTimers()
+}
+
+function readableError(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return '操作失败，请稍后重试'
 }
 </script>
 
@@ -308,7 +372,7 @@ function stopWithError(message: string) {
             转写已用 {{ elapsedSeconds }} 秒
           </p>
           <p
-            v-if="currentJob.status === 'completed'"
+            v-if="currentJob.status === 'completed' && subtitleReady"
             class="text-muted-foreground"
           >
             字幕已生成并写入本地缓存。
