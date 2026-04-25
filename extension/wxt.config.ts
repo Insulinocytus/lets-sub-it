@@ -3,7 +3,7 @@ import { defineConfig } from 'wxt'
 export default defineConfig({
   srcDir: 'src',
   extensionApi: 'chrome',
-  modules: [],
+  modules: ['@wxt-dev/module-vue'],
   manifest: {
     name: "Let's Sub It",
     version: '0.1.0',

@@ -22,6 +22,7 @@
     "@types/webextension-polyfill": "^0.12.1",
     "@vue/test-utils": "^2.4.6",
     "@wxt-dev/auto-icons": "^1.1.1",
+    "@wxt-dev/module-vue": "^1.0.3",
     "autoprefixer": "^10.4.20",
     "jsdom": "^26.0.0",
     "postcss": "^8.5.1",
