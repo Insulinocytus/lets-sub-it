@@ -24,10 +24,14 @@ const activeText = ref('')
 
 let removeVideoListeners: (() => void) | null = null
 let removeVideoIdWatch: (() => void) | null = null
+let isMounted = false
+let requestToken = 0
 
 const hasSubtitle = computed(() => cues.value.length > 0)
+const isWatchPage = computed(() => currentVideoId.value !== null)
 
 onMounted(() => {
+  isMounted = true
   const videoId = getCurrentVideoId()
   currentVideoId.value = videoId
   void loadForVideo(videoId)
@@ -39,12 +43,15 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isMounted = false
+  requestToken += 1
   cleanupVideoListeners()
   removeVideoIdWatch?.()
   removeVideoIdWatch = null
 })
 
 async function loadForVideo(videoId: string | null) {
+  const token = ++requestToken
   cleanupVideoListeners()
   currentVideoId.value = videoId
   currentAsset.value = null
@@ -64,10 +71,13 @@ async function loadForVideo(videoId: string | null) {
       payload: { videoId },
     })
   } catch (error) {
+    if (!canUpdate(token)) {
+      return
+    }
     status.value = readableError(error)
     return
   }
-  if (currentVideoId.value !== videoId) {
+  if (!canUpdate(token) || currentVideoId.value !== videoId) {
     return
   }
 
@@ -83,27 +93,37 @@ async function loadForVideo(videoId: string | null) {
 
   currentAsset.value = result.data
   selectedMode.value = result.data.selectedMode
-  await loadVtt()
+  await loadVtt(token)
 }
 
-async function loadVtt() {
+async function loadVtt(token = requestToken) {
   const asset = currentAsset.value
-  if (!asset) {
+  if (!asset || !canUpdate(token)) {
     return
   }
+  const jobId = asset.jobId
+  const mode = selectedMode.value
 
   status.value = '加载字幕'
+  activeText.value = ''
   let result
   try {
     result = await sendExtensionMessage<string>({
       type: 'subtitle:fetch-file',
-      payload: { jobId: asset.jobId, mode: selectedMode.value },
+      payload: { jobId, mode },
     })
   } catch (error) {
+    if (!canUpdate(token)) {
+      return
+    }
     status.value = readableError(error)
     return
   }
-  if (currentAsset.value?.jobId !== asset.jobId) {
+  if (
+    !canUpdate(token) ||
+    currentAsset.value?.jobId !== jobId ||
+    selectedMode.value !== mode
+  ) {
     return
   }
 
@@ -123,7 +143,7 @@ async function loadVtt() {
   }
 
   status.value = '字幕已加载'
-  bindVideo()
+  bindVideo(token)
 }
 
 async function changeMode(mode: SubtitleMode) {
@@ -131,22 +151,52 @@ async function changeMode(mode: SubtitleMode) {
     return
   }
 
-  selectedMode.value = mode
+  const token = requestToken
+  const previousMode = selectedMode.value
   const asset = currentAsset.value
   if (!asset) {
     return
   }
+  const videoId = asset.videoId
+  const jobId = asset.jobId
+  const targetLanguage = asset.targetLanguage
 
-  const result = await sendExtensionMessage<SubtitleAssetCacheEntry | null>({
-    type: 'subtitle:update-mode',
-    payload: {
-      videoId: asset.videoId,
-      targetLanguage: asset.targetLanguage,
-      mode,
-    },
-  })
+  selectedMode.value = mode
+  activeText.value = ''
+  let result
+  try {
+    result = await sendExtensionMessage<SubtitleAssetCacheEntry | null>({
+      type: 'subtitle:update-mode',
+      payload: {
+        videoId,
+        targetLanguage,
+        mode,
+      },
+    })
+  } catch (error) {
+    if (
+      canUpdate(token) &&
+      currentVideoId.value === videoId &&
+      currentAsset.value?.jobId === jobId &&
+      selectedMode.value === mode
+    ) {
+      selectedMode.value = previousMode
+      status.value = readableError(error)
+    }
+    return
+  }
+
+  if (
+    !canUpdate(token) ||
+    currentVideoId.value !== videoId ||
+    currentAsset.value?.jobId !== jobId ||
+    selectedMode.value !== mode
+  ) {
+    return
+  }
 
   if (!result.ok) {
+    selectedMode.value = previousMode
     status.value = result.error.message
     return
   }
@@ -154,10 +204,14 @@ async function changeMode(mode: SubtitleMode) {
   if (result.data) {
     currentAsset.value = result.data
   }
-  await loadVtt()
+  await loadVtt(token)
 }
 
-function bindVideo() {
+function bindVideo(token: number) {
+  if (!canUpdate(token)) {
+    return
+  }
+
   cleanupVideoListeners()
 
   const video = document.querySelector('video')
@@ -167,6 +221,9 @@ function bindVideo() {
   }
 
   const updateActiveCue = () => {
+    if (!canUpdate(token)) {
+      return
+    }
     activeText.value = findActiveCue(cues.value, video.currentTime)?.text ?? ''
   }
 
@@ -180,6 +237,10 @@ function bindVideo() {
   }
 }
 
+function canUpdate(token: number) {
+  return isMounted && token === requestToken
+}
+
 function cleanupVideoListeners() {
   removeVideoListeners?.()
   removeVideoListeners = null
@@ -187,7 +248,9 @@ function cleanupVideoListeners() {
 
 function handleModeClick(mode: SubtitleMode) {
   void changeMode(mode).catch((error: unknown) => {
-    status.value = readableError(error)
+    if (isMounted) {
+      status.value = readableError(error)
+    }
   })
 }
 
@@ -197,7 +260,10 @@ function readableError(error: unknown) {
 </script>
 
 <template>
-  <div class="pointer-events-none fixed inset-x-0 bottom-7 z-[2147483647] flex justify-center px-4">
+  <div
+    v-if="isWatchPage"
+    class="pointer-events-none fixed inset-x-0 bottom-7 z-[2147483647] flex justify-center px-4"
+  >
     <div class="flex max-w-[min(720px,calc(100vw-32px))] flex-col items-center gap-2">
       <div class="pointer-events-auto flex items-center gap-1.5 rounded-md border border-white/15 bg-black/70 px-2 py-1.5 text-white shadow-lg backdrop-blur">
         <Button

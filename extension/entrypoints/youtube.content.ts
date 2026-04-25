@@ -4,7 +4,7 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root'
 import YoutubeOverlay from '@/content/YoutubeOverlay.vue'
 
 export default defineContentScript({
-  matches: ['https://www.youtube.com/watch*'],
+  matches: ['https://www.youtube.com/*'],
   cssInjectionMode: 'ui',
   async main(ctx) {
     const ui = await createShadowRootUi(ctx, {
