@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build --browser chrome",
-    "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit",
+    "test": "wxt prepare && vitest run",
+    "typecheck": "wxt prepare && vue-tsc --noEmit",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
