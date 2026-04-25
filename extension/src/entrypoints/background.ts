@@ -44,8 +44,12 @@ export default defineBackground(() => {
         sendResponse({ success: false, error: data.error?.message ?? 'create job failed' })
         return
       }
-      const jobId = (data.job as { id: string }).id
-      stateCache.set(jobId, data)
+      const job = data.job
+      if (!job || typeof job.id !== 'string') {
+        sendResponse({ success: false, error: 'invalid job response: missing job.id' })
+        return
+      }
+      stateCache.set(job.id, data)
       sendResponse({ success: true, data })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'create job failed'
@@ -62,30 +66,39 @@ export default defineBackground(() => {
       sendResponse({ success: false, error: 'jobId is required' })
       return
     }
-    try {
-      const res = await fetch(`${BACKEND_BASE}/jobs/${jobId}`)
-      const data = await res.json()
-      if (!res.ok) {
-        sendResponse({ success: false, error: data.error?.message ?? 'get job failed' })
-        return
-      }
-      stateCache.set(jobId, data)
-      sendResponse({ success: true, data })
-    } catch (err) {
-      // Retry once on network error
+
+    async function tryFetch(): Promise<{ ok: boolean; data?: unknown; error?: string }> {
       try {
         const res = await fetch(`${BACKEND_BASE}/jobs/${jobId}`)
         const data = await res.json()
         if (!res.ok) {
-          sendResponse({ success: false, error: data.error?.message ?? 'get job failed' })
-          return
+          return { ok: false, error: data.error?.message ?? 'get job failed' }
         }
-        stateCache.set(jobId, data)
-        sendResponse({ success: true, data })
-      } catch (err2) {
-        const message = err2 instanceof Error ? err2.message : 'get job failed'
-        sendResponse({ success: false, error: message })
+        return { ok: true, data }
+      } catch {
+        return { ok: false }
       }
+    }
+
+    const first = await tryFetch()
+    if (first.ok) {
+      stateCache.set(jobId, first.data)
+      sendResponse({ success: true, data: first.data })
+      return
+    }
+    if (first.error) {
+      // Application-level error, not a network failure — don't retry
+      sendResponse({ success: false, error: first.error })
+      return
+    }
+
+    // Network error — retry once
+    const second = await tryFetch()
+    if (second.ok) {
+      stateCache.set(jobId, second.data)
+      sendResponse({ success: true, data: second.data })
+    } else {
+      sendResponse({ success: false, error: second.error ?? 'get job failed' })
     }
   }
 
