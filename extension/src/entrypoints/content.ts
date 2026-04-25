@@ -1,11 +1,118 @@
 import { defineContentScript } from 'wxt/sandbox'
 import { parseVtt, findCueAtTime } from '@/lib/vtt-parser'
-import type { SubtitleCue, SubtitleMode, LocalCacheEntry, UserPreferences } from '@/types'
+import type {
+  ExtensionMessage,
+  ExtensionResponse,
+  SubtitleCue,
+  SubtitleMode,
+  LocalCacheEntry,
+  UserPreferences,
+} from '@/types'
 
-const BACKEND_BASE = 'http://127.0.0.1:8080'
 const CONTAINER_ID = 'lsi-subtitle-host'
 const MAX_RETRIES = 3
 const RETRY_INTERVAL_MS = 1000
+
+type SendMessage = (message: ExtensionMessage) => Promise<ExtensionResponse>
+type GetCurrentGeneration = () => number
+type GetCacheEntry = (cacheKey: string) => Promise<LocalCacheEntry | undefined>
+type LoadSubtitlesForGeneration = (
+  entry: LocalCacheEntry,
+  mode: SubtitleMode,
+  generation: number,
+) => Promise<void>
+type LoadSubtitleCues = () => Promise<SubtitleCue[]>
+type ApplySubtitleCues = (cues: SubtitleCue[]) => void
+
+export interface SubtitleStorageLoadDecision {
+  nextMode: SubtitleMode
+  nextTargetLanguage: string | null
+  entryToLoad: LocalCacheEntry | null
+  cacheKeyToRead: string | null
+  modeToLoad: SubtitleMode
+}
+
+export function decideSubtitleStorageLoad(
+  changes: Record<string, chrome.storage.StorageChange>,
+  videoId: string,
+  currentTargetLanguage: string | null,
+  currentMode: SubtitleMode,
+): SubtitleStorageLoadDecision {
+  const prefsKey = `prefs:${videoId}`
+  const prefs = changes[prefsKey]?.newValue as UserPreferences | undefined
+  const nextMode = prefs?.selectedMode ?? currentMode
+  const nextTargetLanguage = prefs?.targetLanguage ?? currentTargetLanguage
+  let entryToLoad: LocalCacheEntry | null = null
+  let cacheKeyToRead =
+    prefs?.targetLanguage ? `cache:${videoId}:${prefs.targetLanguage}` : null
+
+  for (const [key, change] of Object.entries(changes)) {
+    if (!key.startsWith('cache:')) continue
+
+    const entry = change.newValue as LocalCacheEntry | undefined
+    if (
+      entry?.jobId &&
+      entry.videoId === videoId &&
+      entry.targetLanguage === nextTargetLanguage
+    ) {
+      entryToLoad = entry
+      cacheKeyToRead = null
+      break
+    }
+  }
+
+  return {
+    nextMode,
+    nextTargetLanguage,
+    entryToLoad,
+    cacheKeyToRead,
+    modeToLoad: nextMode,
+  }
+}
+
+export async function loadCacheEntryForGeneration(
+  cacheKey: string,
+  mode: SubtitleMode,
+  generation: number,
+  getCurrentGeneration: GetCurrentGeneration,
+  getCacheEntry: GetCacheEntry,
+  loadSubtitles: LoadSubtitlesForGeneration,
+): Promise<void> {
+  const entry = await getCacheEntry(cacheKey)
+  if (generation !== getCurrentGeneration()) return
+  if (entry?.jobId) {
+    await loadSubtitles(entry, mode, generation)
+  }
+}
+
+export async function applySubtitleLoadForGeneration(
+  generation: number,
+  getCurrentGeneration: GetCurrentGeneration,
+  loadCues: LoadSubtitleCues,
+  applyCues: ApplySubtitleCues,
+): Promise<void> {
+  const cues = await loadCues()
+  if (generation !== getCurrentGeneration()) return
+  applyCues(cues)
+}
+
+export async function fetchSubtitleText(
+  jobId: string,
+  mode: SubtitleMode,
+  sendMessage: SendMessage = (message) => chrome.runtime.sendMessage(message),
+): Promise<string> {
+  const response = await sendMessage({
+    type: 'GET_SUBTITLE_FILE',
+    payload: { jobId, mode },
+  })
+  if (!response.success) {
+    throw new Error(response.error ?? 'get subtitle file failed')
+  }
+  if (typeof response.data !== 'string') {
+    throw new Error('invalid subtitle file response')
+  }
+  return response.data
+}
 
 export default defineContentScript({
   matches: ['*://www.youtube.com/watch*'],
@@ -20,6 +127,7 @@ export default defineContentScript({
     let currentCueText: string | null = null
     let retryCount = 0
     let rAFHandle: number | null = null
+    let subtitleLoadGeneration = 0
     const cleanups: (() => void)[] = []
 
     // ── Shadow DOM creation and injection ──
@@ -114,27 +222,43 @@ export default defineContentScript({
       return new URLSearchParams(location.search).get('v')
     }
 
-    async function fetchSubtitles(entry: LocalCacheEntry): Promise<void> {
-      const url = `${BACKEND_BASE}/subtitle-files/${entry.jobId}/${subtitleMode}`
+    async function fetchSubtitles(
+      entry: LocalCacheEntry,
+      mode: SubtitleMode,
+      generation: number,
+    ): Promise<void> {
       try {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const vtt = await res.text()
-        const result = parseVtt(vtt)
-        subtitleCues = result.cues
-        currentCueText = null // force re-render on next tick
-        renderCue()
+        await applySubtitleLoadForGeneration(
+          generation,
+          () => subtitleLoadGeneration,
+          async () => {
+            const vtt = await fetchSubtitleText(entry.jobId, mode)
+            return parseVtt(vtt).cues
+          },
+          (cues) => {
+            subtitleCues = cues
+            currentCueText = null // force re-render on next tick
+            renderCue()
+          },
+        )
       } catch (err) {
         console.error('[LSI] Failed to fetch subtitles:', err)
       }
     }
 
-    async function loadFromCache(): Promise<void> {
+    async function getCacheEntry(cacheKey: string): Promise<LocalCacheEntry | undefined> {
+      const result = await chrome.storage.local.get(cacheKey)
+      return result[cacheKey] as LocalCacheEntry | undefined
+    }
+
+    async function loadFromCache(generation: number): Promise<void> {
       const videoId = getVideoId()
-      if (!videoId) return
+      if (!videoId || generation !== subtitleLoadGeneration) return
 
       const prefsKey = `prefs:${videoId}`
       const { [prefsKey]: prefs } = await chrome.storage.local.get(prefsKey)
+      if (generation !== subtitleLoadGeneration) return
+
       const userPrefs = prefs as UserPreferences | undefined
 
       if (userPrefs?.selectedMode) {
@@ -146,9 +270,11 @@ export default defineContentScript({
         currentTargetLang = targetLang
         const cacheKey = `cache:${videoId}:${targetLang}`
         const { [cacheKey]: cacheEntry } = await chrome.storage.local.get(cacheKey)
+        if (generation !== subtitleLoadGeneration) return
+
         const entry = cacheEntry as LocalCacheEntry | undefined
         if (entry?.jobId) {
-          await fetchSubtitles(entry)
+          await fetchSubtitles(entry, subtitleMode, generation)
         }
       }
     }
@@ -162,32 +288,34 @@ export default defineContentScript({
         const videoId = getVideoId()
         if (!videoId) return
 
-        for (const [key, change] of Object.entries(changes)) {
-          // Cache key: cache:{videoId}:{targetLanguage}
-          if (key.startsWith('cache:')) {
-            const entry = change.newValue as LocalCacheEntry | undefined
-            if (entry?.videoId === videoId && entry?.targetLanguage === currentTargetLang) {
-              fetchSubtitles(entry)
-            }
-          }
-          // Prefs key: prefs:{videoId}
-          if (key === `prefs:${videoId}`) {
-            const prefs = change.newValue as UserPreferences | undefined
-            if (prefs?.selectedMode) {
-              subtitleMode = prefs.selectedMode
-            }
-            const targetLang = prefs?.targetLanguage
-            if (targetLang) {
-              currentTargetLang = targetLang
-              const cacheKey = `cache:${videoId}:${targetLang}`
-              chrome.storage.local.get(cacheKey).then((result) => {
-                const entry = result[cacheKey] as LocalCacheEntry | undefined
-                if (entry?.jobId) {
-                  fetchSubtitles(entry)
-                }
-              })
-            }
-          }
+        const decision = decideSubtitleStorageLoad(
+          changes,
+          videoId,
+          currentTargetLang,
+          subtitleMode,
+        )
+        subtitleMode = decision.nextMode
+        currentTargetLang = decision.nextTargetLanguage
+
+        const hasPrefsChange = Object.hasOwn(changes, `prefs:${videoId}`)
+        if (!hasPrefsChange && !decision.entryToLoad && !decision.cacheKeyToRead) {
+          return
+        }
+
+        const generation = ++subtitleLoadGeneration
+        if (decision.entryToLoad) {
+          fetchSubtitles(decision.entryToLoad, decision.modeToLoad, generation)
+        }
+        if (decision.cacheKeyToRead) {
+          const { cacheKeyToRead, modeToLoad } = decision
+          loadCacheEntryForGeneration(
+            cacheKeyToRead,
+            modeToLoad,
+            generation,
+            () => subtitleLoadGeneration,
+            getCacheEntry,
+            fetchSubtitles,
+          )
         }
       }
 
@@ -199,7 +327,9 @@ export default defineContentScript({
 
     // ── Video element detection ──
 
-    function waitForVideo(resolve: () => void): void {
+    function waitForVideo(generation: number, resolve: () => void): void {
+      if (generation !== subtitleLoadGeneration) return
+
       const el = document.querySelector('video')
       if (el) {
         videoElement = el
@@ -214,7 +344,7 @@ export default defineContentScript({
         return
       }
 
-      setTimeout(() => waitForVideo(resolve), RETRY_INTERVAL_MS)
+      setTimeout(() => waitForVideo(generation, resolve), RETRY_INTERVAL_MS)
     }
 
     // ── SPA navigation detection ──
@@ -257,17 +387,21 @@ export default defineContentScript({
     // ── Init / Teardown ──
 
     function init(): void {
+      const generation = ++subtitleLoadGeneration
       createShadowHost()
       setupStorageListener()
       setupSpaNavigation()
 
-      waitForVideo(() => {
+      waitForVideo(generation, () => {
+        if (generation !== subtitleLoadGeneration) return
+
         injectShadowHost()
-        loadFromCache()
+        loadFromCache(generation)
       })
     }
 
     function teardown(): void {
+      subtitleLoadGeneration++
       if (rAFHandle !== null) {
         cancelAnimationFrame(rAFHandle)
         rAFHandle = null

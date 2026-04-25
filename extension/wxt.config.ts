@@ -10,6 +10,7 @@ export default defineConfig({
     permissions: ['storage', 'tabs'],
     host_permissions: [
       'http://localhost:8080/*',
+      'http://127.0.0.1:8080/*',
       'https://www.youtube.com/*',
     ],
     action: {

@@ -27,5 +27,12 @@ export function useCache() {
     await chrome.storage.local.set({ [prefsKey(prefs.videoId)]: prefs })
   }
 
-  return { getCacheEntry, setCacheEntry, getPreferences, setPreferences }
+  async function setSubtitleSelection(entry: LocalCacheEntry, prefs: UserPreferences): Promise<void> {
+    await chrome.storage.local.set({
+      [cacheKey(entry.videoId, entry.targetLanguage)]: entry,
+      [prefsKey(prefs.videoId)]: prefs,
+    })
+  }
+
+  return { getCacheEntry, setCacheEntry, getPreferences, setPreferences, setSubtitleSelection }
 }

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Button } from '@/components/ui/button'
+import type { CreateJobParams } from '@/types'
 
-const emit = defineEmits<{
-  submit: [params: { youtubeUrl: string; sourceLanguage: string; targetLanguage: string }]
+const props = defineProps<{
+  submitJob: (params: CreateJobParams) => Promise<void>
 }>()
 
 const youtubeUrl = ref('')
@@ -30,7 +31,7 @@ async function handleSubmit() {
   error.value = null
 
   try {
-    emit('submit', {
+    await props.submitJob({
       youtubeUrl: youtubeUrl.value,
       sourceLanguage: sourceLanguage.value,
       targetLanguage: targetLanguage.value,

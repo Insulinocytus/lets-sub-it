@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { JobResponse, SubtitleMode } from '@/types'
 import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   job: JobResponse | null
   failedJob: JobResponse | null
+  updateMode: (mode: SubtitleMode) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -13,9 +14,29 @@ const emit = defineEmits<{
 }>()
 
 const selectedMode = ref<SubtitleMode>('bilingual')
+const modeError = ref<string | null>(null)
+const isModeUpdating = ref(false)
 
-const isFailed = props.failedJob !== null
-const displayJob = props.failedJob ?? props.job
+const isFailed = computed(() => props.failedJob !== null)
+const displayJob = computed(() => props.failedJob ?? props.job)
+
+async function selectMode(mode: SubtitleMode) {
+  if (isModeUpdating.value) return
+
+  const previousMode = selectedMode.value
+  modeError.value = null
+  isModeUpdating.value = true
+
+  try {
+    await props.updateMode(mode)
+    selectedMode.value = mode
+  } catch (err) {
+    selectedMode.value = previousMode
+    modeError.value = err instanceof Error ? err.message : '无法保存字幕模式'
+  } finally {
+    isModeUpdating.value = false
+  }
+}
 </script>
 
 <template>
@@ -44,18 +65,21 @@ const displayJob = props.failedJob ?? props.job
           <Button
             :variant="selectedMode === 'translated' ? 'default' : 'outline'"
             size="sm"
-            @click="selectedMode = 'translated'"
+            :disabled="isModeUpdating"
+            @click="selectMode('translated')"
           >
             仅翻译
           </Button>
           <Button
             :variant="selectedMode === 'bilingual' ? 'default' : 'outline'"
             size="sm"
-            @click="selectedMode = 'bilingual'"
+            :disabled="isModeUpdating"
+            @click="selectMode('bilingual')"
           >
             双语
           </Button>
         </div>
+        <p v-if="modeError" class="text-xs text-destructive">{{ modeError }}</p>
       </div>
 
       <div class="text-xs text-muted-foreground">

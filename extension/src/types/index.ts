@@ -73,6 +73,7 @@ export type MessageType =
   | 'CREATE_JOB'
   | 'GET_JOB'
   | 'GET_SUBTITLE_ASSETS'
+  | 'GET_SUBTITLE_FILE'
 
 export interface ExtensionMessage {
   type: MessageType

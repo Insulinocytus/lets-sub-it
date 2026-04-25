@@ -17,43 +17,82 @@ const failedJob = ref<JobResponse | null>(null)
 const api = useApi()
 const polling = useJobPolling()
 const cache = useCache()
+let modeChangeWrite = Promise.resolve()
 
 async function handleSubmit(params: CreateJobParams) {
-  try {
-    const result = await api.createJob(params)
-    if (result.reused && result.job.status === 'completed') {
-      handleJobComplete(result.job, 'bilingual')
-    } else if (result.job.status === 'failed') {
-      handleJobFailed(result.job)
-    } else {
-      viewState.value = 'polling'
-      polling.start(result.job.id)
-    }
-  } catch (err) {
-    throw err
+  const result = await api.createJob(params)
+  if (result.reused && result.job.status === 'completed') {
+    await handleJobComplete(result.job, 'bilingual')
+  } else if (result.job.status === 'failed') {
+    handleJobFailed(result.job)
+  } else {
+    viewState.value = 'polling'
+    polling.start(result.job.id)
   }
 }
 
-function handleJobComplete(job: JobResponse, selectedMode: SubtitleMode) {
+async function handleJobComplete(job: JobResponse, selectedMode: SubtitleMode) {
+  await Promise.all([
+    cache.setCacheEntry({
+      videoId: job.videoId,
+      targetLanguage: job.targetLanguage,
+      jobId: job.id,
+      selectedMode,
+      lastSyncedAt: new Date().toISOString(),
+    }),
+    cache.setPreferences({
+      videoId: job.videoId,
+      targetLanguage: job.targetLanguage,
+      selectedMode,
+    }),
+  ])
   completedJob.value = job
-  cache.setCacheEntry({
-    videoId: job.videoId,
-    targetLanguage: job.targetLanguage,
-    jobId: job.id,
-    selectedMode,
-    lastSyncedAt: new Date().toISOString(),
-  })
-  cache.setPreferences({
-    videoId: job.videoId,
-    targetLanguage: job.targetLanguage,
-    selectedMode,
-  })
   viewState.value = 'result'
+}
+
+async function handlePollingComplete(job: JobResponse, selectedMode: SubtitleMode) {
+  try {
+    await handleJobComplete(job, selectedMode)
+  } catch (err) {
+    failedJob.value = {
+      ...job,
+      status: 'failed',
+      errorMessage: err instanceof Error ? err.message : '无法保存字幕缓存',
+    }
+    viewState.value = 'result'
+  }
 }
 
 function handleJobFailed(job: JobResponse) {
   failedJob.value = job
   viewState.value = 'result'
+}
+
+async function handleModeChange(selectedMode: SubtitleMode) {
+  const job = completedJob.value
+  if (!job) return
+
+  const currentWrite = modeChangeWrite.catch(() => undefined).then(async () => {
+    const { videoId, targetLanguage } = job
+    const existingEntry = await cache.getCacheEntry(videoId, targetLanguage)
+    await cache.setSubtitleSelection(
+      {
+        videoId,
+        targetLanguage,
+        jobId: job.id,
+        lastSyncedAt: new Date().toISOString(),
+        ...existingEntry,
+        selectedMode,
+      },
+      {
+        videoId,
+        targetLanguage,
+        selectedMode,
+      },
+    )
+  })
+  modeChangeWrite = currentWrite
+  await currentWrite
 }
 
 function handleRetry() {
@@ -68,20 +107,21 @@ function handleRetry() {
   <div class="w-[400px] min-h-[300px] p-4">
     <JobForm
       v-if="viewState === 'form'"
-      @submit="handleSubmit"
+      :submit-job="handleSubmit"
     />
     <JobStatusView
       v-else-if="viewState === 'polling'"
       :job="polling.job.value"
       :status="polling.status.value"
       :error="polling.error.value"
-      @complete="handleJobComplete"
+      @complete="handlePollingComplete"
       @failed="handleJobFailed"
     />
     <JobResultView
       v-else
       :job="completedJob"
       :failed-job="failedJob"
+      :update-mode="handleModeChange"
       @retry="handleRetry"
     />
   </div>

@@ -68,4 +68,26 @@ describe('useCache', () => {
     const result = await getPreferences('nonexistent')
     expect(result).toBeNull()
   })
+
+  it('stores subtitle selection cache and preferences with one storage write', async () => {
+    const { getCacheEntry, getPreferences, setSubtitleSelection } = useCache()
+    const entry: LocalCacheEntry = {
+      videoId: 'abc123',
+      targetLanguage: 'zh-CN',
+      jobId: 'job_xyz',
+      selectedMode: 'translated',
+      lastSyncedAt: '2026-04-25T00:00:00Z',
+    }
+    const prefs: UserPreferences = {
+      videoId: 'abc123',
+      targetLanguage: 'zh-CN',
+      selectedMode: 'translated',
+    }
+
+    await setSubtitleSelection(entry, prefs)
+
+    expect(chrome.storage.local.set).toHaveBeenCalledTimes(1)
+    expect(await getCacheEntry('abc123', 'zh-CN')).toEqual(entry)
+    expect(await getPreferences('abc123')).toEqual(prefs)
+  })
 })
