@@ -136,6 +136,23 @@ describe('createBackendClient', () => {
     }
   })
 
+  it('rejects backend URLs with invalid ports', () => {
+    const invalidUrls = ['http://localhost:65536', 'http://localhost:999999']
+
+    for (const url of invalidUrls) {
+      try {
+        normalizeBackendBaseUrl(url)
+        throw new Error('expected normalizeBackendBaseUrl to throw')
+      } catch (error) {
+        expect(error).toBeInstanceOf(BackendClientError)
+        expect(error).toMatchObject({
+          code: 'invalid_backend_url',
+          message: 'backendBaseUrl must be a localhost or 127.0.0.1 origin',
+        })
+      }
+    }
+  })
+
   it('uses network_error for failed fetch calls', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError('failed to fetch')

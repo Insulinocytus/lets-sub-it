@@ -50,4 +50,14 @@ describe('settings storage', () => {
       updateSettings({ sourceLanguage: 'en', targetLanguage: 'en' }),
     ).rejects.toThrow('sourceLanguage and targetLanguage must be different')
   })
+
+  it('rejects invalid backend ports without persisting settings', async () => {
+    await expect(
+      updateSettings({ backendBaseUrl: 'http://localhost:65536' }),
+    ).rejects.toMatchObject({
+      code: 'invalid_backend_url',
+      message: 'backendBaseUrl must be a localhost or 127.0.0.1 origin',
+    })
+    await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
+  })
 })

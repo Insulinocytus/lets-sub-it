@@ -80,15 +80,33 @@ export function createBackendClient(
 
 export function normalizeBackendBaseUrl(value: string): string {
   const raw = value.trim()
-  const isValidLocalOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+(?:\/)?$/i.test(raw)
-  if (!isValidLocalOrigin) {
-    throw new BackendClientError(
-      'invalid_backend_url',
-      'backendBaseUrl must be a localhost or 127.0.0.1 origin',
-    )
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw invalidBackendBaseUrlError()
   }
 
-  return new URL(raw).origin
+  const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+  const isExplicitPort = url.port !== ''
+  const isOriginOnly =
+    !url.username &&
+    !url.password &&
+    url.pathname === '/' &&
+    !url.search &&
+    !url.hash
+  if (!isLocalHost || url.protocol !== 'http:' || !isExplicitPort || !isOriginOnly) {
+    throw invalidBackendBaseUrlError()
+  }
+
+  return url.origin
+}
+
+function invalidBackendBaseUrlError() {
+  return new BackendClientError(
+    'invalid_backend_url',
+    'backendBaseUrl must be a localhost or 127.0.0.1 origin',
+  )
 }
 
 async function requestJson<T>(
