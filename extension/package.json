@@ -1,0 +1,34 @@
+{
+  "name": "lets-sub-it-extension",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "compile": "wxt prepare",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@wxt-dev/storage": "^1.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.468.0",
+    "reka-ui": "^2.9.6",
+    "tailwind-merge": "^2.6.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.1",
+    "@vue/test-utils": "^2.4.6",
+    "@wxt-dev/auto-icons": "^1.1.1",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^26.0.0",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4",
+    "wxt": "^0.19.26"
+  }
+}
