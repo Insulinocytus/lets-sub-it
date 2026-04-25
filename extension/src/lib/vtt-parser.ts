@@ -1,6 +1,6 @@
 import type { SubtitleCue, VttParseResult } from '@/types'
 
-function parseTimestamp(ts: string): number {
+export function parseTimestamp(ts: string): number {
   const parts = ts.split(':')
   if (parts.length === 3) {
     const [h, m, s] = parts
