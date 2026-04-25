@@ -13,11 +13,11 @@ export type SubtitleAssetCacheEntry = SubtitleAsset & {
 }
 
 function subtitleAssetKey(videoId: string, targetLanguage: LanguageCode) {
-  return `local:subtitleAssets:${videoId}:${targetLanguage}` as const
+  return `local:subtitleAssets:${encodeURIComponent(videoId)}:${targetLanguage}` as const
 }
 
 function videoPreferenceKey(videoId: string) {
-  return `local:videoPreferences:${videoId}` as const
+  return `local:videoPreferences:${encodeURIComponent(videoId)}` as const
 }
 
 export async function getCachedSubtitleAsset(

@@ -64,4 +64,33 @@ describe('subtitle cache storage', () => {
 
     await expect(getCachedSubtitleAsset('video_123', 'en')).resolves.toBeNull()
   })
+
+  it('keeps special videoId keys isolated from ordinary keys', async () => {
+    const specialAsset: SubtitleAsset = {
+      ...asset,
+      videoId: 'video/123?ref=abc#frag',
+      targetLanguage: 'zh-CN',
+    }
+    const ordinaryAsset: SubtitleAsset = {
+      ...asset,
+      videoId: 'video_ordinary',
+      targetLanguage: 'zh-CN',
+    }
+
+    await setCachedSubtitleAsset(ordinaryAsset, 'translated', '2026-04-25T00:01:00Z')
+    await setCachedSubtitleAsset(specialAsset, 'bilingual', '2026-04-25T00:02:00Z')
+
+    await expect(getCachedSubtitleAsset('video_ordinary', 'zh-CN')).resolves.toEqual({
+      ...ordinaryAsset,
+      selectedMode: 'translated',
+      lastSyncedAt: '2026-04-25T00:01:00Z',
+    })
+    await expect(
+      getCachedSubtitleAsset('video/123?ref=abc#frag', 'zh-CN'),
+    ).resolves.toEqual({
+      ...specialAsset,
+      selectedMode: 'bilingual',
+      lastSyncedAt: '2026-04-25T00:02:00Z',
+    })
+  })
 })

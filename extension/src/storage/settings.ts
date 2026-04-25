@@ -5,18 +5,19 @@ import {
   type Settings,
 } from '@/api/messages'
 
-export const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = Object.freeze({
   backendBaseUrl: 'http://127.0.0.1:8080',
   sourceLanguage: 'en',
   targetLanguage: 'zh-CN',
-}
+})
 
 const settingsItem = storage.defineItem<Settings>('local:settings', {
   fallback: DEFAULT_SETTINGS,
 })
 
 export async function getSettings(): Promise<Settings> {
-  return settingsItem.getValue()
+  const settings = await settingsItem.getValue()
+  return { ...settings }
 }
 
 export async function updateSettings(patch: Partial<Settings>): Promise<Settings> {

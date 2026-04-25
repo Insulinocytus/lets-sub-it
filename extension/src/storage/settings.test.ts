@@ -11,6 +11,13 @@ describe('settings storage', () => {
     await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
   })
 
+  it('does not let callers mutate the default settings fallback', async () => {
+    const first = await getSettings()
+    first.backendBaseUrl = 'http://localhost:9090'
+
+    await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
+  })
+
   it('updates backend URL and language settings', async () => {
     const settings = await updateSettings({
       backendBaseUrl: 'http://localhost:9090',
