@@ -153,6 +153,7 @@ extension/
 ```text
 permissions:
   - storage
+  - activeTab
 
 host_permissions:
   - http://127.0.0.1:*/*
@@ -162,7 +163,7 @@ content_scripts matches:
   - https://www.youtube.com/watch*
 ```
 
-第一版只允许本机 backend 地址。popup 可以配置 `localhost` 或 `127.0.0.1` 的不同端口，但不支持任意远程主机。这样权限提示更收敛，也符合当前自托管本地联调阶段。
+第一版只允许本机 backend 地址。popup 可以配置 `localhost` 或 `127.0.0.1` 的不同端口，但不支持任意远程主机。这样权限提示更收敛，也符合当前自托管本地联调阶段。`activeTab` 用于用户打开 popup 时读取当前活动标签页 URL，便于预填 YouTube 地址，不使用持久的 `tabs` 权限。
 
 ## 架构边界
 
