@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BackendClientError, createBackendClient } from './backend-client'
+import {
+  BackendClientError,
+  createBackendClient,
+  normalizeBackendBaseUrl,
+} from './backend-client'
 
 describe('createBackendClient', () => {
   it('creates a job through POST /jobs', async () => {
@@ -85,6 +89,12 @@ describe('createBackendClient', () => {
     )
   })
 
+  it('normalizes localhost backend URLs to their origin', () => {
+    expect(normalizeBackendBaseUrl('http://localhost:8080/')).toBe(
+      'http://localhost:8080',
+    )
+  })
+
   it('converts backend JSON errors into BackendClientError', async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(
@@ -110,6 +120,8 @@ describe('createBackendClient', () => {
 
   it('rejects backend URLs with path, query, hash, or credentials', () => {
     const invalidUrls = [
+      'http://localhost',
+      'http://127.0.0.1',
       'http://localhost:8080/api',
       'http://localhost:8080/?debug=1',
       'http://localhost:8080/#x',

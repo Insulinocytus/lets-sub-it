@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
+import { DEFAULT_SETTINGS, getSettings } from '@/storage/settings'
 import { getCachedSubtitleAsset } from '@/storage/subtitle-cache'
 import { handleExtensionMessage } from './message-handler'
 
@@ -70,6 +71,24 @@ describe('handleExtensionMessage', () => {
 
     expect(result.ok).toBe(true)
     expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+
+  it('rejects invalid backend URLs without persisting settings', async () => {
+    const result = await handleExtensionMessage({
+      type: 'settings:update',
+      payload: {
+        backendBaseUrl: 'http://localhost:8080/api',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'invalid_backend_url',
+        message: 'backendBaseUrl must be a localhost or 127.0.0.1 origin',
+      },
+    })
+    await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
   })
 
   it('resolves and caches a subtitle asset from backend when local cache is empty', async () => {

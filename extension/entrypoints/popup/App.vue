@@ -203,6 +203,7 @@ async function pollJob(jobId: string) {
       }
 
       subtitleReady.value = true
+      void notifySubtitleUpdated(resolveResult.data.videoId)
       return
     }
 
@@ -266,6 +267,22 @@ function readableError(error: unknown) {
     return error.message
   }
   return '操作失败，请稍后重试'
+}
+
+async function notifySubtitleUpdated(videoId: string) {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id) {
+      return
+    }
+
+    await browser.tabs.sendMessage(tab.id, {
+      type: 'lets-sub-it:subtitle-updated',
+      videoId,
+    })
+  } catch {
+    // Keep job completion unaffected when the active tab cannot receive messages.
+  }
 }
 </script>
 

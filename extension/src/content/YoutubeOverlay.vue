@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { browser } from 'wxt/browser'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +25,7 @@ const activeText = ref('')
 
 let removeVideoListeners: (() => void) | null = null
 let removeVideoIdWatch: (() => void) | null = null
+let removeRuntimeListener: (() => void) | null = null
 let isMounted = false
 let requestToken = 0
 
@@ -40,6 +42,21 @@ onMounted(() => {
     currentVideoId.value = nextVideoId
     void loadForVideo(nextVideoId)
   })
+
+  const handleRuntimeMessage = (message: unknown) => {
+    if (!isSubtitleUpdatedMessage(message)) {
+      return
+    }
+    if (message.videoId !== currentVideoId.value) {
+      return
+    }
+
+    void loadForVideo(currentVideoId.value)
+  }
+  browser.runtime.onMessage.addListener(handleRuntimeMessage)
+  removeRuntimeListener = () => {
+    browser.runtime.onMessage.removeListener(handleRuntimeMessage)
+  }
 })
 
 onUnmounted(() => {
@@ -48,6 +65,8 @@ onUnmounted(() => {
   cleanupVideoListeners()
   removeVideoIdWatch?.()
   removeVideoIdWatch = null
+  removeRuntimeListener?.()
+  removeRuntimeListener = null
 })
 
 async function loadForVideo(videoId: string | null) {
@@ -275,6 +294,20 @@ function handleModeClick(mode: SubtitleMode) {
 
 function readableError(error: unknown) {
   return error instanceof Error ? error.message : '字幕操作失败'
+}
+
+type SubtitleUpdatedMessage = {
+  type: 'lets-sub-it:subtitle-updated'
+  videoId: string
+}
+
+function isSubtitleUpdatedMessage(message: unknown): message is SubtitleUpdatedMessage {
+  if (typeof message !== 'object' || message === null) {
+    return false
+  }
+
+  const candidate = message as Partial<SubtitleUpdatedMessage>
+  return candidate.type === 'lets-sub-it:subtitle-updated' && typeof candidate.videoId === 'string'
 }
 </script>
 

@@ -53,6 +53,7 @@ flowchart LR
 
 - Go `1.22`
 - Python `3.12`
+- Node `22`
 - `uv`
 
 ```bash

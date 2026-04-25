@@ -1,4 +1,5 @@
 import { storage } from 'wxt/utils/storage'
+import { normalizeBackendBaseUrl } from '@/api/backend-client'
 import {
   assertDifferentLanguages,
   type LanguageCode,
@@ -28,8 +29,13 @@ export async function updateSettings(patch: Partial<Settings>): Promise<Settings
   }
 
   assertDifferentLanguages(next.sourceLanguage, next.targetLanguage)
-  await settingsItem.setValue(next)
-  return next
+  const normalizedNext: Settings = {
+    ...next,
+    backendBaseUrl: normalizeBackendBaseUrl(next.backendBaseUrl),
+  }
+
+  await settingsItem.setValue(normalizedNext)
+  return normalizedNext
 }
 
 export function createLanguagePair(

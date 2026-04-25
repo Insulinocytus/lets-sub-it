@@ -33,6 +33,18 @@ describe('settings storage', () => {
     await expect(getSettings()).resolves.toEqual(settings)
   })
 
+  it('normalizes backend URL before persisting settings', async () => {
+    const settings = await updateSettings({
+      backendBaseUrl: 'http://localhost:9090/',
+    })
+
+    expect(settings.backendBaseUrl).toBe('http://localhost:9090')
+    await expect(getSettings()).resolves.toEqual({
+      ...DEFAULT_SETTINGS,
+      backendBaseUrl: 'http://localhost:9090',
+    })
+  })
+
   it('rejects same source and target languages', async () => {
     await expect(
       updateSettings({ sourceLanguage: 'en', targetLanguage: 'en' }),

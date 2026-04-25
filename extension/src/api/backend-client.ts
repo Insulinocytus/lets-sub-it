@@ -78,29 +78,17 @@ export function createBackendClient(
   }
 }
 
-function normalizeBackendBaseUrl(value: string): string {
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    throw new BackendClientError('invalid_backend_url', 'backendBaseUrl is invalid')
-  }
-
-  const isLocalHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost'
-  const isOriginOnly =
-    !url.username &&
-    !url.password &&
-    url.pathname === '/' &&
-    !url.search &&
-    !url.hash
-  if (!isLocalHost || url.protocol !== 'http:' || !isOriginOnly) {
+export function normalizeBackendBaseUrl(value: string): string {
+  const raw = value.trim()
+  const isValidLocalOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+(?:\/)?$/i.test(raw)
+  if (!isValidLocalOrigin) {
     throw new BackendClientError(
       'invalid_backend_url',
       'backendBaseUrl must be a localhost or 127.0.0.1 origin',
     )
   }
 
-  return url.origin
+  return new URL(raw).origin
 }
 
 async function requestJson<T>(
