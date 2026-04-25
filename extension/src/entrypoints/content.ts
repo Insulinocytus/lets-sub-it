@@ -15,7 +15,8 @@ export default defineContentScript({
     let shadowHost: HTMLDivElement | null = null
     let cueDisplayEl: HTMLSpanElement | null = null
     let subtitleCues: SubtitleCue[] = []
-    let subtitleMode: SubtitleMode = 'translated'
+    let subtitleMode: SubtitleMode = 'bilingual'
+    let currentTargetLang: string | null = null
     let currentCueText: string | null = null
     let retryCount = 0
     let rAFHandle: number | null = null
@@ -142,6 +143,7 @@ export default defineContentScript({
 
       const targetLang = userPrefs?.targetLanguage
       if (targetLang) {
+        currentTargetLang = targetLang
         const cacheKey = `cache:${videoId}:${targetLang}`
         const { [cacheKey]: cacheEntry } = await chrome.storage.local.get(cacheKey)
         const entry = cacheEntry as LocalCacheEntry | undefined
@@ -164,7 +166,7 @@ export default defineContentScript({
           // Cache key: cache:{videoId}:{targetLanguage}
           if (key.startsWith('cache:')) {
             const entry = change.newValue as LocalCacheEntry | undefined
-            if (entry?.videoId === videoId) {
+            if (entry?.videoId === videoId && entry?.targetLanguage === currentTargetLang) {
               fetchSubtitles(entry)
             }
           }
@@ -176,6 +178,7 @@ export default defineContentScript({
             }
             const targetLang = prefs?.targetLanguage
             if (targetLang) {
+              currentTargetLang = targetLang
               const cacheKey = `cache:${videoId}:${targetLang}`
               chrome.storage.local.get(cacheKey).then((result) => {
                 const entry = result[cacheKey] as LocalCacheEntry | undefined
@@ -278,6 +281,7 @@ export default defineContentScript({
       videoElement = null
       subtitleCues = []
       currentCueText = null
+      currentTargetLang = null
       retryCount = 0
     }
 
