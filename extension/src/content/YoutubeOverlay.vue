@@ -52,11 +52,9 @@ onUnmounted(() => {
 
 async function loadForVideo(videoId: string | null) {
   const token = ++requestToken
-  cleanupVideoListeners()
+  resetLoadedSubtitles()
   currentVideoId.value = videoId
   currentAsset.value = null
-  cues.value = []
-  activeText.value = ''
 
   if (!videoId) {
     status.value = '非 watch 页面'
@@ -96,16 +94,16 @@ async function loadForVideo(videoId: string | null) {
   await loadVtt(token)
 }
 
-async function loadVtt(token = requestToken) {
+async function loadVtt(token = requestToken): Promise<boolean> {
   const asset = currentAsset.value
   if (!asset || !canUpdate(token)) {
-    return
+    return false
   }
   const jobId = asset.jobId
   const mode = selectedMode.value
 
+  resetLoadedSubtitles()
   status.value = '加载字幕'
-  activeText.value = ''
   let result
   try {
     result = await sendExtensionMessage<string>({
@@ -114,36 +112,35 @@ async function loadVtt(token = requestToken) {
     })
   } catch (error) {
     if (!canUpdate(token)) {
-      return
+      return false
     }
     status.value = readableError(error)
-    return
+    return false
   }
   if (
     !canUpdate(token) ||
     currentAsset.value?.jobId !== jobId ||
     selectedMode.value !== mode
   ) {
-    return
+    return false
   }
 
   if (!result.ok) {
     status.value = result.error.message
-    return
+    return false
   }
 
   try {
     cues.value = parseVtt(result.data)
   } catch {
-    cues.value = []
-    activeText.value = ''
+    resetLoadedSubtitles()
     status.value = '字幕解析失败'
-    cleanupVideoListeners()
-    return
+    return false
   }
 
   status.value = '字幕已加载'
   bindVideo(token)
+  return true
 }
 
 async function changeMode(mode: SubtitleMode) {
@@ -162,7 +159,7 @@ async function changeMode(mode: SubtitleMode) {
   const targetLanguage = asset.targetLanguage
 
   selectedMode.value = mode
-  activeText.value = ''
+  resetLoadedSubtitles()
   let result
   try {
     result = await sendExtensionMessage<SubtitleAssetCacheEntry | null>({
@@ -204,7 +201,23 @@ async function changeMode(mode: SubtitleMode) {
   if (result.data) {
     currentAsset.value = result.data
   }
-  await loadVtt(token)
+  const loaded = await loadVtt(token)
+  if (
+    !loaded &&
+    canUpdate(token) &&
+    currentVideoId.value === videoId &&
+    currentAsset.value?.jobId === jobId &&
+    selectedMode.value === mode
+  ) {
+    selectedMode.value = previousMode
+    if (currentAsset.value) {
+      currentAsset.value = {
+        ...currentAsset.value,
+        selectedMode: previousMode,
+      }
+    }
+    await loadVtt(token)
+  }
 }
 
 function bindVideo(token: number) {
@@ -244,6 +257,12 @@ function canUpdate(token: number) {
 function cleanupVideoListeners() {
   removeVideoListeners?.()
   removeVideoListeners = null
+}
+
+function resetLoadedSubtitles() {
+  cleanupVideoListeners()
+  cues.value = []
+  activeText.value = ''
 }
 
 function handleModeClick(mode: SubtitleMode) {
