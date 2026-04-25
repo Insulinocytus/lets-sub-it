@@ -56,6 +56,7 @@ const form = computed<CreateJobForm>(() => ({
 }))
 
 const formError = computed(() => validateCreateJobForm(form.value))
+const alertMessage = computed(() => errorMessage.value || formError.value)
 const isSubmitDisabled = computed(() => isSubmitting.value || formError.value !== null)
 
 const statusLabel = computed(() => {
@@ -272,9 +273,9 @@ function stopWithError(message: string) {
             </label>
           </div>
 
-          <Alert v-if="errorMessage" variant="destructive" class="py-2">
+          <Alert v-if="alertMessage" variant="destructive" class="py-2">
             <AlertDescription class="text-xs">
-              {{ errorMessage }}
+              {{ alertMessage }}
             </AlertDescription>
           </Alert>
 

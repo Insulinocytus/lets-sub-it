@@ -24,6 +24,17 @@ describe('validateCreateJobForm', () => {
     ).toBe('请输入 YouTube URL')
   })
 
+  it('rejects empty backend URL', () => {
+    expect(
+      validateCreateJobForm({
+        backendBaseUrl: '',
+        youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+      }),
+    ).toBe('请输入 backend URL')
+  })
+
   it('rejects equal source and target languages', () => {
     expect(
       validateCreateJobForm({
