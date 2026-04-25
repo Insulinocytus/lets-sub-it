@@ -136,8 +136,9 @@ uv build
 - [x] 本地 `whisper-cli` 转写命令
 - [x] WebVTT 渲染与基础校验
 - [x] CLI 退出码和 JSON 输出契约
-- [ ] Go API server 与 embedded runner
-- [ ] `yt-dlp` / `ffmpeg` 下载和音频处理链路
+- [x] mock backend API、SQLite、job 复用、状态机与字幕文件服务
+- [ ] 真实 Go API server 与 embedded runner
+- [ ] 真实 `yt-dlp` / `ffmpeg` / `whisper-cli` / LLM 集成
 - [ ] OpenAI-compatible 翻译链路
 - [ ] `translated.vtt` 与 `bilingual.vtt` 打包
 - [ ] Chrome extension 任务提交、状态轮询和播放页字幕层
