@@ -87,14 +87,20 @@ function normalizeBackendBaseUrl(value: string): string {
   }
 
   const isLocalHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost'
-  if (!isLocalHost || url.protocol !== 'http:') {
+  const isOriginOnly =
+    !url.username &&
+    !url.password &&
+    url.pathname === '/' &&
+    !url.search &&
+    !url.hash
+  if (!isLocalHost || url.protocol !== 'http:' || !isOriginOnly) {
     throw new BackendClientError(
       'invalid_backend_url',
-      'backendBaseUrl must use localhost or 127.0.0.1',
+      'backendBaseUrl must be a localhost or 127.0.0.1 origin',
     )
   }
 
-  return url.toString().replace(/\/$/, '')
+  return url.origin
 }
 
 async function requestJson<T>(

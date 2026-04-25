@@ -54,6 +54,37 @@ describe('createBackendClient', () => {
     )
   })
 
+  it('fetches subtitle asset metadata with video and language query', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          asset: {
+            jobId: 'job_123',
+            videoId: 'video_123',
+            targetLanguage: 'zh-CN',
+            sourceLanguage: 'en',
+            files: {
+              source: '/subtitle-files/job_123/source',
+              translated: '/subtitle-files/job_123/translated',
+              bilingual: '/subtitle-files/job_123/bilingual',
+            },
+            createdAt: '2026-04-25T00:00:00Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const client = createBackendClient('http://localhost:8080/', fetchImpl)
+
+    const response = await client.getSubtitleAsset('video_123', 'zh-CN')
+
+    expect(response.asset?.jobId).toBe('job_123')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:8080/subtitle-assets?videoId=video_123&targetLanguage=zh-CN',
+      undefined,
+    )
+  })
+
   it('converts backend JSON errors into BackendClientError', async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(
@@ -73,8 +104,24 @@ describe('createBackendClient', () => {
 
   it('rejects non-local backend URLs', () => {
     expect(() => createBackendClient('https://api.example.com', fetch)).toThrow(
-      'backendBaseUrl must use localhost or 127.0.0.1',
+      'backendBaseUrl must be a localhost or 127.0.0.1 origin',
     )
+  })
+
+  it('rejects backend URLs with path, query, hash, or credentials', () => {
+    const invalidUrls = [
+      'http://localhost:8080/api',
+      'http://localhost:8080/?debug=1',
+      'http://localhost:8080/#x',
+      'http://user@localhost:8080',
+    ]
+
+    for (const url of invalidUrls) {
+      expect(() => createBackendClient(url, fetch)).toThrow(BackendClientError)
+      expect(() => createBackendClient(url, fetch)).toThrow(
+        'backendBaseUrl must be a localhost or 127.0.0.1 origin',
+      )
+    }
   })
 
   it('uses network_error for failed fetch calls', async () => {
