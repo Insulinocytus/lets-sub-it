@@ -169,6 +169,8 @@ async function changeMode(mode: SubtitleMode) {
 
   const token = requestToken
   const previousMode = selectedMode.value
+  const previousCues = cues.value
+  const previousActiveText = activeText.value
   const asset = currentAsset.value
   if (!asset) {
     return
@@ -197,6 +199,7 @@ async function changeMode(mode: SubtitleMode) {
       selectedMode.value === mode
     ) {
       selectedMode.value = previousMode
+      restoreDisplayedSubtitles(token, previousCues, previousActiveText)
       status.value = readableError(error)
     }
     return
@@ -213,13 +216,19 @@ async function changeMode(mode: SubtitleMode) {
 
   if (!result.ok) {
     selectedMode.value = previousMode
+    restoreDisplayedSubtitles(token, previousCues, previousActiveText)
     status.value = result.error.message
     return
   }
 
-  if (result.data) {
-    currentAsset.value = result.data
+  if (!result.data) {
+    selectedMode.value = previousMode
+    restoreDisplayedSubtitles(token, previousCues, previousActiveText)
+    status.value = '字幕模式切换失败'
+    return
   }
+
+  currentAsset.value = result.data
   const loaded = await loadVtt(token)
   if (
     !loaded &&
@@ -234,6 +243,46 @@ async function changeMode(mode: SubtitleMode) {
         ...currentAsset.value,
         selectedMode: previousMode,
       }
+    }
+    try {
+      const rollbackResult = await sendExtensionMessage<SubtitleAssetCacheEntry | null>({
+        type: 'subtitle:update-mode',
+        payload: {
+          videoId,
+          targetLanguage,
+          mode: previousMode,
+        },
+      })
+      if (
+        !canUpdate(token) ||
+        currentVideoId.value !== videoId ||
+        currentAsset.value?.jobId !== jobId ||
+        selectedMode.value !== previousMode
+      ) {
+        return
+      }
+      if (!rollbackResult.ok) {
+        restoreDisplayedSubtitles(token, previousCues, previousActiveText)
+        status.value = rollbackResult.error.message
+        return
+      }
+      if (!rollbackResult.data) {
+        restoreDisplayedSubtitles(token, previousCues, previousActiveText)
+        status.value = '字幕模式回滚失败'
+        return
+      }
+      currentAsset.value = rollbackResult.data
+    } catch (error) {
+      if (
+        canUpdate(token) &&
+        currentVideoId.value === videoId &&
+        currentAsset.value?.jobId === jobId &&
+        selectedMode.value === previousMode
+      ) {
+        restoreDisplayedSubtitles(token, previousCues, previousActiveText)
+        status.value = readableError(error)
+      }
+      return
     }
     await loadVtt(token)
   }
@@ -282,6 +331,23 @@ function resetLoadedSubtitles() {
   cleanupVideoListeners()
   cues.value = []
   activeText.value = ''
+}
+
+function restoreDisplayedSubtitles(
+  token: number,
+  previousCues: VttCue[],
+  previousActiveText: string,
+) {
+  if (!canUpdate(token)) {
+    return
+  }
+
+  cues.value = previousCues
+  activeText.value = previousActiveText
+
+  if (previousCues.length > 0) {
+    bindVideo(token)
+  }
 }
 
 function handleModeClick(mode: SubtitleMode) {

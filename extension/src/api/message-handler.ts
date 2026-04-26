@@ -12,10 +12,12 @@ import {
   setCachedSubtitleAsset,
   updateCachedSubtitleMode,
 } from '@/storage/subtitle-cache'
+import { startJobMonitor } from './job-monitor'
 
 export type MessageHandlerDeps = {
   fetchImpl?: typeof fetch
   now?: () => string
+  startJobMonitor?: typeof startJobMonitor
 }
 
 export async function handleExtensionMessage(
@@ -36,12 +38,21 @@ export async function handleExtensionMessage(
           message.payload.sourceLanguage,
           message.payload.targetLanguage,
         )
-        await updateSettings({
+        const settings = await updateSettings({
           sourceLanguage: message.payload.sourceLanguage,
           targetLanguage: message.payload.targetLanguage,
         })
-        const client = await clientFromSettings(fetchImpl)
-        return ok(await client.createJob(message.payload))
+        const client = createBackendClient(settings.backendBaseUrl, fetchImpl)
+        const response = await client.createJob(message.payload)
+        const monitor = deps.startJobMonitor ?? startJobMonitor
+        void Promise.resolve(
+          monitor(response.job, {
+            backendBaseUrl: settings.backendBaseUrl,
+            client,
+            now,
+          }),
+        ).catch(() => {})
+        return ok(response)
       }
       case 'job:get': {
         const client = await clientFromSettings(fetchImpl)
@@ -49,9 +60,13 @@ export async function handleExtensionMessage(
       }
       case 'subtitle:resolve': {
         const settings = await getSettings()
-        const preference = await getVideoPreference(message.payload.videoId)
+        const preference = await getVideoPreference(
+          settings.backendBaseUrl,
+          message.payload.videoId,
+        )
         const targetLanguage = preference?.targetLanguage ?? settings.targetLanguage
         const cached = await getCachedSubtitleAsset(
+          settings.backendBaseUrl,
           message.payload.videoId,
           targetLanguage,
         )
@@ -72,6 +87,7 @@ export async function handleExtensionMessage(
           response.asset,
           preference?.selectedMode ?? 'translated',
           now(),
+          settings.backendBaseUrl,
         )
         return ok(entry)
       }
@@ -82,13 +98,7 @@ export async function handleExtensionMessage(
         )
       }
       case 'subtitle:update-mode':
-        return ok(
-          await updateCachedSubtitleMode(
-            message.payload.videoId,
-            message.payload.targetLanguage,
-            message.payload.mode,
-          ),
-        )
+        return ok(await updateSubtitleMode(message, deps))
     }
   } catch (error) {
     return { ok: false, error: errorToMessage(error) }
@@ -98,6 +108,19 @@ export async function handleExtensionMessage(
 async function clientFromSettings(fetchImpl: typeof fetch) {
   const settings = await getSettings()
   return createBackendClient(settings.backendBaseUrl, fetchImpl)
+}
+
+async function updateSubtitleMode(
+  message: Extract<ExtensionMessage, { type: 'subtitle:update-mode' }>,
+  _deps: MessageHandlerDeps,
+) {
+  const settings = await getSettings()
+  return updateCachedSubtitleMode(
+    settings.backendBaseUrl,
+    message.payload.videoId,
+    message.payload.targetLanguage,
+    message.payload.mode,
+  )
 }
 
 function ok<T>(data: T): MessageResult<T> {

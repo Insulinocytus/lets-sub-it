@@ -10,7 +10,7 @@ export default defineConfig({
     name: 'Lets Sub It',
     description: 'Self-hosted YouTube subtitle generation and translation helper.',
     version: '0.1.0',
-    permissions: ['storage', 'activeTab'],
+    permissions: ['storage', 'activeTab', 'alarms'],
     host_permissions: ['http://127.0.0.1:*/*', 'http://localhost:*/*'],
   },
   vite: () => ({
