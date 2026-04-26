@@ -11,7 +11,7 @@
 Lets Sub It 的目标是把“提交 YouTube 公开视频链接 -> 下载音频 -> 本地转写 -> 翻译 -> 生成字幕 -> 播放页加载”这条链路做得简单、可控、容易排障。
 
 > [!NOTE]
-> 项目仍处于 MVP 阶段。当前可运行部分包括 `backend/` 的 mock API server，以及 `whisper/` 的本地 `faster-whisper` 转写 CLI。真实 `yt-dlp`、`ffmpeg`、`whisper-cli` runner、LLM 翻译和 Chrome extension 播放页集成仍在路线图中。
+> 项目仍处于 MVP 阶段。当前可运行部分包括 `backend/` 的 mock API server、`whisper/` 的本地 `faster-whisper` 转写 CLI，以及 `extension/` 的 Chrome MV3 前端工程。真实 `yt-dlp`、`ffmpeg`、`whisper-cli` runner 和 LLM 翻译仍在路线图中。
 
 ## 功能
 
@@ -39,11 +39,11 @@ flowchart LR
 
 - `backend/`：真实 HTTP API、SQLite、job 复用、mock 状态推进和字幕文件服务。
 - `whisper/`：真实本地转写 CLI、WebVTT 渲染与校验。
+- `extension/`：Chrome MV3 extension 工程，支持 popup 提交/轮询、background API 网关、storage 缓存和 YouTube watch 页面字幕层。
 
 暂未实现：
 
 - 真实 YouTube 下载、音频处理、后端调用 `whisper-cli`、LLM 翻译。
-- Chrome extension 的任务提交、轮询和播放页字幕层。
 
 ## 快速开始
 
@@ -53,6 +53,7 @@ flowchart LR
 
 - Go `1.22`
 - Python `3.12`
+- Node `22`
 - `uv`
 
 ```bash
@@ -173,7 +174,7 @@ whisper-cli \
 │   ├── cmd/server/          # HTTP server 入口
 │   └── internal/            # API、store、runner、app 代码
 ├── docs/                    # PRD、规格和实施计划
-├── extension/               # Chrome extension 预留目录
+├── extension/               # Chrome MV3 extension
 ├── whisper/                 # Python faster-whisper CLI
 │   ├── src/whisper_cli/     # CLI、转写适配和 VTT 渲染
 │   └── tests/               # pytest 单元测试
@@ -213,7 +214,7 @@ mise exec -- uv build
 - [ ] 后端 embedded runner 调用真实 `whisper-cli`
 - [ ] OpenAI-compatible LLM 翻译链路
 - [ ] 基于真实字幕的 `translated.vtt` 与 `bilingual.vtt` 打包
-- [ ] Chrome extension 任务提交、状态轮询和播放页字幕层
+- [x] Chrome extension 任务提交、状态轮询和播放页字幕层
 
 ## 相关文档
 
