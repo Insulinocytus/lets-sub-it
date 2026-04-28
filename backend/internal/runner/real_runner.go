@@ -12,10 +12,11 @@ import (
 type RealRunner struct {
 	store           Store
 	downloadTimeout time.Duration
+	whisperModel    string
 }
 
-func NewRealRunner(store Store, downloadTimeout time.Duration) *RealRunner {
-	return &RealRunner{store: store, downloadTimeout: downloadTimeout}
+func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string) *RealRunner {
+	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel}
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
@@ -30,11 +31,12 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	defer cancel()
 
 	// WorkingDir format: <LSI_WORK_DIR>/<jobID> (see store.NewJob)
-	if _, err := downloadAudio(downloadCtx, filepath.Dir(job.WorkingDir), job.ID, job.YoutubeURL); err != nil {
+	audioPath, err := downloadAudio(downloadCtx, filepath.Dir(job.WorkingDir), job.ID, job.YoutubeURL)
+	if err != nil {
 		return r.fail(job.ID, store.StatusDownloading, err)
 	}
 
-	if err := r.set(job.ID, store.StatusTranscribing, "生成 mock source.vtt", ""); err != nil {
+	if err := r.set(job.ID, store.StatusTranscribing, "调用 whisper-cli 生成 source.vtt", ""); err != nil {
 		return r.fail(job.ID, store.StatusTranscribing, err)
 	}
 	if err := os.MkdirAll(job.WorkingDir, 0o755); err != nil {
@@ -45,7 +47,7 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	translatedPath := filepath.Join(job.WorkingDir, "translated.vtt")
 	bilingualPath := filepath.Join(job.WorkingDir, "bilingual.vtt")
 
-	if err := os.WriteFile(sourcePath, []byte(mockSourceVTT), 0o644); err != nil {
+	if err := transcribeAudio(ctx, audioPath, sourcePath, r.whisperModel, job.SourceLanguage); err != nil {
 		return r.fail(job.ID, store.StatusTranscribing, err)
 	}
 
