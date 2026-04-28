@@ -20,7 +20,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	testStore := openTestStore(t)
 	workDir := t.TempDir()
 	jobDir := filepath.Join(workDir, "job_1")
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "zh", "en", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)
@@ -69,9 +69,9 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	assertArg(t, whisperCall.args, "--input", audioPath)
 	assertArg(t, whisperCall.args, "--output", sourcePath)
 	assertArg(t, whisperCall.args, "--model", "tiny")
-	assertArg(t, whisperCall.args, "--language", "ja")
+	assertArg(t, whisperCall.args, "--language", "zh")
 
-	asset, assetErr := testStore.FindSubtitleAsset("abc123", "zh-CN")
+	asset, assetErr := testStore.FindSubtitleAsset("abc123", "en")
 	if assetErr != nil {
 		t.Fatalf("FindSubtitleAsset() error = %v", assetErr)
 	}
@@ -99,7 +99,7 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=deleted", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=deleted", "ja", "zh", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)
@@ -135,7 +135,7 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)
@@ -172,7 +172,7 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 	testStore := openTestStore(t)
 	workDir := t.TempDir()
 	jobDir := filepath.Join(workDir, "job_1")
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)

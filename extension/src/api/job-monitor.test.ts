@@ -19,7 +19,7 @@ const queuedJob: Job = {
   videoId: 'video_123',
   youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
   status: 'queued',
   stage: 'queued',
   progressText: '等待处理',
@@ -53,7 +53,7 @@ const asset: SubtitleAsset = {
   jobId: 'job_123',
   videoId: 'video_123',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
   files: {
     source: '/subtitle-files/job_123/source',
     translated: '/subtitle-files/job_123/translated',
@@ -89,7 +89,7 @@ describe('job monitor', () => {
 
     expect(client.getJob).toHaveBeenCalledWith('job_123')
     await vi.waitFor(() => {
-      expect(client.getSubtitleAsset).toHaveBeenCalledWith('video_123', 'zh-CN')
+      expect(client.getSubtitleAsset).toHaveBeenCalledWith('video_123', 'zh')
       expect(setCachedSubtitleAsset).toHaveBeenCalledWith(
         asset,
         'translated',
@@ -197,7 +197,7 @@ describe('job monitor', () => {
     )
 
     expect(client.getJob).toHaveBeenCalledTimes(2)
-    expect(client.getSubtitleAsset).toHaveBeenCalledWith('video_123', 'zh-CN')
+    expect(client.getSubtitleAsset).toHaveBeenCalledWith('video_123', 'zh')
     expect(setCachedSubtitleAsset).toHaveBeenCalledWith(
       asset,
       'translated',
@@ -226,7 +226,7 @@ describe('job monitor', () => {
 
       if (
         url ===
-        'http://127.0.0.1:8080/subtitle-assets?videoId=video_123&targetLanguage=zh-CN'
+        'http://127.0.0.1:8080/subtitle-assets?videoId=video_123&targetLanguage=zh'
       ) {
         return new Response(JSON.stringify({ asset }), {
           status: 200,
@@ -334,7 +334,7 @@ describe('job monitor', () => {
 
       if (
         url ===
-        'http://127.0.0.1:8080/subtitle-assets?videoId=video_backend_a&targetLanguage=zh-CN'
+        'http://127.0.0.1:8080/subtitle-assets?videoId=video_backend_a&targetLanguage=zh'
       ) {
         return new Response(JSON.stringify({ asset: backendAAsset }), {
           status: 200,
@@ -344,7 +344,7 @@ describe('job monitor', () => {
 
       if (
         url ===
-        'http://127.0.0.1:9090/subtitle-assets?videoId=video_backend_b&targetLanguage=zh-CN'
+        'http://127.0.0.1:9090/subtitle-assets?videoId=video_backend_b&targetLanguage=zh'
       ) {
         return new Response(JSON.stringify({ asset: backendBAsset }), {
           status: 200,

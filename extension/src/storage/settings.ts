@@ -9,7 +9,7 @@ import {
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
   backendBaseUrl: 'http://127.0.0.1:8080',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
 })
 
 const settingsItem = storage.defineItem<Settings>('local:settings', {

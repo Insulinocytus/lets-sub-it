@@ -26,7 +26,7 @@ func openTestStore(t *testing.T) *store.Store {
 func TestMockRunnerCompletesJobAndWritesAssets(t *testing.T) {
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)
@@ -44,7 +44,7 @@ func TestMockRunnerCompletesJobAndWritesAssets(t *testing.T) {
 		t.Fatalf("Status = %q, want %q", updatedJob.Status, store.StatusCompleted)
 	}
 
-	asset, err := testStore.FindSubtitleAsset("abc123", "zh-CN")
+	asset, err := testStore.FindSubtitleAsset("abc123", "zh")
 	if err != nil {
 		t.Fatalf("FindSubtitleAsset() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestMockRunnerCompletesJobAndWritesAssets(t *testing.T) {
 func TestMockRunnerMarksCanceledJobAsFailed(t *testing.T) {
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", jobDir)
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
 
 	if err := testStore.CreateJob(job); err != nil {
 		t.Fatalf("CreateJob() error = %v", err)
@@ -105,7 +105,7 @@ func TestMockRunnerFailsJobWhenCompletionUpdateFails(t *testing.T) {
 			store.StatusCompleted: errors.New("completed update failed"),
 		},
 	}
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", t.TempDir())
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", t.TempDir())
 
 	err := NewMockRunner(fakeStore).Start(context.Background(), job)
 	if !errors.Is(err, fakeStore.failOnStatus[store.StatusCompleted]) {
@@ -153,7 +153,7 @@ func TestMockRunnerMarksFailedWhenTranscribingUpdateFails(t *testing.T) {
 			store.StatusTranscribing: errors.New("transcribing update failed"),
 		},
 	}
-	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh-CN", t.TempDir())
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", t.TempDir())
 
 	err := NewMockRunner(fakeStore).Start(context.Background(), job)
 	if !errors.Is(err, fakeStore.failOnStatus[store.StatusTranscribing]) {

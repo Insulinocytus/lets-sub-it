@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser'
 
-export const SUPPORTED_LANGUAGES = ['en', 'zh-CN'] as const
+export const SUPPORTED_LANGUAGES = ['en', 'zh'] as const
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]
 
 export const SUBTITLE_MODES = ['translated', 'bilingual'] as const

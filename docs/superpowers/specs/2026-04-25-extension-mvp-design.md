@@ -24,7 +24,7 @@
 - 不支持 YouTube Shorts 页面。
 - 不在播放页创建新 job，第一版只在 popup 创建任务。
 - 不做字号、位置、透明度、拖拽、字幕编辑或字幕分享。
-- 不支持完整语言列表，第一版只支持 `en` 和 `zh-CN` 互相转换。
+- 不支持完整语言列表，第一版只支持 `en` 和 `zh` 互相转换。
 - 不引入用户登录、鉴权、云同步或多用户能力。
 - 不把翻译 provider 密钥保存在 extension 里。
 - 不新增真实下载、真实转写或真实翻译能力。
@@ -39,8 +39,8 @@
 - backend URL 在 popup 中可配置，默认值为 `http://127.0.0.1:8080`。
 - background service worker 是唯一 HTTP API 网关。
 - source language 默认 `en`。
-- target language 默认 `zh-CN`。
-- 支持语言固定为 `en` 和 `zh-CN`。
+- target language 默认 `zh`。
+- 支持语言固定为 `en` 和 `zh`。
 - `sourceLanguage` 和 `targetLanguage` 不能相同。
 - 播放页第一版只做字幕显示、开关和 `translated/bilingual` 切换。
 - 播放页恢复逻辑为本地缓存优先；缓存缺失时按上次目标语言查询 backend 的 `/subtitle-assets`。
@@ -294,9 +294,9 @@ popup 是紧凑工具面板，不做营销页或说明页。
 语言选择：
 
 ```text
-支持语言：en, zh-CN
+支持语言：en, zh
 sourceLanguage 默认：en
-targetLanguage 默认：zh-CN
+targetLanguage 默认：zh
 约束：sourceLanguage != targetLanguage
 ```
 
@@ -320,8 +320,8 @@ targetLanguage 默认：zh-CN
 ```ts
 type Settings = {
   backendBaseUrl: string
-  sourceLanguage: "en" | "zh-CN"
-  targetLanguage: "en" | "zh-CN"
+  sourceLanguage: "en" | "zh"
+  targetLanguage: "en" | "zh"
 }
 ```
 
@@ -331,7 +331,7 @@ type Settings = {
 {
   backendBaseUrl: "http://127.0.0.1:8080",
   sourceLanguage: "en",
-  targetLanguage: "zh-CN"
+  targetLanguage: "zh"
 }
 ```
 
@@ -340,7 +340,7 @@ type Settings = {
 ```ts
 type VideoPreference = {
   videoId: string
-  targetLanguage: "en" | "zh-CN"
+  targetLanguage: "en" | "zh"
   selectedMode: "translated" | "bilingual"
 }
 ```
@@ -350,8 +350,8 @@ type VideoPreference = {
 ```ts
 type SubtitleAssetCacheEntry = {
   videoId: string
-  targetLanguage: "en" | "zh-CN"
-  sourceLanguage: "en" | "zh-CN"
+  targetLanguage: "en" | "zh"
+  sourceLanguage: "en" | "zh"
   jobId: string
   files: {
     source: string
@@ -394,7 +394,7 @@ type ExtensionMessage =
       type: "subtitle:update-mode"
       payload: {
         videoId: string
-        targetLanguage: "en" | "zh-CN"
+        targetLanguage: "en" | "zh"
         mode: "translated" | "bilingual"
       }
     }

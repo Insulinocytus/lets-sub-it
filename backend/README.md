@@ -39,7 +39,7 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   -d '{
     "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "sourceLanguage": "ja",
-    "targetLanguage": "zh-Hans"
+    "targetLanguage": "zh"
   }'
 ```
 

@@ -104,7 +104,7 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   -d '{
     "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "sourceLanguage": "en",
-    "targetLanguage": "zh-CN"
+    "targetLanguage": "zh"
   }'
 ```
 
@@ -166,7 +166,7 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 - 包管理器是 npm，锁文件是 `extension/package-lock.json`。
 - 入口文件在 `extension/entrypoints/`：`background.ts`、`youtube.content.ts`、`popup/`。
 - background service worker 是唯一 HTTP API 网关；popup 和 content script 通过 runtime message 访问它。
-- 支持语言固定为 `en` 和 `zh-CN`，`sourceLanguage` 与 `targetLanguage` 不能相同。
+- 支持语言固定为 `en` 和 `zh`，`sourceLanguage` 与 `targetLanguage` 不能相同。
 - 播放页字幕模式只支持 `translated` 和 `bilingual`；backend 仍保留 `source` 文件服务。
 - backend URL 只能是带端口的本机 HTTP origin，例如 `http://127.0.0.1:8080`。
 - Manifest host permissions 只允许 `http://127.0.0.1:*/*` 和 `http://localhost:*/*`。
@@ -354,7 +354,7 @@ mise exec -- npm run build
 ## 常见注意事项
 
 - backend 默认是 mock runner；`LSI_RUNNER_MODE=real` 代表下载和转写阶段真实执行，不代表端到端真实翻译字幕链路。
-- extension 第一版只支持 `en` 和 `zh-CN`，不要在 UI 或文档中承诺完整语言列表。
+- extension 第一版只支持 `en` 和 `zh`，不要在 UI 或文档中承诺完整语言列表。
 - backend CORS 只允许本机 HTTP origin 且必须显式端口。
 - 单元测试必须离线、可重复，不依赖真实 YouTube、模型下载、GPU、外部 LLM 或本地私有数据。
 - 修改 Go 依赖时通过 Go 工具更新 `backend/go.sum`，不要手动编辑。

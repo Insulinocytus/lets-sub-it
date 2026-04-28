@@ -55,7 +55,7 @@ const asset = {
   jobId: 'job_123',
   videoId: 'video_123',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
   files: {
     source: '/subtitle-files/job_123/source',
     translated: '/subtitle-files/job_123/translated',
@@ -140,7 +140,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'bilingual',
           },
         },
@@ -148,7 +148,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'translated',
           },
         },
@@ -198,7 +198,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'translated',
           },
         },
@@ -247,7 +247,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'translated',
           },
         },
@@ -287,7 +287,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'bilingual',
           },
         },
@@ -322,7 +322,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'bilingual',
           },
         },
@@ -360,7 +360,7 @@ describe('YoutubeOverlay', () => {
           type: 'subtitle:update-mode',
           payload: {
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             mode: 'bilingual',
           },
         },

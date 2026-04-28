@@ -14,7 +14,7 @@ const asset: SubtitleAsset = {
   jobId: 'job_123',
   videoId: 'video_123',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
   files: {
     source: '/subtitle-files/job_123/source',
     translated: '/subtitle-files/job_123/translated',
@@ -37,7 +37,7 @@ describe('subtitle cache storage', () => {
     )
 
     await expect(
-      getCachedSubtitleAsset(defaultBackendBaseUrl, 'video_123', 'zh-CN'),
+      getCachedSubtitleAsset(defaultBackendBaseUrl, 'video_123', 'zh'),
     ).resolves.toEqual({
       ...asset,
       selectedMode: 'translated',
@@ -57,7 +57,7 @@ describe('subtitle cache storage', () => {
       getVideoPreference(defaultBackendBaseUrl, 'video_123'),
     ).resolves.toEqual({
       videoId: 'video_123',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
       selectedMode: 'translated',
     })
   })
@@ -73,7 +73,7 @@ describe('subtitle cache storage', () => {
     const updated = await updateCachedSubtitleMode(
       defaultBackendBaseUrl,
       'video_123',
-      'zh-CN',
+      'zh',
       'bilingual',
     )
 
@@ -82,7 +82,7 @@ describe('subtitle cache storage', () => {
       getVideoPreference(defaultBackendBaseUrl, 'video_123'),
     ).resolves.toEqual({
       videoId: 'video_123',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
       selectedMode: 'bilingual',
     })
   })
@@ -104,12 +104,12 @@ describe('subtitle cache storage', () => {
     const specialAsset: SubtitleAsset = {
       ...asset,
       videoId: 'video/123?ref=abc#frag',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
     }
     const ordinaryAsset: SubtitleAsset = {
       ...asset,
       videoId: 'video_ordinary',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
     }
 
     await setCachedSubtitleAsset(
@@ -126,7 +126,7 @@ describe('subtitle cache storage', () => {
     )
 
     await expect(
-      getCachedSubtitleAsset(defaultBackendBaseUrl, 'video_ordinary', 'zh-CN'),
+      getCachedSubtitleAsset(defaultBackendBaseUrl, 'video_ordinary', 'zh'),
     ).resolves.toEqual({
       ...ordinaryAsset,
       selectedMode: 'translated',
@@ -136,7 +136,7 @@ describe('subtitle cache storage', () => {
       getCachedSubtitleAsset(
         defaultBackendBaseUrl,
         'video/123?ref=abc#frag',
-        'zh-CN',
+        'zh',
       ),
     ).resolves.toEqual({
       ...specialAsset,
@@ -173,14 +173,14 @@ describe('subtitle cache storage', () => {
     )
 
     await expect(
-      getCachedSubtitleAsset('http://127.0.0.1:8080', 'video_123', 'zh-CN'),
+      getCachedSubtitleAsset('http://127.0.0.1:8080', 'video_123', 'zh'),
     ).resolves.toEqual({
       ...asset,
       selectedMode: 'translated',
       lastSyncedAt: '2026-04-25T00:01:00Z',
     })
     await expect(
-      getCachedSubtitleAsset('http://127.0.0.1:9090/', 'video_123', 'zh-CN'),
+      getCachedSubtitleAsset('http://127.0.0.1:9090/', 'video_123', 'zh'),
     ).resolves.toEqual({
       ...secondAsset,
       selectedMode: 'bilingual',
@@ -190,14 +190,14 @@ describe('subtitle cache storage', () => {
       getVideoPreference('http://127.0.0.1:8080', 'video_123'),
     ).resolves.toEqual({
       videoId: 'video_123',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
       selectedMode: 'translated',
     })
     await expect(
       getVideoPreference('http://127.0.0.1:9090', 'video_123'),
     ).resolves.toEqual({
       videoId: 'video_123',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
       selectedMode: 'bilingual',
     })
   })

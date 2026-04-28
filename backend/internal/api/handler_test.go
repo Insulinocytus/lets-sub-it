@@ -38,7 +38,7 @@ func newTestServer(t *testing.T) http.Handler {
 
 func TestPostJobsCreatesJobAndCompletesWithMockRunner(t *testing.T) {
 	server := newTestServer(t)
-	body := bytes.NewBufferString(`{"youtubeUrl":"https://www.youtube.com/watch?v=abc123","sourceLanguage":"ja","targetLanguage":"zh-CN"}`)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://www.youtube.com/watch?v=abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
 	request := httptest.NewRequest(http.MethodPost, "/jobs", body)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestPostJobsCreatesJobAndCompletesWithMockRunner(t *testing.T) {
 
 func TestPostJobsRejectsMissingSourceLanguage(t *testing.T) {
 	server := newTestServer(t)
-	body := bytes.NewBufferString(`{"youtubeUrl":"https://www.youtube.com/watch?v=abc123","targetLanguage":"zh-CN"}`)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://www.youtube.com/watch?v=abc123","targetLanguage":"zh"}`)
 	request := httptest.NewRequest(http.MethodPost, "/jobs", body)
 	response := httptest.NewRecorder()
 
@@ -77,7 +77,7 @@ func TestPostJobsRejectsMissingSourceLanguage(t *testing.T) {
 
 func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 	server := newTestServer(t)
-	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh-CN"}`)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
 	createRequest := httptest.NewRequest(http.MethodPost, "/jobs", body)
 	createResponse := httptest.NewRecorder()
 	server.ServeHTTP(createResponse, createRequest)
@@ -97,7 +97,7 @@ func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 
 func TestSubtitleFileServing(t *testing.T) {
 	server := newTestServer(t)
-	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh-CN"}`)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
 	createRequest := httptest.NewRequest(http.MethodPost, "/jobs", body)
 	createResponse := httptest.NewRecorder()
 	server.ServeHTTP(createResponse, createRequest)
@@ -328,7 +328,7 @@ func waitForAsset(t *testing.T, server http.Handler, jobID string) *httptest.Res
 	t.Helper()
 	var last *httptest.ResponseRecorder
 	for range 20 {
-		assetRequest := httptest.NewRequest(http.MethodGet, "/subtitle-assets?videoId=abc123&targetLanguage=zh-CN", nil)
+		assetRequest := httptest.NewRequest(http.MethodGet, "/subtitle-assets?videoId=abc123&targetLanguage=zh", nil)
 		assetResponse := httptest.NewRecorder()
 		server.ServeHTTP(assetResponse, assetRequest)
 		last = assetResponse

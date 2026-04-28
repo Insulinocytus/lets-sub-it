@@ -74,7 +74,7 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   -d '{
     "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "sourceLanguage": "en",
-    "targetLanguage": "zh-CN"
+    "targetLanguage": "zh"
   }'
 ```
 
@@ -267,7 +267,7 @@ cd ../extension && mise exec -- npm run build
 - [ ] 基于真实转写与翻译结果生成 `translated.vtt` 和 `bilingual.vtt`
 - [ ] 更完整的任务历史、错误恢复和配置体验
 
-当前不支持私有视频、登录态、远程 backend URL、多用户系统、鉴权、批量任务、实时生成或完整语言列表。extension 第一版只提供 `en` 和 `zh-CN` 互相转换。
+当前不支持私有视频、登录态、远程 backend URL、多用户系统、鉴权、批量任务、实时生成或完整语言列表。extension 第一版只提供 `en` 和 `zh` 互相转换。
 
 ## 相关文档
 
