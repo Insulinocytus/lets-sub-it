@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "path=$(jq -r '(.worktree_path // .path // .directory // empty)' 2>/dev/null) && [ -n \"$path\" ] && [ -d \"$path\" ] && cd \"$path\" && mise trust || true",
+            "timeout": 30,
+            "statusMessage": "Running mise trust in new worktree"
+          }
+        ]
+      }
+    ]
+  }
+}
