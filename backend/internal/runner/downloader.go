@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 )
@@ -10,12 +11,16 @@ import (
 var execCommand = exec.CommandContext
 
 func downloadAudio(ctx context.Context, workDir string, jobID string, youtubeURL string) (string, error) {
-	audioPath := filepath.Join(workDir, jobID, "audio.mp3")
+	jobDir := filepath.Join(workDir, jobID)
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
+		return "", fmt.Errorf("create job directory: %w", err)
+	}
+	audioPath := filepath.Join(jobDir, "audio.mp3")
 	args := []string{
 		"-x",
 		"--audio-format", "mp3",
 		"--audio-quality", "128K",
-		"-o", filepath.Join(workDir, jobID, "audio.%(ext)s"),
+		"-o", filepath.Join(jobDir, "audio.%(ext)s"),
 		youtubeURL,
 	}
 	cmd := execCommand(ctx, "yt-dlp", args...)

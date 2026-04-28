@@ -10,18 +10,41 @@ import (
 	"time"
 )
 
+func TestDownloadAudioCreatesJobDir(t *testing.T) {
+	origExec := execCommand
+	t.Cleanup(func() { execCommand = origExec })
+
+	tmpDir := t.TempDir()
+	// Intentionally do NOT create the job directory — downloadAudio should create it.
+
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	_, err := downloadAudio(context.Background(), tmpDir, "job_newdir", "https://www.youtube.com/watch?v=abc123")
+	if err != nil {
+		t.Fatalf("downloadAudio() error = %v", err)
+	}
+
+	jobDir := filepath.Join(tmpDir, "job_newdir")
+	info, statErr := os.Stat(jobDir)
+	if statErr != nil {
+		t.Fatalf("os.Stat(jobDir) error = %v", statErr)
+	}
+	if !info.IsDir() {
+		t.Fatalf("jobDir is not a directory")
+	}
+}
+
 func TestDownloadAudioSuccess(t *testing.T) {
 	origExec := execCommand
 	t.Cleanup(func() { execCommand = origExec })
 
 	tmpDir := t.TempDir()
 	jobDir := filepath.Join(tmpDir, "job_1")
-	if err := os.MkdirAll(jobDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll error = %v", err)
-	}
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "mkdir -p "+jobDir+" && echo fake-audio-data > "+jobDir+"/audio.mp3")
+		return exec.CommandContext(ctx, "sh", "-c", "echo fake-audio-data > "+filepath.Join(jobDir, "audio.mp3"))
 	}
 
 	audioPath, err := downloadAudio(context.Background(), tmpDir, "job_1", "https://www.youtube.com/watch?v=abc123")
@@ -46,8 +69,6 @@ func TestDownloadAudioVideoUnavailable(t *testing.T) {
 	t.Cleanup(func() { execCommand = origExec })
 
 	tmpDir := t.TempDir()
-	jobDir := filepath.Join(tmpDir, "job_1")
-	os.MkdirAll(jobDir, 0o755)
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
@@ -67,7 +88,6 @@ func TestDownloadAudioTimeout(t *testing.T) {
 	t.Cleanup(func() { execCommand = origExec })
 
 	tmpDir := t.TempDir()
-	os.MkdirAll(filepath.Join(tmpDir, "job_1"), 0o755)
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sleep", "10")
@@ -87,7 +107,6 @@ func TestDownloadAudioNetworkError(t *testing.T) {
 	t.Cleanup(func() { execCommand = origExec })
 
 	tmpDir := t.TempDir()
-	os.MkdirAll(filepath.Join(tmpDir, "job_1"), 0o755)
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Unable to download webpage: network error' >&2 && exit 1")
@@ -107,7 +126,6 @@ func TestDownloadAudioYtDlpMissing(t *testing.T) {
 	t.Cleanup(func() { execCommand = origExec })
 
 	tmpDir := t.TempDir()
-	os.MkdirAll(filepath.Join(tmpDir, "job_1"), 0o755)
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "yt-dlp-this-tool-does-not-exist-xyz")

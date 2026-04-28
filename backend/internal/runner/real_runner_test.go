@@ -25,7 +25,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	}
 
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "mkdir -p "+jobDir+" && echo fake-audio-data > "+jobDir+"/audio.mp3")
+		return exec.CommandContext(ctx, "sh", "-c", "echo fake-audio-data > "+filepath.Join(jobDir, "audio.mp3"))
 	}
 
 	if err := NewRealRunner(testStore, 10*time.Minute).Start(context.Background(), job); err != nil {

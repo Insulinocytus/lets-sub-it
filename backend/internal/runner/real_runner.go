@@ -29,6 +29,7 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	downloadCtx, cancel := context.WithTimeout(ctx, r.downloadTimeout)
 	defer cancel()
 
+	// WorkingDir format: <LSI_WORK_DIR>/<jobID> (see store.NewJob)
 	if _, err := downloadAudio(downloadCtx, filepath.Dir(job.WorkingDir), job.ID, job.YoutubeURL); err != nil {
 		return r.fail(job.ID, store.StatusDownloading, err)
 	}
