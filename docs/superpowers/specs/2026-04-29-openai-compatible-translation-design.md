@@ -13,6 +13,7 @@
 
 - 在 `LSI_RUNNER_MODE=real` 下，`translating` 阶段调用 Chat Completions 兼容接口。
 - 生成的 `translated.vtt` 保持与 `source.vtt` 相同的 cue 数量和时间轴。
+- 翻译单条 cue 时携带邻近上下文：目标 cue 前后各 10 条作为上下文输入，但只要求模型返回目标 cue 的翻译。
 - 生成的 `bilingual.vtt` 使用同一时间轴，每个 cue 先写 source 文本，再写 translated 文本。
 - 保持现有 HTTP API 响应结构不变，extension 不需要改动。
 - 单元测试不依赖真实 OpenAI、真实 YouTube、真实 Whisper 模型或外部网络。
@@ -21,7 +22,7 @@
 
 - 不实现 `mock` runner 的真实翻译；mock 模式继续完全离线。
 - 不新增 provider registry、插件系统或多 provider 抽象。
-- 不实现重试、分块并发、流式响应、成本统计或阶段级日志。
+- 不实现重试、分块并发、流式响应、成本统计、可配置上下文窗口或阶段级日志。
 - 不在 extension 中保存或读取 LLM API key。
 - 不放宽 backend 的本机自托管边界，也不把服务描述为公网生产服务。
 
@@ -75,37 +76,43 @@ POST {LSI_LLM_BASE_URL}/v1/chat/completions
 
 ```go
 type Translator interface {
-    Translate(ctx context.Context, texts []string, sourceLanguage string, targetLanguage string) ([]string, error)
+    Translate(ctx context.Context, cues []Cue, sourceLanguage string, targetLanguage string) ([]string, error)
 }
 ```
 
 real runner 构造时接收 translator。正常 app 启动使用 Chat Completions translator，测试使用 fake translator。mock runner 不使用该接口。
+
+translator 接收完整 cue 列表，而不是只接收文本数组。这样 Chat Completions translator 可以为每个目标 cue 构建上下文窗口，同时对外仍返回与 cue 数量一致的翻译数组。
 
 ### Chat Completions translator
 
 Chat translator 负责：
 
 - 规范化 `LSI_LLM_BASE_URL`，拼接 `/v1/chat/completions`。
-- 构造 JSON 请求。
+- 逐条 cue 构造 JSON 请求。
+- 对第 `i` 条 cue，携带 `[max(0, i-10), min(len(cues)-1, i+10)]` 范围内的上下文 cue。
+- 在请求中明确标记目标 cue，要求模型只翻译目标 cue。
 - 非空 `LSI_LLM_API_KEY` 时设置 `Authorization` header。
 - 设置 `Content-Type: application/json`。
 - 校验 HTTP 2xx。
 - 解析 `choices[0].message.content`。
-- 将 content 解析为 JSON 对象，并读取 `translations` 字段。
-- 校验翻译数量与输入文本数量一致。
+- 将 content 解析为 JSON 对象，并读取 `translation` 字段。
+- 收集每条 cue 的翻译，最终校验翻译数量与输入 cue 数量一致。
 
 请求的 message 语义固定为：
 
-- system：要求模型只做字幕翻译，保持 cue 顺序，输出 JSON，不添加解释。
-- user：提供 `sourceLanguage`、`targetLanguage` 和 `texts` 数组。
+- system：要求模型只做字幕翻译，结合上下文理解语义，输出 JSON，不添加解释。
+- user：提供 `sourceLanguage`、`targetLanguage`、`target` 和 `context`。`context` 中包含目标 cue 前后各 10 条以内的文本，目标 cue 会通过 `isTarget: true` 标记。
 
 期望 assistant content 为：
 
 ```json
 {
-  "translations": ["第一条翻译", "第二条翻译"]
+  "translation": "目标 cue 的翻译"
 }
 ```
+
+示例：翻译第 100 条 cue 时，请求会携带第 90 到第 110 条 cue 作为上下文，但 `target.index` 仍是 `100`，响应只允许包含第 100 条的翻译。
 
 ## 状态流转
 
@@ -135,8 +142,8 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 | LLM 返回非 2xx | `translating` |
 | LLM response JSON 无法解析 | `translating` |
 | `choices[0].message.content` 为空 | `translating` |
-| content 不是合法 JSON 或缺少 `translations` | `translating` |
-| translations 数量与 source cue 数量不一致 | `translating` |
+| content 不是合法 JSON 或缺少 `translation` | `translating` |
+| 收集到的翻译数量与 source cue 数量不一致 | `translating` |
 | 写入 `translated.vtt` 失败 | `translating` |
 | 写入 `bilingual.vtt` 失败 | `packaging` |
 
@@ -148,7 +155,8 @@ backend 单元测试覆盖：
 
 - config：新增 LLM 配置默认值和环境变量读取。
 - VTT：解析多个 cue、多行 cue、渲染 translated、渲染 bilingual、解析错误。
-- translator：使用 `httptest.Server` 断言请求路径、headers、payload，并覆盖成功、非 2xx、无效 JSON、条数不一致。
+- translator：使用 `httptest.Server` 断言请求路径、headers、payload，并覆盖成功、非 2xx、无效 JSON、缺少 `translation`、上下文窗口和目标 cue 标记。
+- translator 上下文窗口：覆盖中间 cue 使用前后各 10 条上下文，开头和结尾 cue 自动截断窗口。
 - real runner：fake `yt-dlp` 与 `whisper-cli` 生成真实 `source.vtt`，fake translator 返回确定翻译，断言 `translated.vtt` 和 `bilingual.vtt` 不再包含 mock 翻译文本。
 - real runner 失败：translator 返回错误时 job 进入 `failed`，`stage=translating`。
 
