@@ -11,52 +11,61 @@
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?style=flat-square&logo=googlechrome&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-local-003B57?style=flat-square&logo=sqlite&logoColor=white)
 
-[概览](#概览) • [快速开始](#快速开始) • [架构](#架构) • [API](#api) • [开发](#开发) • [路线图](#限制与路线图)
+[概览](#概览) • [快速开始](#快速开始) • [真实模式](#真实下载与转写模式) • [架构](#架构) • [API](#api) • [开发](#开发与验证)
 
 </div>
 
-Lets Sub It 是一个本地优先的字幕工作台：提交 YouTube 公开视频链接，生成字幕任务，保存结果，并让 Chrome extension 在播放页加载 `translated` 或 `bilingual` 字幕。
+Lets Sub It 是一个本地优先的字幕工作台：提交 YouTube 公开视频链接，后端创建字幕任务，下载音频、转写、翻译并打包字幕，Chrome extension 再在 YouTube 播放页加载 `translated` 或 `bilingual` 字幕。
 
 > [!IMPORTANT]
-> 项目仍处于 MVP 阶段。默认 backend 使用 mock runner，不访问 YouTube、模型或 LLM；显式设置 `LSI_RUNNER_MODE=real` 时，下载阶段会调用本机 `yt-dlp`，转写阶段会调用本机 `whisper-cli` 生成 `source.vtt`，后续翻译和打包仍使用 mock VTT。
+> 项目仍处于 MVP 阶段。默认 backend 使用 mock runner，不访问 YouTube、Whisper 模型或 LLM。设置 `LSI_RUNNER_MODE=real` 后，目前只有下载和源语言转写阶段会真实执行；翻译和最终 `translated.vtt` / `bilingual.vtt` 仍是 mock 结果。
 
 ## 概览
 
-当前仓库是一个多模块项目：
+当前仓库由三个可独立运行和测试的模块组成：
 
 | 模块 | 技术栈 | 当前能力 |
 | --- | --- | --- |
 | `backend/` | Go 1.22, SQLite, GORM | HTTP API、SQLite 持久化、job 复用、mock runner、可选真实下载与转写、VTT 文件服务 |
 | `whisper/` | Python 3.12, `faster-whisper`, `uv` | 本地音频转 WebVTT、CLI JSON 输出、退出码契约和离线测试 |
-| `extension/` | WXT, Vue, TypeScript, Vitest | Chrome MV3 popup、background API 网关、storage 缓存、YouTube 字幕层 |
-| `docs/` | Markdown | PRD、规格说明和实施计划 |
+| `extension/` | WXT, Vue, TypeScript, Vitest | Chrome MV3 popup、background API 网关、storage 缓存、YouTube 播放页字幕层 |
+
+主要链路：
+
+1. 在 extension popup 中提交 YouTube URL、源语言和目标语言。
+2. background service worker 调用本机 backend。
+3. backend 创建或复用 `videoId + targetLanguage` 对应的 job。
+4. runner 推进 `queued -> downloading -> transcribing -> translating -> packaging -> completed`。
+5. 播放页 content script 查询字幕资产并渲染字幕层。
 
 ## 功能
 
-- **自托管优先**：面向单用户本地部署，SQLite 数据库、job 工作目录和字幕文件都保存在本机。
-- **清晰的任务状态**：`queued -> downloading -> transcribing -> translating -> packaging -> completed`，失败时进入 `failed` 并记录错误摘要。
-- **结果复用**：同一个 `videoId + targetLanguage` 可以复用已完成结果或进行中的 job。
-- **字幕文件服务**：backend 只通过 `/subtitle-files/:jobId/:mode` 暴露 VTT，不把本地绝对路径返回给 extension。
-- **播放页集成**：extension 在 YouTube watch 页面渲染字幕层，并支持 `translated` / `bilingual` 模式。
-- **可独立验证的转写 CLI**：`whisper-cli` 输入本地音频文件，输出经过校验的 WebVTT。
+- **本机自托管**：面向单用户本地部署，SQLite 数据库、job 工作目录和字幕文件都保存在本机。
+- **任务复用**：同一个 `videoId + targetLanguage` 会复用已完成结果或进行中的 job。
+- **清晰状态流**：extension 可展示 `queued`、`downloading`、`transcribing`、`translating`、`packaging`、`completed` 和 `failed`。
+- **字幕资产服务**：backend 只通过 `/subtitle-files/:jobId/:mode` 暴露 VTT，不向前端返回本地绝对路径。
+- **播放页集成**：YouTube watch 页面支持 `translated` 和 `bilingual` 两种字幕模式。
+- **可替换转写 CLI**：Go backend 通过 PATH 调用本仓库的 `whisper-cli`，CLI 输出经过校验的 WebVTT。
 
 ## 快速开始
 
 ### 1. 准备工具链
 
-项目使用 `mise.toml` 固定工具版本：
+项目使用根目录 `mise.toml` 固定工具版本：
 
-- Go `1.22`
-- Python `3.12`
-- Node.js `22`
-- `uv`
+| 工具 | 版本 |
+| --- | --- |
+| Go | `1.22` |
+| Python | `3.12` |
+| Node.js | `22` |
+| uv | `latest` |
 
 ```bash
 mise install
 ```
 
 > [!TIP]
-> 如果 shell 没有自动激活 `mise`，请通过 `mise exec --` 运行项目命令。下面示例都使用这种形式。
+> 如果当前 shell 没有自动激活 `mise`，请使用 `mise exec --` 前缀运行项目命令。下面示例都采用这种写法。
 
 ### 2. 启动 backend mock API
 
@@ -78,9 +87,9 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   }'
 ```
 
-默认 mock runner 会推进完整状态流，并在 `LSI_WORK_DIR` 下生成 `source.vtt`、`translated.vtt` 和 `bilingual.vtt`。
+mock runner 会推进完整状态流，并在 `LSI_WORK_DIR` 下生成 `source.vtt`、`translated.vtt` 和 `bilingual.vtt`。
 
-### 3. 加载 Chrome extension
+### 3. 启动 Chrome extension
 
 ```bash
 cd extension
@@ -88,9 +97,15 @@ mise exec -- npm install
 mise exec -- npm run dev
 ```
 
-在 Chrome extension developer mode 中加载 WXT 输出目录 `.output/chrome-mv3`。popup 默认连接 `http://127.0.0.1:8080`，当前只允许带端口的本机 HTTP origin，例如 `http://localhost:8080` 或 `http://127.0.0.1:8080`。
+在 Chrome extension developer mode 中加载 WXT 输出目录：
 
-### 4. 运行本地 Whisper CLI
+```text
+extension/.output/chrome-mv3
+```
+
+popup 默认连接 `http://127.0.0.1:8080`。当前只允许带端口的本机 HTTP origin，例如 `http://localhost:8080` 或 `http://127.0.0.1:8080`。
+
+### 4. 单独运行 Whisper CLI
 
 ```bash
 cd whisper
@@ -102,7 +117,7 @@ mise exec -- uv run whisper-cli \
   --language ja
 ```
 
-成功时 stdout 输出 JSON，`--output` 写入 WebVTT：
+成功时 stdout 输出 JSON，`--output` 写入合法 WebVTT：
 
 ```json
 {
@@ -113,11 +128,14 @@ mise exec -- uv run whisper-cli \
 }
 ```
 
-真实转写可能需要下载模型，并依赖本机可用的推理运行环境。
+## 真实下载与转写模式
 
-### 可选：真实下载与转写模式
+`LSI_RUNNER_MODE=real` 会让 backend 在 `downloading` 阶段调用 `yt-dlp`，在 `transcribing` 阶段调用 PATH 中的 `whisper-cli`。
 
-如果要让 `downloading` 阶段真实调用 `yt-dlp`，并让 `transcribing` 阶段真实调用 `whisper-cli`，可以启动 real runner：
+```bash
+cd whisper
+mise exec -- uv sync --dev
+```
 
 ```bash
 cd backend
@@ -130,7 +148,7 @@ mise exec -- go run ./cmd/server
 ```
 
 > [!NOTE]
-> `LSI_RUNNER_MODE=real` 要求 `yt-dlp`、`ffmpeg` 和本仓库的 Python `whisper-cli` 都在 `PATH` 上。这个模式目前会生成真实 `audio.mp3` 和真实 `source.vtt`；翻译和字幕打包阶段仍会生成 mock VTT。
+> real runner 还要求本机安装 `yt-dlp` 和 `ffmpeg`。这个模式目前会生成真实 `audio.mp3` 和真实 `source.vtt`；翻译阶段和最终双语字幕仍未接入真实 LLM。
 
 ## 架构
 
@@ -145,9 +163,9 @@ flowchart LR
   API -->|"text/vtt"| Background
   Content -->|"Shadow DOM"| YouTube["YouTube watch page"]
 
-  Runner -. "LSI_RUNNER_MODE=real" .-> Ytdlp["yt-dlp + ffmpeg<br/>download audio"]
-  Runner -. "LSI_RUNNER_MODE=real" .-> Whisper["whisper-cli<br/>source.vtt"]
-  Runner -. "planned" .-> Pipeline["LLM translation"]
+  Runner -. "real mode" .-> Ytdlp["yt-dlp + ffmpeg<br/>audio.mp3"]
+  Runner -. "real mode" .-> Whisper["whisper-cli<br/>source.vtt"]
+  Runner -. "planned" .-> LLM["OpenAI-compatible<br/>translation"]
 ```
 
 状态流转：
@@ -182,14 +200,6 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 
 `whisper-cli` 输入本地音频文件，输出合法 WebVTT。
 
-```bash
-whisper-cli \
-  --input /path/to/audio.mp3 \
-  --output /tmp/source.vtt \
-  --model small \
-  --language ja
-```
-
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
 | `--input` | 是 | 本地音频文件路径 |
@@ -202,7 +212,7 @@ whisper-cli \
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | 成功 |
-| `2` | 输入校验失败，例如文件不存在、模型名或语言无效 |
+| `2` | 输入校验失败，例如输入文件不存在、模型名或语言无效 |
 | `3` | 转写失败 |
 | `4` | 输出校验失败，例如无法生成合法 VTT |
 
@@ -212,18 +222,18 @@ whisper-cli \
 .
 ├── backend/                 # Go API server
 │   ├── cmd/server/          # HTTP server 入口
-│   └── internal/            # API、store、runner、app 代码
+│   └── internal/            # api、store、runner、app
 ├── docs/                    # PRD、规格说明和实施计划
 ├── extension/               # Chrome MV3 extension
-│   ├── entrypoints/         # popup、background、content script 入口
-│   └── src/                 # API、storage、subtitle、YouTube 集成和 UI 代码
+│   ├── entrypoints/         # popup、background、content script
+│   └── src/                 # API、storage、subtitle、YouTube 集成和 UI
 ├── whisper/                 # Python faster-whisper CLI
-│   ├── src/whisper_cli/     # CLI、转写适配和 VTT 渲染
+│   ├── src/whisper_cli/     # CLI、转写适配和 VTT 处理
 │   └── tests/               # pytest 单元测试
 └── mise.toml                # 本地工具链版本
 ```
 
-## 开发
+## 开发与验证
 
 安装依赖：
 
@@ -249,25 +259,31 @@ cd ../whisper && mise exec -- uv build
 cd ../extension && mise exec -- npm run build
 ```
 
-## 排障
+## 当前限制
 
-- `LSI_RUNNER_MODE=real` 启动失败：确认 `yt-dlp`、`ffmpeg` 和本仓库的 Python `whisper-cli` 已安装，并且能在当前 shell 的 `PATH` 中找到。若系统中有其他同名命令，请把 `whisper/.venv/bin` 放到 `PATH` 前面。
-- extension 无法连接 backend：确认 backend URL 是带端口的本机 HTTP origin，例如 `http://127.0.0.1:8080`，不要带路径、查询参数或 hash。
-- Whisper CLI 首次运行慢：真实转写可能触发模型下载，测试环境使用 fake model，不需要网络、GPU 或真实音频样本。
-- 字幕文件 404：backend 会限制文件必须位于对应 job 工作目录内，且文件名必须匹配 `source.vtt`、`translated.vtt` 或 `bilingual.vtt`。
+- 只面向单用户本地自托管，没有登录、鉴权、多用户或公网部署能力。
+- 只处理 YouTube 公开视频，不支持私有视频、登录态或 cookie 导入。
+- extension 第一版只支持 `en` 和 `zh`，且 `sourceLanguage` 与 `targetLanguage` 不能相同。
+- extension 只允许 `localhost` / `127.0.0.1` backend URL，不支持任意远程主机。
+- OpenAI-compatible LLM 翻译链路尚未实现，真实 `translated.vtt` 和 `bilingual.vtt` 仍是后续工作。
 
-## 限制与路线图
+## 路线图
 
 - [x] `whisper-cli` 本地转写命令、WebVTT 渲染和退出码契约
 - [x] Go API、SQLite、job 复用、mock runner 和字幕文件服务
 - [x] Chrome extension 任务提交、状态轮询、字幕缓存和播放页字幕层
-- [x] 可选 `LSI_RUNNER_MODE=real` 下载阶段，调用 `yt-dlp` 产出 `audio.mp3`
+- [x] 可选真实下载阶段，调用 `yt-dlp` 和 `ffmpeg` 产出 `audio.mp3`
 - [x] backend 调用真实 `whisper-cli` 产出 `source.vtt`
 - [ ] OpenAI-compatible LLM 翻译链路
-- [ ] 基于真实转写与翻译结果生成 `translated.vtt` 和 `bilingual.vtt`
+- [ ] 基于真实转写和翻译结果生成 `translated.vtt` / `bilingual.vtt`
 - [ ] 更完整的任务历史、错误恢复和配置体验
 
-当前不支持私有视频、登录态、远程 backend URL、多用户系统、鉴权、批量任务、实时生成或完整语言列表。extension 第一版只提供 `en` 和 `zh` 互相转换。
+## 排障
+
+- `LSI_RUNNER_MODE=real` 启动失败：确认 `yt-dlp`、`ffmpeg` 和 `whisper-cli` 都能在当前 shell 的 `PATH` 中找到。
+- extension 无法连接 backend：确认 backend URL 是带端口的本机 HTTP origin，不要带路径、查询参数或 hash。
+- Whisper CLI 首次运行较慢：真实转写可能触发模型下载，单元测试不会下载模型或依赖 GPU。
+- 字幕文件返回 404：确认 job 已完成，且请求的 mode 是 `source`、`translated` 或 `bilingual`。
 
 ## 相关文档
 
