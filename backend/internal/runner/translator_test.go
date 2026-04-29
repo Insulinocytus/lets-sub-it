@@ -84,6 +84,31 @@ func TestChatTranslatorTruncatesContextAtEdges(t *testing.T) {
 	}
 }
 
+func TestChatTranslatorPromptRequiresTranslationField(t *testing.T) {
+	var request chatCompletionRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"译文\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	translator := NewChatTranslator(server.URL, "", "test-model", time.Second, server.Client())
+	if _, err := translator.Translate(context.Background(), makeTranslatorTestCues(1), "en", "zh"); err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+
+	if len(request.Messages) == 0 {
+		t.Fatal("request messages are empty")
+	}
+	systemContent := request.Messages[0].Content
+	if !strings.Contains(systemContent, `"translation"`) {
+		t.Fatalf("system prompt = %q, want explicit translation field name", systemContent)
+	}
+}
+
 func TestChatTranslatorRequiresModel(t *testing.T) {
 	translator := NewChatTranslator("http://example.test", "test-key", "", time.Second, nil)
 

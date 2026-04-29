@@ -68,7 +68,7 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 		Messages: []chatMessage{
 			{
 				Role:    "system",
-				Content: "Translate the target subtitle cue. Return only a JSON object with a non-empty translation string.",
+				Content: `Translate the target subtitle cue. Return exactly one JSON object in this schema: {"translation":"<translated target cue>"}. Do not include any keys other than "translation".`,
 			},
 			{Role: "user", Content: string(content)},
 		},
