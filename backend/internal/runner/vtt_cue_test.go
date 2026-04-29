@@ -72,3 +72,33 @@ func TestRenderTranslatedVTTRejectsMismatchedCounts(t *testing.T) {
 		t.Fatal("renderTranslatedVTT() error = nil, want error")
 	}
 }
+
+func TestRenderVTTRejectsInvalidTranslations(t *testing.T) {
+	cues := []Cue{
+		{TimeLine: "00:00:00.000 --> 00:00:01.000", TextLines: []string{"hello"}},
+	}
+	tests := []struct {
+		name        string
+		translation string
+	}{
+		{name: "empty after trim", translation: " \n\t "},
+		{name: "blank line", translation: "first\n\nsecond"},
+		{name: "timeline marker", translation: "bad --> marker"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+"/translated", func(t *testing.T) {
+			_, err := renderTranslatedVTT(cues, []string{tt.translation})
+			if err == nil {
+				t.Fatal("renderTranslatedVTT() error = nil, want error")
+			}
+		})
+
+		t.Run(tt.name+"/bilingual", func(t *testing.T) {
+			_, err := renderBilingualVTT(cues, []string{tt.translation})
+			if err == nil {
+				t.Fatal("renderBilingualVTT() error = nil, want error")
+			}
+		})
+	}
+}

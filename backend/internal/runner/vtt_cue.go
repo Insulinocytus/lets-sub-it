@@ -60,9 +60,13 @@ func renderTranslatedVTT(cues []Cue, translations []string) (string, error) {
 	var b strings.Builder
 	b.WriteString("WEBVTT\n\n")
 	for i, cue := range cues {
+		translation, err := validateTranslation(translations[i])
+		if err != nil {
+			return "", err
+		}
 		b.WriteString(cue.TimeLine)
 		b.WriteString("\n")
-		b.WriteString(strings.TrimSpace(translations[i]))
+		b.WriteString(translation)
 		b.WriteString("\n\n")
 	}
 	return b.String(), nil
@@ -75,12 +79,32 @@ func renderBilingualVTT(cues []Cue, translations []string) (string, error) {
 	var b strings.Builder
 	b.WriteString("WEBVTT\n\n")
 	for i, cue := range cues {
+		translation, err := validateTranslation(translations[i])
+		if err != nil {
+			return "", err
+		}
 		b.WriteString(cue.TimeLine)
 		b.WriteString("\n")
 		b.WriteString(cueText(cue))
 		b.WriteString("\n")
-		b.WriteString(strings.TrimSpace(translations[i]))
+		b.WriteString(translation)
 		b.WriteString("\n\n")
 	}
 	return b.String(), nil
+}
+
+func validateTranslation(translation string) (string, error) {
+	trimmed := strings.TrimSpace(translation)
+	if trimmed == "" {
+		return "", fmt.Errorf("translation is empty")
+	}
+	if strings.Contains(trimmed, "-->") {
+		return "", fmt.Errorf("translation contains timeline marker")
+	}
+	for _, line := range strings.Split(trimmed, "\n") {
+		if strings.TrimSpace(line) == "" {
+			return "", fmt.Errorf("translation contains blank line")
+		}
+	}
+	return trimmed, nil
 }
