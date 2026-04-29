@@ -31,16 +31,16 @@ import {
   type CreateJobForm,
 } from '@/popup/form-validation'
 
-const languages = ['en', 'zh-CN'] satisfies LanguageCode[]
+const languages = ['en', 'zh'] satisfies LanguageCode[]
 const languageLabels: Record<LanguageCode, string> = {
   en: 'English',
-  'zh-CN': '简体中文',
+  'zh': '简体中文',
 }
 
 const backendBaseUrl = ref('http://127.0.0.1:8080')
 const youtubeUrl = ref('')
 const sourceLanguage = ref<LanguageCode>('en')
-const targetLanguage = ref<LanguageCode>('zh-CN')
+const targetLanguage = ref<LanguageCode>('zh')
 const currentJob = ref<Job | null>(null)
 const errorMessage = ref('')
 const isSubmitting = ref(false)

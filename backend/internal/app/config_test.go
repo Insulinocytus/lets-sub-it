@@ -80,3 +80,19 @@ func TestLoadConfigDownloadTimeoutInvalid(t *testing.T) {
 		t.Fatalf("DownloadTimeout = %v, want fallback %v", config.DownloadTimeout, 10*time.Minute)
 	}
 }
+
+func TestLoadConfigWhisperModelDefault(t *testing.T) {
+	t.Setenv("LSI_WHISPER_MODEL", "")
+	config := LoadConfig()
+	if config.WhisperModel != "small" {
+		t.Fatalf("WhisperModel = %q, want %q", config.WhisperModel, "small")
+	}
+}
+
+func TestLoadConfigWhisperModelCustom(t *testing.T) {
+	t.Setenv("LSI_WHISPER_MODEL", "medium")
+	config := LoadConfig()
+	if config.WhisperModel != "medium" {
+		t.Fatalf("WhisperModel = %q, want %q", config.WhisperModel, "medium")
+	}
+}

@@ -8,7 +8,7 @@ describe('validateCreateJobForm', () => {
         backendBaseUrl: 'http://127.0.0.1:8080',
         youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
         sourceLanguage: 'en',
-        targetLanguage: 'zh-CN',
+        targetLanguage: 'zh',
       }),
     ).toBeNull()
   })
@@ -19,7 +19,7 @@ describe('validateCreateJobForm', () => {
         backendBaseUrl: 'http://127.0.0.1:8080',
         youtubeUrl: '',
         sourceLanguage: 'en',
-        targetLanguage: 'zh-CN',
+        targetLanguage: 'zh',
       }),
     ).toBe('请输入 YouTube URL')
   })
@@ -30,7 +30,7 @@ describe('validateCreateJobForm', () => {
         backendBaseUrl: '',
         youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
         sourceLanguage: 'en',
-        targetLanguage: 'zh-CN',
+        targetLanguage: 'zh',
       }),
     ).toBe('请输入 backend URL')
   })

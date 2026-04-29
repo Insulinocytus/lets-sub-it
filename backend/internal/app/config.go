@@ -11,6 +11,7 @@ type Config struct {
 	WorkDir         string
 	RunnerMode      string
 	DownloadTimeout time.Duration
+	WhisperModel    string
 }
 
 func LoadConfig() Config {
@@ -20,6 +21,7 @@ func LoadConfig() Config {
 		WorkDir:         envOrDefault("LSI_WORK_DIR", "./data/jobs"),
 		RunnerMode:      envOrDefault("LSI_RUNNER_MODE", "mock"),
 		DownloadTimeout: envDurationOrDefault("LSI_DOWNLOAD_TIMEOUT", 10*time.Minute),
+		WhisperModel:    envOrDefault("LSI_WHISPER_MODEL", "small"),
 	}
 }
 

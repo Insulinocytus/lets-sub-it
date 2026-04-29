@@ -18,6 +18,17 @@ mise exec -- go mod download
 LSI_ADDR=127.0.0.1:8080 mise exec -- go run ./cmd/server
 ```
 
+启动真实下载与转写 runner：
+
+```bash
+PATH="$PWD/../whisper/.venv/bin:$PATH" \
+LSI_RUNNER_MODE=real \
+LSI_DOWNLOAD_TIMEOUT=10m \
+LSI_WHISPER_MODEL=small \
+LSI_ADDR=127.0.0.1:8080 \
+mise exec -- go run ./cmd/server
+```
+
 ## API quick check
 
 可以用下面的请求快速确认 `POST /jobs` 正常工作。请求体需要包含 `youtubeUrl`、`sourceLanguage` 和 `targetLanguage`：
@@ -28,7 +39,7 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   -d '{
     "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "sourceLanguage": "ja",
-    "targetLanguage": "zh-Hans"
+    "targetLanguage": "zh"
   }'
 ```
 
@@ -42,8 +53,8 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
 mise exec -- go test ./...
 ```
 
-## Mock boundary
+## Runner boundary
 
 当前 backend 已经实现了真实 HTTP API、SQLite 持久化、job 复用、mock 状态推进和 VTT 字幕文件服务，方便前端和播放页联调。
 
-这一阶段不会调用真实的 `yt-dlp`、`ffmpeg`、`whisper-cli` 或 LLM；这些能力仍然保留为后续接入真实外部工具的边界。
+默认 mock runner 不会调用真实的 `yt-dlp`、`ffmpeg`、`whisper-cli` 或 LLM。设置 `LSI_RUNNER_MODE=real` 后，backend 会调用 `yt-dlp` 产出 `audio.mp3`，再调用 PATH 中本仓库的 Python `whisper-cli` 产出真实 `source.vtt`；`translated.vtt` 和 `bilingual.vtt` 仍是 mock。

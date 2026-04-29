@@ -15,7 +15,7 @@ describe('createBackendClient', () => {
             videoId: 'video_123',
             youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
             sourceLanguage: 'en',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             status: 'queued',
             stage: 'queued',
             progressText: '等待处理',
@@ -33,7 +33,7 @@ describe('createBackendClient', () => {
     const response = await client.createJob({
       youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
       sourceLanguage: 'en',
-      targetLanguage: 'zh-CN',
+      targetLanguage: 'zh',
     })
 
     expect(response.reused).toBe(false)
@@ -44,7 +44,7 @@ describe('createBackendClient', () => {
       body: JSON.stringify({
         youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
         sourceLanguage: 'en',
-        targetLanguage: 'zh-CN',
+        targetLanguage: 'zh',
       }),
     })
   })
@@ -65,7 +65,7 @@ describe('createBackendClient', () => {
           asset: {
             jobId: 'job_123',
             videoId: 'video_123',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             sourceLanguage: 'en',
             files: {
               source: '/subtitle-files/job_123/source',
@@ -80,11 +80,11 @@ describe('createBackendClient', () => {
     )
     const client = createBackendClient('http://localhost:8080/', fetchImpl)
 
-    const response = await client.getSubtitleAsset('video_123', 'zh-CN')
+    const response = await client.getSubtitleAsset('video_123', 'zh')
 
     expect(response.asset?.jobId).toBe('job_123')
     expect(fetchImpl).toHaveBeenCalledWith(
-      'http://localhost:8080/subtitle-assets?videoId=video_123&targetLanguage=zh-CN',
+      'http://localhost:8080/subtitle-assets?videoId=video_123&targetLanguage=zh',
       undefined,
     )
   })

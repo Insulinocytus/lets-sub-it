@@ -10,7 +10,7 @@ const queuedJob: Job = {
   videoId: 'video_123',
   youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
   sourceLanguage: 'en',
-  targetLanguage: 'zh-CN',
+  targetLanguage: 'zh',
   status: 'queued',
   stage: 'queued',
   progressText: '等待处理',
@@ -66,7 +66,7 @@ describe('handleExtensionMessage', () => {
         payload: {
           youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
           sourceLanguage: 'en',
-          targetLanguage: 'zh-CN',
+          targetLanguage: 'zh',
         },
       },
       {
@@ -101,7 +101,7 @@ describe('handleExtensionMessage', () => {
         payload: {
           youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
           sourceLanguage: 'en',
-          targetLanguage: 'zh-CN',
+          targetLanguage: 'zh',
         },
       },
       { fetchImpl, now: () => '2026-04-25T00:00:00Z', startJobMonitor },
@@ -134,7 +134,7 @@ describe('handleExtensionMessage', () => {
         payload: {
           youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
           sourceLanguage: 'en',
-          targetLanguage: 'zh-CN',
+          targetLanguage: 'zh',
         },
       },
       { fetchImpl, now: () => '2026-04-25T00:00:00Z', startJobMonitor },
@@ -181,7 +181,7 @@ describe('handleExtensionMessage', () => {
             jobId: 'job_123',
             videoId: 'video_123',
             sourceLanguage: 'en',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             files: {
               source: '/subtitle-files/job_123/source',
               translated: '/subtitle-files/job_123/translated',
@@ -201,7 +201,7 @@ describe('handleExtensionMessage', () => {
 
     expect(result.ok).toBe(true)
     await expect(
-      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh-CN'),
+      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh'),
     ).resolves.toMatchObject({
       jobId: 'job_123',
       selectedMode: 'translated',
@@ -223,7 +223,7 @@ describe('handleExtensionMessage', () => {
             jobId: 'job_old',
             videoId: 'video_123',
             sourceLanguage: 'en',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             files: {
               source: '/subtitle-files/job_old/source',
               translated: '/subtitle-files/job_old/translated',
@@ -255,7 +255,7 @@ describe('handleExtensionMessage', () => {
             jobId: 'job_new',
             videoId: 'video_123',
             sourceLanguage: 'en',
-            targetLanguage: 'zh-CN',
+            targetLanguage: 'zh',
             files: {
               source: '/subtitle-files/job_new/source',
               translated: '/subtitle-files/job_new/translated',

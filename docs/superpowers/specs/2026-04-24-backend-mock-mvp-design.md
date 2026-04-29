@@ -147,7 +147,7 @@ Job {
 - `videoId`：从 YouTube URL 解析出的 video id。
 - `youtubeUrl`：用户提交的原始 URL。
 - `sourceLanguage`：前端传入的源语言；本项目不做视频语言自动识别。
-- `targetLanguage`：目标语言，例如 `zh-CN`、`en`、`ja`。
+- `targetLanguage`：目标语言，例如 `zh`、`en`、`ja`。
 - `status`：前端展示和轮询使用的主状态。
 - `stage`：当前执行阶段；第一阶段与 `status` 保持一致。
 - `progressText`：给前端直接展示的短文本。
@@ -223,7 +223,7 @@ Content-Type: application/json
 {
   "youtubeUrl": "https://www.youtube.com/watch?v=abc123",
   "sourceLanguage": "ja",
-  "targetLanguage": "zh-CN"
+  "targetLanguage": "zh"
 }
 ```
 
@@ -239,7 +239,7 @@ Content-Type: application/json
     "videoId": "abc123",
     "youtubeUrl": "https://www.youtube.com/watch?v=abc123",
     "sourceLanguage": "ja",
-    "targetLanguage": "zh-CN",
+    "targetLanguage": "zh",
     "status": "queued",
     "stage": "queued",
     "progressText": "等待处理",
@@ -283,7 +283,7 @@ GET /jobs/{jobId}
     "videoId": "abc123",
     "youtubeUrl": "https://www.youtube.com/watch?v=abc123",
     "sourceLanguage": "ja",
-    "targetLanguage": "zh-CN",
+    "targetLanguage": "zh",
     "status": "translating",
     "stage": "translating",
     "progressText": "2/3 segments",
@@ -308,7 +308,7 @@ GET /jobs/{jobId}
 ### 查询字幕资产
 
 ```http
-GET /subtitle-assets?videoId=abc123&targetLanguage=zh-CN
+GET /subtitle-assets?videoId=abc123&targetLanguage=zh
 ```
 
 未完成或不存在时返回 `200 OK`，`asset` 为 `null`。
@@ -326,7 +326,7 @@ GET /subtitle-assets?videoId=abc123&targetLanguage=zh-CN
   "asset": {
     "jobId": "job_01hwxyz123",
     "videoId": "abc123",
-    "targetLanguage": "zh-CN",
+    "targetLanguage": "zh",
     "sourceLanguage": "ja",
     "files": {
       "source": "/subtitle-files/job_01hwxyz123/source",

@@ -12,6 +12,8 @@ import (
 	"lets-sub-it-api/internal/store"
 )
 
+var lookPath = exec.LookPath
+
 func NewHTTPHandler(config Config) (http.Handler, error) {
 	if err := os.MkdirAll(filepath.Dir(config.DBPath), 0o755); err != nil {
 		return nil, err
@@ -34,7 +36,7 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 		if err := checkTools(); err != nil {
 			return nil, err
 		}
-		jobRunner = runner.NewRealRunner(database, config.DownloadTimeout)
+		jobRunner = runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel)
 	default:
 		jobRunner = runner.NewMockRunner(database)
 	}
@@ -44,8 +46,8 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 }
 
 func checkTools() error {
-	for _, tool := range []string{"yt-dlp", "ffmpeg"} {
-		if _, err := exec.LookPath(tool); err != nil {
+	for _, tool := range []string{"yt-dlp", "ffmpeg", "whisper-cli"} {
+		if _, err := lookPath(tool); err != nil {
 			return fmt.Errorf("LSI_RUNNER_MODE=real requires %s to be installed and on PATH", tool)
 		}
 	}

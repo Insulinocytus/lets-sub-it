@@ -9,6 +9,7 @@ describe('settings storage', () => {
 
   it('returns default settings when storage is empty', async () => {
     await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
+    expect(DEFAULT_SETTINGS.targetLanguage).toBe('zh')
   })
 
   it('does not let callers mutate the default settings fallback', async () => {
@@ -21,13 +22,13 @@ describe('settings storage', () => {
   it('updates backend URL and language settings', async () => {
     const settings = await updateSettings({
       backendBaseUrl: 'http://localhost:9090',
-      sourceLanguage: 'zh-CN',
+      sourceLanguage: 'zh',
       targetLanguage: 'en',
     })
 
     expect(settings).toEqual({
       backendBaseUrl: 'http://localhost:9090',
-      sourceLanguage: 'zh-CN',
+      sourceLanguage: 'zh',
       targetLanguage: 'en',
     })
     await expect(getSettings()).resolves.toEqual(settings)
