@@ -13,10 +13,11 @@ type RealRunner struct {
 	store           Store
 	downloadTimeout time.Duration
 	whisperModel    string
+	translator      Translator
 }
 
-func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string) *RealRunner {
-	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel}
+func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, translator Translator) *RealRunner {
+	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, translator: translator}
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
@@ -51,20 +52,38 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 		return r.fail(job.ID, store.StatusTranscribing, err)
 	}
 
-	for _, progress := range []string{"1/3 segments", "2/3 segments", "3/3 segments"} {
-		if err := r.set(job.ID, store.StatusTranslating, progress, ""); err != nil {
-			return r.fail(job.ID, store.StatusTranslating, err)
-		}
+	if err := r.set(job.ID, store.StatusTranslating, "翻译字幕...", ""); err != nil {
+		return r.fail(job.ID, store.StatusTranslating, err)
+	}
+	sourceContent, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return r.fail(job.ID, store.StatusTranslating, err)
+	}
+	cues, err := parseWebVTTCues(string(sourceContent))
+	if err != nil {
+		return r.fail(job.ID, store.StatusTranslating, err)
+	}
+	translations, err := r.translator.Translate(ctx, cues, job.SourceLanguage, job.TargetLanguage)
+	if err != nil {
+		return r.fail(job.ID, store.StatusTranslating, err)
+	}
+	translatedVTT, err := renderTranslatedVTT(cues, translations)
+	if err != nil {
+		return r.fail(job.ID, store.StatusTranslating, err)
 	}
 
-	if err := os.WriteFile(translatedPath, []byte(mockTranslatedVTT), 0o644); err != nil {
+	if err := os.WriteFile(translatedPath, []byte(translatedVTT), 0o644); err != nil {
 		return r.fail(job.ID, store.StatusTranslating, err)
 	}
 
 	if err := r.set(job.ID, store.StatusPackaging, "生成字幕资产", ""); err != nil {
 		return r.fail(job.ID, store.StatusPackaging, err)
 	}
-	if err := os.WriteFile(bilingualPath, []byte(mockBilingualVTT), 0o644); err != nil {
+	bilingualVTT, err := renderBilingualVTT(cues, translations)
+	if err != nil {
+		return r.fail(job.ID, store.StatusPackaging, err)
+	}
+	if err := os.WriteFile(bilingualPath, []byte(bilingualVTT), 0o644); err != nil {
 		return r.fail(job.ID, store.StatusPackaging, err)
 	}
 

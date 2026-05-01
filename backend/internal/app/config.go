@@ -12,6 +12,10 @@ type Config struct {
 	RunnerMode      string
 	DownloadTimeout time.Duration
 	WhisperModel    string
+	LLMBaseURL      string
+	LLMAPIKey       string
+	LLMModel        string
+	LLMTimeout      time.Duration
 }
 
 func LoadConfig() Config {
@@ -22,6 +26,10 @@ func LoadConfig() Config {
 		RunnerMode:      envOrDefault("LSI_RUNNER_MODE", "mock"),
 		DownloadTimeout: envDurationOrDefault("LSI_DOWNLOAD_TIMEOUT", 10*time.Minute),
 		WhisperModel:    envOrDefault("LSI_WHISPER_MODEL", "small"),
+		LLMBaseURL:      envOrDefault("LSI_LLM_BASE_URL", "https://api.openai.com"),
+		LLMAPIKey:       os.Getenv("LSI_LLM_API_KEY"),
+		LLMModel:        os.Getenv("LSI_LLM_MODEL"),
+		LLMTimeout:      envDurationOrDefault("LSI_LLM_TIMEOUT", 2*time.Minute),
 	}
 }
 

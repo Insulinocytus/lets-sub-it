@@ -96,3 +96,47 @@ func TestLoadConfigWhisperModelCustom(t *testing.T) {
 		t.Fatalf("WhisperModel = %q, want %q", config.WhisperModel, "medium")
 	}
 }
+
+func TestLoadConfigLLMDefaults(t *testing.T) {
+	t.Setenv("LSI_LLM_BASE_URL", "")
+	t.Setenv("LSI_LLM_API_KEY", "")
+	t.Setenv("LSI_LLM_MODEL", "")
+	t.Setenv("LSI_LLM_TIMEOUT", "")
+
+	config := LoadConfig()
+
+	if config.LLMBaseURL != "https://api.openai.com" {
+		t.Fatalf("LLMBaseURL = %q, want default", config.LLMBaseURL)
+	}
+	if config.LLMAPIKey != "" {
+		t.Fatalf("LLMAPIKey = %q, want empty", config.LLMAPIKey)
+	}
+	if config.LLMModel != "" {
+		t.Fatalf("LLMModel = %q, want empty", config.LLMModel)
+	}
+	if config.LLMTimeout != 2*time.Minute {
+		t.Fatalf("LLMTimeout = %v, want %v", config.LLMTimeout, 2*time.Minute)
+	}
+}
+
+func TestLoadConfigLLMCustomValues(t *testing.T) {
+	t.Setenv("LSI_LLM_BASE_URL", "http://127.0.0.1:11434")
+	t.Setenv("LSI_LLM_API_KEY", "test-key")
+	t.Setenv("LSI_LLM_MODEL", "gpt-4.1-mini")
+	t.Setenv("LSI_LLM_TIMEOUT", "30s")
+
+	config := LoadConfig()
+
+	if config.LLMBaseURL != "http://127.0.0.1:11434" {
+		t.Fatalf("LLMBaseURL = %q", config.LLMBaseURL)
+	}
+	if config.LLMAPIKey != "test-key" {
+		t.Fatalf("LLMAPIKey = %q", config.LLMAPIKey)
+	}
+	if config.LLMModel != "gpt-4.1-mini" {
+		t.Fatalf("LLMModel = %q", config.LLMModel)
+	}
+	if config.LLMTimeout != 30*time.Second {
+		t.Fatalf("LLMTimeout = %v", config.LLMTimeout)
+	}
+}

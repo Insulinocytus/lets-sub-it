@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
+	translator := fakeTranslator{translations: []string{"translated one"}}
 	var calls []execCall
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		calls = append(calls, execCall{name: name, args: slices.Clone(args)})
@@ -40,7 +42,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 		}
 	}
 
-	if err := NewRealRunner(testStore, 10*time.Minute, "tiny").Start(context.Background(), job); err != nil {
+	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", translator).Start(context.Background(), job); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 
@@ -91,6 +93,23 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	if !strings.Contains(string(sourceContent), "real transcript") {
 		t.Fatalf("source.vtt content = %q, want real transcript", string(sourceContent))
 	}
+	translatedContent, readTranslatedErr := os.ReadFile(asset.TranslatedVTTPath)
+	if readTranslatedErr != nil {
+		t.Fatalf("os.ReadFile(translated.vtt) error = %v", readTranslatedErr)
+	}
+	if !strings.Contains(string(translatedContent), "translated one") {
+		t.Fatalf("translated.vtt content = %q, want translated one", string(translatedContent))
+	}
+	if strings.Contains(string(translatedContent), "mock 翻译") {
+		t.Fatalf("translated.vtt content = %q, want no mock translation", string(translatedContent))
+	}
+	bilingualContent, readBilingualErr := os.ReadFile(asset.BilingualVTTPath)
+	if readBilingualErr != nil {
+		t.Fatalf("os.ReadFile(bilingual.vtt) error = %v", readBilingualErr)
+	}
+	if !strings.Contains(string(bilingualContent), "real transcript\ntranslated one") {
+		t.Fatalf("bilingual.vtt content = %q, want transcript followed by translation", string(bilingualContent))
+	}
 }
 
 func TestRealRunnerDownloadFailed(t *testing.T) {
@@ -109,7 +128,7 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small").Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
 	}
@@ -148,7 +167,7 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small").Start(ctx, job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(ctx, job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want context canceled")
 	}
@@ -189,7 +208,7 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small").Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want transcription error")
 	}
@@ -206,6 +225,51 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 	}
 	if updatedJob.ErrorMessage == nil || !strings.Contains(*updatedJob.ErrorMessage, "model download error") {
 		t.Fatalf("ErrorMessage = %v, want containing model download error", updatedJob.ErrorMessage)
+	}
+}
+
+func TestRealRunnerTranslationFailed(t *testing.T) {
+	origExec := execCommand
+	t.Cleanup(func() { execCommand = origExec })
+
+	testStore := openTestStore(t)
+	workDir := t.TempDir()
+	jobDir := filepath.Join(workDir, "job_1")
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
+
+	if err := testStore.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		switch name {
+		case "yt-dlp":
+			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
+		case "whisper-cli":
+			outputPath := argValue(t, args, "--output")
+			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
+		default:
+			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
+		}
+	}
+
+	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
+	if err == nil {
+		t.Fatal("Start() error = nil, want translation error")
+	}
+
+	updatedJob, findErr := testStore.FindJob("job_1")
+	if findErr != nil {
+		t.Fatalf("FindJob() error = %v", findErr)
+	}
+	if updatedJob.Status != store.StatusFailed {
+		t.Fatalf("Status = %q, want %q", updatedJob.Status, store.StatusFailed)
+	}
+	if updatedJob.Stage != store.StatusTranslating {
+		t.Fatalf("Stage = %q, want %q", updatedJob.Stage, store.StatusTranslating)
+	}
+	if updatedJob.ErrorMessage == nil || !strings.Contains(*updatedJob.ErrorMessage, "translation unavailable") {
+		t.Fatalf("ErrorMessage = %v, want containing translation unavailable", updatedJob.ErrorMessage)
 	}
 }
 
@@ -239,4 +303,23 @@ func argValue(t *testing.T, args []string, flag string) string {
 	}
 	t.Fatalf("missing %s arg in %#v", flag, args)
 	return ""
+}
+
+type fakeTranslator struct {
+	translations []string
+	err          error
+}
+
+func (t fakeTranslator) Translate(ctx context.Context, cues []Cue, sourceLanguage string, targetLanguage string) ([]string, error) {
+	if t.err != nil {
+		return nil, t.err
+	}
+	if len(t.translations) > 0 {
+		return t.translations, nil
+	}
+	translations := make([]string, len(cues))
+	for i := range cues {
+		translations[i] = "translated"
+	}
+	return translations, nil
 }
