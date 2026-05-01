@@ -1,118 +1,66 @@
 # AGENTS.md
 
-## 项目概览
+## Project Overview
 
-Lets Sub It 是一个自托管的 YouTube 字幕生成与翻译工具。目标链路是：提交 YouTube 公开视频链接，下载音频，本地转写，翻译，生成字幕，并由播放页加载字幕。
+Lets Sub It is a self-hosted YouTube subtitle generation and translation tool. The pipeline: submit a YouTube public video URL, download audio, transcribe locally, translate, generate subtitles, and render them on the YouTube watch page.
 
-当前仓库处于 MVP 阶段，是一个多模块仓库：
+This is a multi-module monorepo at MVP stage:
 
-- `backend/`：Go 1.22 API server。提供真实 HTTP API、SQLite 持久化、job 复用、默认 mock runner 状态推进；可选 real runner 支持真实下载、真实转写、Chat Completions 兼容 LLM 翻译和 VTT 字幕文件服务。
-- `whisper/`：Python 3.12 包 `whisper-cli`。通过 `faster-whisper` 把本地音频文件转成经过校验的 WebVTT 字幕。
-- `extension/`：Chrome MV3 extension。使用 WXT、Vue、TypeScript 和 Vitest，支持 popup 提交任务、background 统一访问 backend、storage 缓存和 YouTube watch 页面字幕层。
-- `docs/`：PRD、规格说明与实施计划。该目录下另有 `docs/AGENTS.md`，要求文档正文使用中文。
+- **`backend/`** — Go 1.22 API server with SQLite/GORM persistence, job deduplication, mock runner by default, optional real runner (yt-dlp + whisper-cli + LLM), and VTT file serving
+- **`whisper/`** — Python 3.12 `whisper-cli` package wrapping `faster-whisper`, producing validated WebVTT output
+- **`extension/`** — Chrome MV3 extension using WXT + Vue + TypeScript + Vitest + shadcn-vue, with popup submission, background API gateway, storage cache, and YouTube watch page subtitle overlay
+- **`docs/`** — PRD, specs, and implementation plans. A nested `docs/AGENTS.md` requires Chinese for all prose under `docs/`
 
-当前 backend 默认是“真实 API + 真实持久化 + mock runner”，不会访问 YouTube、Whisper 模型或 LLM。设置 `LSI_RUNNER_MODE=real` 时，会调用本机 `yt-dlp` / `ffmpeg`、`whisper-cli` 和 Chat Completions 兼容 LLM，生成真实 `source.vtt`、`translated.vtt`、`bilingual.vtt`；当前无请求重试、并发控制或成本统计。
+By default, the backend runs with a **mock runner** (no YouTube access, no Whisper, no LLM). Setting `LSI_RUNNER_MODE=real` enables actual download, transcription, and translation.
 
-仓库结构：
+## Dev Environment Tips
 
-```text
-.
-├── backend/                 # Go API server
-│   ├── cmd/server/          # HTTP server 入口
-│   └── internal/            # api、store、runner、app
-├── docs/                    # PRD、规格说明和实施计划
-├── extension/               # Chrome MV3 extension
-│   ├── entrypoints/         # popup、background、content script
-│   └── src/                 # API、storage、subtitle、YouTube 集成和 UI
-├── whisper/                 # Python faster-whisper CLI
-│   ├── src/whisper_cli/     # CLI、转写适配和 VTT 处理
-│   └── tests/               # pytest 单元测试
-├── .github/                 # PR template；当前没有 GitHub Actions workflow
-└── mise.toml                # 本地工具链版本
-```
+- AI agent shells do **not** auto-activate `mise`. Always prefix tool commands with `mise exec --` (e.g. `mise exec -- go`, `mise exec -- uv`, `mise exec -- npm`).
+- This is **not** a monorepo with a unified package manager. `cd` into the relevant subdirectory before running commands.
+- Toolchain versions are pinned in root `mise.toml`: Go 1.22, Python 3.12, Node.js 22, uv.
+- The closest `AGENTS.md` in the directory tree takes precedence. Currently `docs/AGENTS.md` mandates Chinese for `docs/` prose.
+- User instructions always override this file. If a request conflicts with these guidelines, note the conflict and risk before following the user's explicit direction.
+- This file targets coding agents. Human-facing project intro belongs in `README.md`.
 
-主要入口：
+## Setup Commands
 
-- backend server：`backend/cmd/server/main.go`
-- backend API：`backend/internal/api/`
-- backend store：`backend/internal/store/`
-- backend runner：`backend/internal/runner/`
-- whisper CLI：`whisper/src/whisper_cli/cli.py`
-- whisper 转写适配：`whisper/src/whisper_cli/transcribe.py`
-- whisper VTT 处理：`whisper/src/whisper_cli/vtt.py`
-- extension entrypoints：`extension/entrypoints/`
-- extension API/message/storage/subtitle/youtube 逻辑：`extension/src/`
-
-## 作用域与优先级
-
-- 本文件适用于整个仓库。
-- 子目录中更近的 `AGENTS.md` 优先于根目录说明；当前 `docs/AGENTS.md` 要求 `docs/` 下说明性正文使用中文。
-- 用户的直接请求优先于本文件；如果请求与本文件冲突，先说明冲突和风险，再按用户明确要求执行。
-- 本文件面向 coding agent；面向人类读者的项目介绍放在 `README.md`。
-
-## 协作原则
-
-- 始终使用简体中文与用户沟通。
-- 优先做最小可行改动，不添加未被要求的功能、抽象或配置。
-- 修改现有代码时保持手术式变更：只触碰与任务直接相关的文件和行。
-- 如果需求存在多种解释，先说明假设；不确定且风险较高时先询问。
-- 不要清理无关代码、重排无关格式或重构未被要求的模块。
-- 不要覆盖用户或其他 agent 已做的未提交改动；开始前和结束前用 `git status --short` 核对工作树。
-- 不要提交构建产物、数据库、模型文件、下载缓存、真实音频样本、`.env`、API key 或 LLM 请求日志。
-
-## 设置命令与依赖
-
-AI agent 的 shell 环境不会自动执行 `eval "$(mise activate zsh)"`。凡是使用 `mise.toml` 中锁定版本的工具，都必须通过 `mise exec --` 前缀调用，例如 `mise exec -- go`、`mise exec -- uv`、`mise exec -- python`、`mise exec -- npm`。
-
-工具链由根目录 `mise.toml` 管理：
-
-- Go `1.22`
-- Python `3.12`
-- Node.js `22`
-- `uv`
-
-从仓库根目录安装工具链：
+Install toolchain (from repo root):
 
 ```bash
 mise install
 ```
 
-同步 backend 依赖：
+Install dependencies per module:
 
 ```bash
-cd backend
-mise exec -- go mod download
+cd backend && mise exec -- go mod download
+cd ../whisper && mise exec -- uv sync --dev
+cd ../extension && mise exec -- npm install
 ```
 
-同步 whisper 依赖：
+## Development Workflow
 
-```bash
-cd whisper
-mise exec -- uv sync --dev
-```
-
-同步 extension 依赖：
-
-```bash
-cd extension
-mise exec -- npm install
-```
-
-根目录没有统一 package manager 或 monorepo runner。请进入具体子目录执行对应命令。
-
-## 开发工作流
-
-启动本地 mock API server：
+### Start backend (mock runner)
 
 ```bash
 cd backend
 LSI_ADDR=127.0.0.1:8080 mise exec -- go run ./cmd/server
 ```
 
-可选真实下载、转写与翻译模式要求 `yt-dlp`、`ffmpeg` 和 `whisper-cli` 都在 `PATH` 上，并配置 Chat Completions 兼容 LLM：
+Quick smoke test:
 
 ```bash
-cd backend
+curl -X POST "http://127.0.0.1:8080/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
+```
+
+### Start backend (real runner)
+
+Requires `yt-dlp`, `ffmpeg`, and `whisper-cli` on `PATH`, plus a Chat Completions-compatible LLM:
+
+```bash
+cd whisper && mise exec -- uv sync --dev && cd ../backend
 PATH="$PWD/../whisper/.venv/bin:$PATH" \
 LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
@@ -125,28 +73,15 @@ LSI_ADDR=127.0.0.1:8080 \
 mise exec -- go run ./cmd/server
 ```
 
-快速验证 `POST /jobs`：
+### Start extension dev server
 
 ```bash
-curl -X POST "http://127.0.0.1:8080/jobs" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "sourceLanguage": "en",
-    "targetLanguage": "zh"
-  }'
+cd extension && mise exec -- npm run dev
 ```
 
-启动 extension 开发服务器：
+Load `.output/chrome-mv3` in Chrome extension developer mode. Popup defaults to `http://127.0.0.1:8080` — only `http://localhost:<port>` or `http://127.0.0.1:<port>` are allowed.
 
-```bash
-cd extension
-mise exec -- npm run dev
-```
-
-在 Chrome extension developer mode 中加载 WXT 输出目录 `.output/chrome-mv3`。popup 默认连接 `http://127.0.0.1:8080`，当前只支持 `http://localhost:<port>` 或 `http://127.0.0.1:<port>`。
-
-运行本地 Whisper CLI 示例：
+### Run whisper-cli locally
 
 ```bash
 cd whisper
@@ -157,241 +92,190 @@ mise exec -- uv run whisper-cli \
   --language ja
 ```
 
-真实转写会调用 `faster-whisper`，可能需要模型下载能力以及本机可用的推理运行环境。单元测试使用 fake model，不会下载或运行真实 Whisper 模型。
+Real transcription triggers model downloads and may require GPU. Unit tests use a fake model and stay offline.
 
-## Backend 契约
+## Testing Instructions
 
-主要配置：
+### Run all tests per module
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `LSI_ADDR` | `127.0.0.1:8080` | HTTP 监听地址 |
-| `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite 数据库路径 |
-| `LSI_WORK_DIR` | `./data/jobs` | job 工作目录根路径 |
-| `LSI_RUNNER_MODE` | `mock` | runner 模式：`mock` 或 `real` |
-| `LSI_DOWNLOAD_TIMEOUT` | `10m` | `real` 模式下单次下载超时 |
-| `LSI_WHISPER_MODEL` | `small` | `real` 模式下传给 `whisper-cli --model` 的模型名 |
-| `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
-| `LSI_LLM_API_KEY` | 空 | 对 OpenAI 默认 endpoint 必填；非空时作为 Bearer token，仅 backend 读取；本地无鉴权兼容服务可留空 |
-| `LSI_LLM_MODEL` | 空 | `real` 模式下翻译必填的模型名 |
-| `LSI_LLM_TIMEOUT` | `2m` | 单条 cue 翻译请求超时 |
-
-HTTP API：
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `POST` | `/jobs` | 创建或复用字幕生成 job |
-| `GET` | `/jobs/:id` | 查询 job 状态 |
-| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 查询已完成字幕资产 |
-| `GET` | `/subtitle-files/:jobId/:mode` | 读取 VTT 文件，`mode` 为 `source`、`translated` 或 `bilingual` |
-
-状态流转：
-
-```text
-queued -> downloading -> transcribing -> translating -> packaging -> completed
-```
-
-失败时状态为 `failed`，响应中的 `errorMessage` 记录错误摘要。
-
-## Extension 契约
-
-- 技术栈是 `WXT + Vue + TypeScript + Vite + Vitest + shadcn-vue`。
-- 包管理器是 npm，锁文件是 `extension/package-lock.json`。
-- 入口文件在 `extension/entrypoints/`：`background.ts`、`youtube.content.ts`、`popup/`。
-- background service worker 是唯一 HTTP API 网关；popup 和 content script 通过 runtime message 访问它。
-- 支持语言固定为 `en` 和 `zh`，`sourceLanguage` 与 `targetLanguage` 不能相同。
-- 播放页字幕模式只支持 `translated` 和 `bilingual`；backend 仍保留 `source` 文件服务。
-- backend URL 只能是带端口的本机 HTTP origin，例如 `http://127.0.0.1:8080`。
-- Manifest host permissions 只允许 `http://127.0.0.1:*/*` 和 `http://localhost:*/*`。
-
-## Whisper CLI 契约
-
-`whisper-cli` 输入本地音频文件，输出合法 WebVTT。成功时 stdout 输出 JSON，`--output` 写入 `.vtt` 文件。
-
-参数：
-
-| 参数 | 必填 | 说明 |
-| --- | --- | --- |
-| `--input` | 是 | 本地音频文件路径 |
-| `--output` | 是 | 输出 `.vtt` 路径，不能与输入路径相同 |
-| `--model` | 是 | `faster-whisper` 模型名，例如 `small` |
-| `--language` | 是 | 转写语言代码，例如 `ja`、`en` |
-
-退出码：
-
-| 退出码 | 含义 |
+| Module | Command |
 | --- | --- |
-| `0` | 成功 |
-| `2` | 输入校验失败，例如输入文件不存在、模型名或语言无效 |
-| `3` | 转写失败 |
-| `4` | 输出校验失败，例如无法生成合法 VTT |
+| backend | `cd backend && mise exec -- go test ./...` |
+| whisper | `cd whisper && mise exec -- uv run pytest` |
+| extension | `cd extension && mise exec -- npm run test` |
 
-## 测试说明
+### Focused tests
 
-运行 backend 全部测试：
+| What | Command |
+| --- | --- |
+| backend single package | `cd backend && mise exec -- go test ./internal/api` |
+| whisper single file | `cd whisper && mise exec -- uv run pytest tests/test_vtt.py` |
+| whisper by name | `cd whisper && mise exec -- uv run pytest -k "vtt"` |
+| extension single file | `cd extension && mise exec -- npx vitest run src/api/backend-client.test.ts` |
+| extension type check | `cd extension && mise exec -- npm run typecheck` |
 
-```bash
-cd backend
-mise exec -- go test ./...
-```
+### Test patterns
 
-运行 backend 单个包测试：
+- **backend**: `*_test.go` files live alongside the tested package in `backend/internal/*/`
+- **whisper**: `test_*.py` in `whisper/tests/`; pytest config in `pyproject.toml` with `pythonpath = ["src"]`, `addopts = "-q"`
+- **extension**: `src/**/*.test.ts`; Vitest + jsdom + WXT plugin
 
-```bash
-cd backend
-mise exec -- go test ./internal/api
-```
+### Test rules
 
-运行 whisper 全部测试：
+- When changing `backend/internal/*` behavior, add or update same-package Go tests first, then verify with `go test`.
+- When changing `whisper/src/whisper_cli/` behavior, add or update adjacent pytest tests, then verify with `pytest`.
+- When changing `extension/src/` or `extension/entrypoints/`, add or update adjacent Vitest tests, then verify with `npm run test`.
+- **Unit tests must stay offline and repeatable** — no real YouTube, model downloads, GPU, external LLM, or local private data.
 
-```bash
-cd whisper
-mise exec -- uv run pytest
-```
+## Build Verification
 
-运行 whisper 单个测试文件：
+No CI pipeline exists. Verify builds by entering each subdirectory:
 
-```bash
-cd whisper
-mise exec -- uv run pytest tests/test_vtt.py
-```
+| Module | Build command | Artifacts (do not commit) |
+| --- | --- | --- |
+| backend | `cd backend && mise exec -- go build ./...` | Go binary (gitignored) |
+| whisper | `cd whisper && mise exec -- uv build` | `whisper/dist/` (gitignored) |
+| extension | `cd extension && mise exec -- npm run build` | `extension/.output/`, `.wxt/` (gitignored) |
 
-按测试名聚焦运行：
-
-```bash
-cd whisper
-mise exec -- uv run pytest -k "vtt"
-```
-
-运行 extension 全部测试：
-
-```bash
-cd extension
-mise exec -- npm run test
-```
-
-运行 extension 类型检查：
-
-```bash
-cd extension
-mise exec -- npm run typecheck
-```
-
-运行 extension 聚焦测试：
-
-```bash
-cd extension
-mise exec -- npx vitest run src/api/backend-client.test.ts
-```
-
-测试规则：
-
-- backend 测试文件与被测包同目录，命名为 `*_test.go`。
-- whisper 的 pytest 配置在 `whisper/pyproject.toml`：`pythonpath = ["src"]`，默认 `addopts = "-q"`。测试文件命名遵循 `test_*.py`。
-- extension 使用 Vitest + jsdom + WXT Vitest plugin，测试文件位于 `extension/src/**/*.test.ts`。
-- 改动 `backend/internal/` 行为时，优先添加或更新同包 Go 测试，然后确认相关 `go test` 通过。
-- 改动 `whisper/src/whisper_cli/` 行为时，优先添加或更新相邻 pytest 测试，然后确认相关 pytest 通过。
-- 改动 `extension/src/` 或 `extension/entrypoints/` 行为时，优先添加或更新相邻 Vitest 测试，并运行相关 `npm run test` 或聚焦测试。
-- 不要让单元测试依赖网络、真实 YouTube、模型下载、本地 GPU、真实音频样本或外部 LLM API。
-
-## 构建说明
-
-当前仓库没有统一的部署脚本或 GitHub Actions workflow，不要假设存在 CI。构建验证需要进入对应子目录执行。
-
-验证 backend 可构建：
-
-```bash
-cd backend
-mise exec -- go build ./...
-```
-
-验证 Python 包构建：
-
-```bash
-cd whisper
-mise exec -- uv build
-```
-
-验证 extension 可构建：
-
-```bash
-cd extension
-mise exec -- npm run build
-```
-
-构建产物：
-
-- backend 默认 Go build 产物不要提交。
-- `whisper/dist/` 由 `whisper/.gitignore` 忽略，不要提交。
-- `extension/.output/` 和 `extension/.wxt/` 由 `extension/.gitignore` 忽略，不要提交。
-
-## 代码风格
+## Code Style
 
 ### Go backend
 
-- 使用 Go 1.22，保持标准 `gofmt` 风格。
-- 不要引入新框架、队列系统或后台任务系统，除非任务明确要求。
-- HTTP 层位于 `backend/internal/api/`；请求解析、响应结构、路由和 CORS 逻辑应留在该包内。
-- SQLite/GORM 持久化位于 `backend/internal/store/`；schema 当前通过 GORM `AutoMigrate` 初始化。
-- runner 位于 `backend/internal/runner/`；`MockRunner` 全阶段 mock，`RealRunner` 真实调用 `yt-dlp` 下载音频，调用 PATH 中本仓库的 Python `whisper-cli` 生成 `source.vtt`，再调用 Chat Completions 兼容 LLM 生成 `translated.vtt` / `bilingual.vtt`。
-- API 响应不要暴露本地字幕文件绝对路径；前端应通过 `/subtitle-files/:jobId/:mode` 获取 VTT。
-- 文件服务必须限制在 job 工作目录内，避免路径穿越和符号链接逃逸。
+- Go 1.22 with standard `gofmt` style.
+- Do not introduce new frameworks, queue systems, or background task systems unless the task explicitly asks for it.
+- **`backend/internal/api/`** — HTTP layer: request parsing, response structs, routing, CORS. Keep these concerns inside this package.
+- **`backend/internal/store/`** — SQLite/GORM persistence. Schema initialized via GORM `AutoMigrate`.
+- **`backend/internal/runner/`** — `MockRunner` (all stages mocked) and `RealRunner` (calls yt-dlp, whisper-cli, LLM).
+- Never expose local absolute file paths in API responses; frontend should use `/subtitle-files/:jobId/:mode`.
+- File serving must be contained within the job work directory — prevent path traversal and symlink escapes.
 
 ### Python whisper-cli
 
-- 使用 Python 3.12 语法，源码位于 `whisper/src/whisper_cli/`。
-- 保持现有风格：类型标注、`from __future__ import annotations`、四空格缩进、简洁函数。
-- CLI 入口在 `whisper/src/whisper_cli/cli.py`，脚本名由 `whisper/pyproject.toml` 的 `[project.scripts]` 暴露为 `whisper-cli`。
-- 转写 SDK 适配在 `whisper/src/whisper_cli/transcribe.py`；WebVTT 时间轴和 cue 校验在 `whisper/src/whisper_cli/vtt.py`。
-- 不要为单次使用创建额外抽象；不要引入新依赖，除非任务明确需要。
-- 当前没有配置统一 formatter 或 linter；不要仅为格式化而大范围改动文件。
-- `uv.lock` 已提交，修改 Python 依赖时应通过 uv 更新锁文件，而不是手动编辑锁文件。
+- Python 3.12 syntax, source in `whisper/src/whisper_cli/`.
+- Follow existing style: type annotations, `from __future__ import annotations`, 4-space indent, concise functions.
+- CLI entry point: `whisper/src/whisper_cli/cli.py`, exposed as `whisper-cli` via `pyproject.toml` `[project.scripts]`.
+- Transcription adapter: `whisper/src/whisper_cli/transcribe.py`; WebVTT validation: `whisper/src/whisper_cli/vtt.py`.
+- Do not create single-use abstractions or introduce new dependencies unless the task requires it.
+- No formatter/linter configured — do not reformat entire files unprompted.
+- `uv.lock` is committed. Update Python deps through `uv`, never edit the lockfile manually.
 
 ### Chrome extension
 
-- 使用 TypeScript、Vue SFC、WXT 和 npm。
-- 路径别名 `@/*` 指向 `extension/src/*`。
-- popup UI 位于 `extension/entrypoints/popup/`；业务校验优先放在 `extension/src/popup/`。
-- background 消息协议和 HTTP client 位于 `extension/src/api/`。
-- extension storage 逻辑位于 `extension/src/storage/`。
-- WebVTT 解析和当前 cue 命中逻辑位于 `extension/src/subtitles/`，保持可独立测试。
-- YouTube watch URL 和 SPA 页面变化逻辑位于 `extension/src/youtube/`。
-- shadcn-vue 本地组件位于 `extension/src/components/ui/`。只添加实际使用的组件，不提前引入组件库范围外代码。
-- 不要在 content script 中直接访问 Go backend；网络请求统一通过 background service worker。
-- 不要把翻译 provider 密钥或任何长期敏感凭据放进 extension。
-- `package-lock.json` 已提交，修改 npm 依赖时通过 npm 更新锁文件，而不是手动编辑锁文件。
+- TypeScript, Vue SFC, WXT, npm. Path alias `@/*` → `extension/src/*`.
+- **`extension/entrypoints/popup/`** — popup UI; business validation goes in `extension/src/popup/`.
+- **`extension/src/api/`** — background message protocol and HTTP client.
+- **`extension/src/storage/`** — extension storage logic.
+- **`extension/src/subtitles/`** — WebVTT parsing and cue matching, must stay independently testable.
+- **`extension/src/youtube/`** — YouTube watch URL detection and SPA navigation.
+- **`extension/src/components/ui/`** — shadcn-vue local components. Only add components that are actually used.
+- Content scripts must **not** call the Go backend directly; all network requests go through the background service worker.
+- Never put translation provider keys or long-lived secrets in the extension.
+- `package-lock.json` is committed. Update npm deps through `npm`, never edit the lockfile manually.
 
-## 文档规则
+## Key Entry Points
 
-- `docs/` 下所有说明性正文必须使用中文；代码、命令、路径、配置键、API 名称和必须保留的引用可以使用英文。
-- 遵循 AGENTS.md 约定：子目录中更近的 `AGENTS.md` 优先于根目录说明。
-- 更新行为契约、命令、API、退出码、目录结构、支持语言、mock/真实边界或安全边界时，同步检查 `README.md`、`backend/README.md`、`whisper/README.md`、`extension/README.md` 与相关 `docs/` 文件是否需要更新。
+| Module | Entry | Description |
+| --- | --- | --- |
+| backend server | `backend/cmd/server/main.go` | HTTP server entry |
+| backend API | `backend/internal/api/` | Routes, handlers, CORS |
+| backend store | `backend/internal/store/` | GORM models, SQLite persistence |
+| backend runner | `backend/internal/runner/` | MockRunner, RealRunner |
+| whisper CLI | `whisper/src/whisper_cli/cli.py` | CLI entry (`whisper-cli`) |
+| whisper transcribe | `whisper/src/whisper_cli/transcribe.py` | faster-whisper adapter |
+| whisper VTT | `whisper/src/whisper_cli/vtt.py` | WebVTT timeline & cue validation |
+| extension entries | `extension/entrypoints/` | background.ts, youtube.content.ts, popup/ |
+| extension logic | `extension/src/` | api, storage, subtitles, youtube, popup |
 
-## 安全与数据
+## Backend Configuration
 
-- 只处理 YouTube 公开视频，不要加入私有视频、登录态、cookie 导入或鉴权绕过相关能力。
-- backend 当前没有用户鉴权，默认面向单用户本地自托管；不要把它描述成公网生产服务。
-- 不要把真实音频样本、模型文件、下载缓存、SQLite 数据库、`.env`、API key、LLM 请求日志或构建产物提交到仓库。
-- extension 只允许本机 backend URL；不要放宽到任意远程主机，除非任务明确要求并同步更新权限说明。
-- 真实翻译密钥应只保存在服务端配置中，extension 不应持有 provider 密钥。
+| Env var | Default | Description |
+| --- | --- | --- |
+| `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address |
+| `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite database path |
+| `LSI_WORK_DIR` | `./data/jobs` | Job work directory root |
+| `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
+| `LSI_DOWNLOAD_TIMEOUT` | `10m` | Download timeout (real mode) |
+| `LSI_WHISPER_MODEL` | `small` | faster-whisper model name (real mode) |
+| `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
+| `LSI_LLM_API_KEY` | _(empty)_ | Required for OpenAI default; Bearer token, backend-only |
+| `LSI_LLM_MODEL` | _(empty)_ | Required in real mode for translation |
+| `LSI_LLM_TIMEOUT` | `2m` | Per-cue translation timeout |
 
-## Pull Request 指南
+## API Reference
 
-- 仓库当前有 `.github/pull_request_template.md`，但未发现 GitHub Actions workflow；不要假设存在自动 CI。
-- PR 或变更说明建议按影响范围标注，例如 `[backend]`、`[whisper]`、`[extension]`、`[docs]`。
-- 创建 PR 时按 `.github/pull_request_template.md` 填写资料、概要、关联 issue、按文件说明、动作确认和重点 review 项目。
-- 提交 PR 前至少运行与变更相关的测试，并在说明中列出实际执行过的验证命令和结果。
-- 涉及 `backend/` 行为时运行 `cd backend && mise exec -- go test ./...`。
-- 涉及 `whisper/` 包行为时运行 `cd whisper && mise exec -- uv run pytest`。
-- 涉及 `extension/` 行为时运行 `cd extension && mise exec -- npm run test`，类型相关改动还应运行 `cd extension && mise exec -- npm run typecheck`。
-- 涉及打包、入口点或依赖配置时额外运行对应构建命令：backend 用 `cd backend && mise exec -- go build ./...`，whisper 用 `cd whisper && mise exec -- uv build`，extension 用 `cd extension && mise exec -- npm run build`。
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/jobs` | Create or reuse a subtitle generation job |
+| `GET` | `/jobs/:id` | Query job status |
+| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | Query completed subtitle assets |
+| `GET` | `/subtitle-files/:jobId/:mode` | Serve VTT file; mode is `source`, `translated`, or `bilingual` |
 
-## 常见注意事项
+Job state flow: `queued` → `downloading` → `transcribing` → `translating` → `packaging` → `completed`. On failure, state is `failed` with `errorMessage` in the response.
 
-- backend 默认是 mock runner，仍保持离线；`LSI_RUNNER_MODE=real` 代表下载、转写、翻译和打包真实执行。
-- extension 第一版只支持 `en` 和 `zh`，不要在 UI 或文档中承诺完整语言列表。
-- backend CORS 只允许本机 HTTP origin 且必须显式端口。
-- 单元测试必须离线、可重复，不依赖真实 YouTube、模型下载、GPU、外部 LLM 或本地私有数据。
-- 修改 Go 依赖时通过 Go 工具更新 `backend/go.sum`，不要手动编辑。
-- 修改 Python 依赖时通过 uv 更新 `whisper/uv.lock`，不要手动编辑。
-- 修改 extension 依赖时通过 npm 更新 `extension/package-lock.json`，不要手动编辑。
+## Whisper CLI Contract
+
+Input: local audio file. Output: valid WebVTT to `--output`, JSON summary on stdout.
+
+| Param | Required | Description |
+| --- | --- | --- |
+| `--input` | yes | Local audio file path |
+| `--output` | yes | Output `.vtt` path (must differ from input) |
+| `--model` | yes | faster-whisper model name, e.g. `small` |
+| `--language` | yes | Language code, e.g. `ja`, `en` |
+
+Exit codes: `0` success, `2` input validation failed, `3` transcription failed, `4` output validation failed.
+
+## Extension Contract
+
+- Stack: WXT + Vue + TypeScript + Vite + Vitest + shadcn-vue, npm for packages.
+- Entry points: `extension/entrypoints/` — `background.ts`, `youtube.content.ts`, `popup/`.
+- Background service worker is the sole HTTP API gateway; popup and content script communicate via runtime messages.
+- Supported languages: `en` and `zh` only. `sourceLanguage` ≠ `targetLanguage`.
+- Subtitle modes on watch page: `translated` and `bilingual` only (backend still serves `source`).
+- Backend URL must be a localhost HTTP origin with explicit port (`http://localhost:<port>` or `http://127.0.0.1:<port>`).
+- Manifest host permissions: `http://127.0.0.1:*/*` and `http://localhost:*/*` only.
+
+## Collaboration Principles
+
+- Communicate with users in **Simplified Chinese**.
+- Make minimal viable changes — no unsolicited features, abstractions, or config.
+- Surgical edits: only touch files and lines directly related to the task.
+- If requirements are ambiguous, state assumptions; if high-risk uncertainty, ask first.
+- Do not clean up unrelated code, restyle unrelated formatting, or refactor modules not in scope.
+- Do not overwrite uncommitted changes by other agents. Run `git status --short` before and after work.
+- Never commit build artifacts, databases, model files, download caches, real audio samples, `.env` files, API keys, or LLM request logs.
+
+## Security & Data
+
+- Process **YouTube public videos only** — no private video support, login sessions, cookie import, or auth bypass.
+- Backend has no user auth; it is designed for single-user local self-hosting. Never describe it as production-ready for public internet.
+- Never commit real audio samples, model files, download caches, SQLite databases, `.env` files, API keys, or LLM logs.
+- Extension allows localhost backend URLs only — do not relax this to arbitrary remote hosts unless explicitly requested, and update the permissions spec accordingly.
+- Translation provider keys belong in server-side config only; extension must not hold secrets.
+
+## Pull Request Guidelines
+
+- PR label format: `[backend]`, `[whisper]`, `[extension]`, `[docs]` to indicate scope.
+- Follow `.github/pull_request_template.md` for structure: reference, summary, close issue, per-file explanation, verification steps, and review focus items.
+- No automated CI exists. Run relevant tests manually before submitting and list the commands and results in the PR description.
+- Pre-merge verification per scope:
+
+| Scope | Test command | Additional |
+| --- | --- | --- |
+| `backend/` behavior | `cd backend && mise exec -- go test ./...` | `cd backend && mise exec -- go build ./...` if packaging/deps changed |
+| `whisper/` behavior | `cd whisper && mise exec -- uv run pytest` | `cd whisper && mise exec -- uv build` if packaging/deps changed |
+| `extension/` behavior | `cd extension && mise exec -- npm run test` | `cd extension && mise exec -- npm run typecheck` for type changes; `cd extension && mise exec -- npm run build` if packaging/deps changed |
+
+## Documentation Rules
+
+- All prose under `docs/` must be in Chinese. Code, commands, paths, config keys, API names, and required references may stay in English.
+- Nested `AGENTS.md` takes precedence over root. Check `docs/AGENTS.md` for subproject-specific rules.
+- When updating behavioral contracts, commands, APIs, exit codes, directory structure, supported languages, mock/real boundaries, or security boundaries, also check whether `README.md`, `backend/README.md`, `whisper/README.md`, `extension/README.md`, and relevant `docs/` files need updates.
+
+## Common Pitfalls
+
+- **Backend default is mock runner** — it stays offline. `LSI_RUNNER_MODE=real` triggers real download/transcription/translation.
+- **Extension v1 only supports `en` and `zh`** — do not promise a complete language list in UI or docs.
+- **CORS is localhost-only** with explicit port required.
+- **Unit tests must be offline** — no real YouTube, model downloads, GPU, external LLM, or local private data.
+- **Lockfiles**: update via tooling, never manual edits — `go.sum` via Go, `uv.lock` via uv, `package-lock.json` via npm.
