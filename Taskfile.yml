@@ -1,0 +1,155 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Install toolchains and dependencies for all modules
+    cmds:
+      - task tools
+      - task deps:backend
+      - task deps:whisper
+      - task deps:extension
+
+  tools:
+    desc: Install pinned mise toolchains
+    cmds:
+      - mise install
+
+  deps:backend:
+    desc: Download Go module dependencies
+    dir: backend
+    cmds:
+      - mise exec -- go mod download
+
+  deps:whisper:
+    desc: Sync Python dependencies for whisper-cli
+    dir: whisper
+    cmds:
+      - mise exec -- uv sync --dev
+
+  deps:extension:
+    desc: Install extension npm dependencies
+    dir: extension
+    cmds:
+      - mise exec -- npm install
+
+  dev:backend:
+    desc: Run backend API with the default mock runner
+    dir: backend
+    cmds:
+      - LSI_ADDR=${LSI_ADDR:-127.0.0.1:8080} mise exec -- go run ./cmd/server
+
+  dev:backend:real:
+    desc: Run backend API with the real runner
+    dir: backend
+    cmds:
+      - task deps:whisper
+      - >-
+        PATH="$PWD/../whisper/.venv/bin:$PATH"
+        LSI_RUNNER_MODE=real
+        LSI_DOWNLOAD_TIMEOUT=${LSI_DOWNLOAD_TIMEOUT:-10m}
+        LSI_WHISPER_MODEL=${LSI_WHISPER_MODEL:-small}
+        LSI_LLM_BASE_URL=${LSI_LLM_BASE_URL:-https://api.openai.com}
+        LSI_LLM_TIMEOUT=${LSI_LLM_TIMEOUT:-2m}
+        LSI_ADDR=${LSI_ADDR:-127.0.0.1:8080}
+        mise exec -- go run ./cmd/server
+
+  dev:extension:
+    desc: Run the extension dev server
+    dir: extension
+    cmds:
+      - mise exec -- npm run dev
+
+  test:
+    desc: Run all module test suites
+    cmds:
+      - task test:backend
+      - task test:whisper
+      - task test:extension
+
+  test:backend:
+    desc: Run backend Go tests
+    dir: backend
+    cmds:
+      - mise exec -- go test ./...
+
+  test:whisper:
+    desc: Run whisper-cli pytest suite
+    dir: whisper
+    cmds:
+      - mise exec -- uv run pytest
+
+  test:extension:
+    desc: Run extension Vitest suite
+    dir: extension
+    cmds:
+      - mise exec -- npm run test
+
+  typecheck:
+    desc: Run extension TypeScript typecheck
+    dir: extension
+    cmds:
+      - mise exec -- npm run typecheck
+
+  check:
+    desc: Run tests and typecheck
+    cmds:
+      - task test
+      - task typecheck
+
+  build:
+    desc: Build all modules
+    cmds:
+      - task build:backend
+      - task build:whisper
+      - task build:extension
+
+  build:backend:
+    desc: Build backend Go packages
+    dir: backend
+    cmds:
+      - mise exec -- go build ./...
+
+  build:whisper:
+    desc: Build whisper-cli Python package
+    dir: whisper
+    cmds:
+      - mise exec -- uv build
+
+  build:extension:
+    desc: Build Chrome MV3 extension
+    dir: extension
+    cmds:
+      - mise exec -- npm run build
+
+  docker:up:
+    desc: Start Docker backend in real mode
+    cmds:
+      - docker compose up -d
+
+  docker:build:
+    desc: Rebuild and start Docker backend in real mode
+    cmds:
+      - docker compose up -d --build
+
+  docker:logs:
+    desc: Follow Docker backend logs
+    cmds:
+      - docker compose logs -f
+
+  docker:down:
+    desc: Stop Docker backend
+    cmds:
+      - docker compose down
+
+  api:smoke:
+    desc: Submit a mock-friendly POST /jobs request to the local backend
+    cmds:
+      - >-
+        curl -X POST "${LSI_BACKEND_URL:-http://127.0.0.1:8080}/jobs"
+        -H "Content-Type: application/json"
+        -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
