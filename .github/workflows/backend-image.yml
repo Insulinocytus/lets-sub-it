@@ -2,6 +2,8 @@ name: Backend Docker Image
 
 on:
   push:
+    branches:
+      - main
     paths:
       - ".dockerignore"
       - ".github/workflows/backend-image.yml"
