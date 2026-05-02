@@ -6,7 +6,7 @@
 
 ## Run
 
-`uv run whisper-cli --input /path/to/audio.mp3 --output /tmp/source.vtt --model small --language ja`
+`uv run whisper-cli --input /path/to/audio.mp3 --output /tmp/source.vtt --model small --compute-type int8 --language ja`
 
 ## Test
 

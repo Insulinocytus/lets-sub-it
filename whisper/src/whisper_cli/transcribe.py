@@ -30,9 +30,10 @@ def transcribe_audio(
     input_path: Path,
     model_name: str,
     language: str,
+    compute_type: str = "default",
 ) -> TranscriptionResult:
     try:
-        model = WhisperModel(model_name)
+        model = WhisperModel(model_name, compute_type=compute_type)
     except ValueError as exc:
         _raise_input_validation_error(exc)
         raise

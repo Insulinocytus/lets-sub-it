@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func transcribeAudio(ctx context.Context, audioPath string, sourcePath string, model string, language string) error {
+func transcribeAudio(ctx context.Context, audioPath string, sourcePath string, model string, computeType string, language string) error {
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		return fmt.Errorf("create transcript directory: %w", err)
 	}
@@ -16,6 +16,7 @@ func transcribeAudio(ctx context.Context, audioPath string, sourcePath string, m
 		"--input", audioPath,
 		"--output", sourcePath,
 		"--model", model,
+		"--compute-type", computeType,
 		"--language", language,
 	}
 	cmd := execCommand(ctx, "whisper-cli", args...)

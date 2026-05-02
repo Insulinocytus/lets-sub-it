@@ -10,14 +10,15 @@ import (
 )
 
 type RealRunner struct {
-	store           Store
-	downloadTimeout time.Duration
-	whisperModel    string
-	translator      Translator
+	store              Store
+	downloadTimeout    time.Duration
+	whisperModel       string
+	whisperComputeType string
+	translator         Translator
 }
 
-func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, translator Translator) *RealRunner {
-	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, translator: translator}
+func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, whisperComputeType string, translator Translator) *RealRunner {
+	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, whisperComputeType: whisperComputeType, translator: translator}
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
@@ -48,7 +49,7 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	translatedPath := filepath.Join(job.WorkingDir, "translated.vtt")
 	bilingualPath := filepath.Join(job.WorkingDir, "bilingual.vtt")
 
-	if err := transcribeAudio(ctx, audioPath, sourcePath, r.whisperModel, job.SourceLanguage); err != nil {
+	if err := transcribeAudio(ctx, audioPath, sourcePath, r.whisperModel, r.whisperComputeType, job.SourceLanguage); err != nil {
 		return r.fail(job.ID, store.StatusTranscribing, err)
 	}
 

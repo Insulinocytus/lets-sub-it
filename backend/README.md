@@ -33,6 +33,7 @@ PATH="$PWD/../whisper/.venv/bin:$PATH" \
 LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
 LSI_WHISPER_MODEL=small \
+LSI_WHISPER_COMPUTE_TYPE=int8 \
 LSI_LLM_BASE_URL=https://api.openai.com \
 LSI_LLM_API_KEY="$OPENAI_API_KEY" \
 LSI_LLM_MODEL=gpt-4.1-mini \

@@ -15,6 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--compute-type", default="default")
     parser.add_argument("--language", required=True)
     return parser
 
@@ -57,6 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = transcribe_audio(
             input_path=input_path,
             model_name=args.model,
+            compute_type=args.compute_type,
             language=args.language,
         )
     except InputValidationError as exc:
