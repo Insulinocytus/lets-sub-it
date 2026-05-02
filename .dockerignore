@@ -1,0 +1,28 @@
+# Not needed in Docker build
+extension/
+docs/
+graphify-out/
+
+# Git and IDE
+.git/
+.github/
+.vscode/
+.idea/
+
+# Python caches (whisper source is needed for build)
+whisper/.venv/
+whisper/__pycache__/
+whisper/dist/
+
+# Data and env
+data/
+.env
+*.sqlite3
+
+# Build artifacts (rebuilt in Docker)
+backend/server
+
+# Config for other tools
+.codex/
+.opencode/
+mise.toml

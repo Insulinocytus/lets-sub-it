@@ -264,6 +264,23 @@ cd ../whisper && mise exec -- uv build
 cd ../extension && mise exec -- npm run build
 ```
 
+## Docker 部署
+
+一键部署后端（含 real runner），无需安装 Go、Python、yt-dlp、ffmpeg：
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少填写 LSI_LLM_API_KEY 和 LSI_LLM_MODEL
+docker compose up -d
+```
+
+查看日志：`docker compose logs -f`
+停止服务：`docker compose down`
+
+Docker 默认只绑定 `127.0.0.1:8080`。如需让局域网设备访问，可在 `.env` 中将 `LSI_DOCKER_BIND_HOST` 改为 `0.0.0.0`。
+
+数据（SQLite 数据库、Job 文件、Whisper 模型缓存）持久化在 Docker named volume `lsi-data` 中。
+
 ## 当前限制
 
 - 只面向单用户本地自托管，无登录、鉴权、多用户或公网部署能力
