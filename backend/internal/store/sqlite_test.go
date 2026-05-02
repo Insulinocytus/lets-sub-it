@@ -60,6 +60,30 @@ func TestStoreFindsReusableJob(t *testing.T) {
 	}
 }
 
+func TestStoreFindsLatestJobForVideoAndLanguageIncludingFailed(t *testing.T) {
+	store := openTestStore(t)
+	oldJob := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")
+	if err := store.CreateJob(oldJob); err != nil {
+		t.Fatalf("CreateJob(oldJob) error = %v", err)
+	}
+
+	latestJob := NewJob("job_2", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_2")
+	if err := store.CreateJob(latestJob); err != nil {
+		t.Fatalf("CreateJob(latestJob) error = %v", err)
+	}
+	if err := store.UpdateJobStatus("job_2", StatusFailed, StatusTranscribing, "失败", "boom"); err != nil {
+		t.Fatalf("UpdateJobStatus() error = %v", err)
+	}
+
+	found, err := store.FindLatestJob("abc123", "zh")
+	if err != nil {
+		t.Fatalf("FindLatestJob() error = %v", err)
+	}
+	if found.ID != "job_2" || found.Status != StatusFailed {
+		t.Fatalf("latest job = %+v", found)
+	}
+}
+
 func TestStoreCreatesAndFindsSubtitleAsset(t *testing.T) {
 	store := openTestStore(t)
 	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")

@@ -172,6 +172,7 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 | --- | --- | --- |
 | `POST` | `/jobs` | 创建或复用字幕生成任务 |
 | `GET` | `/jobs/:id` | 查询任务状态 |
+| `GET` | `/jobs/active?videoId=...&targetLanguage=...` | 查询指定视频和目标语言最近的任务，用于恢复 popup 状态 |
 | `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 查询已完成字幕资产 |
 | `GET` | `/subtitle-files/:jobId/:mode` | 读取 VTT 文件，`mode` 为 `source`、`translated` 或 `bilingual` |
 

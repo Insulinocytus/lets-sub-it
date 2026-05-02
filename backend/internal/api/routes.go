@@ -7,6 +7,7 @@ import (
 
 type routeHandler interface {
 	handleJobs(http.ResponseWriter, *http.Request)
+	handleActiveJob(http.ResponseWriter, *http.Request)
 	handleJobByID(http.ResponseWriter, *http.Request)
 	handleSubtitleAssets(http.ResponseWriter, *http.Request)
 	handleSubtitleFile(http.ResponseWriter, *http.Request)
@@ -15,6 +16,7 @@ type routeHandler interface {
 func Routes(handler routeHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jobs", handler.handleJobs)
+	mux.HandleFunc("/jobs/active", handler.handleActiveJob)
 	mux.HandleFunc("/jobs/", handler.handleJobByID)
 	mux.HandleFunc("/subtitle-assets", handler.handleSubtitleAssets)
 	mux.HandleFunc("/subtitle-files/", handler.handleSubtitleFile)

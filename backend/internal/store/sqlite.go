@@ -74,6 +74,20 @@ func (s *Store) FindReusableJob(videoID string, targetLanguage string) (Job, err
 	return job, nil
 }
 
+func (s *Store) FindLatestJob(videoID string, targetLanguage string) (Job, error) {
+	var job Job
+	err := s.db.Where("video_id = ? AND target_language = ?", videoID, targetLanguage).
+		Order("updated_at DESC").
+		First(&job).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Job{}, ErrNotFound
+		}
+		return Job{}, err
+	}
+	return job, nil
+}
+
 func (s *Store) UpdateJobStatus(id string, status string, stage string, progressText string, errorMessage string) error {
 	updates := map[string]any{
 		"status":        status,

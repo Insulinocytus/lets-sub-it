@@ -89,6 +89,38 @@ describe('createBackendClient', () => {
     )
   })
 
+  it('fetches the latest job for a video and target language', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          job: {
+            id: 'job_123',
+            videoId: 'video_123',
+            youtubeUrl: 'https://www.youtube.com/watch?v=video_123',
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            status: 'transcribing',
+            stage: 'transcribing',
+            progressText: '转写中',
+            errorMessage: null,
+            createdAt: '2026-04-25T00:00:00Z',
+            updatedAt: '2026-04-25T00:01:00Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const client = createBackendClient('http://localhost:8080/', fetchImpl)
+
+    const response = await client.getActiveJob('video_123', 'zh')
+
+    expect(response.job?.id).toBe('job_123')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:8080/jobs/active?videoId=video_123&targetLanguage=zh',
+      undefined,
+    )
+  })
+
   it('normalizes localhost backend URLs to their origin', () => {
     expect(normalizeBackendBaseUrl('http://localhost:8080/')).toBe(
       'http://localhost:8080',
