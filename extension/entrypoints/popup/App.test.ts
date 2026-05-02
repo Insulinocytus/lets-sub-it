@@ -159,5 +159,6 @@ describe('popup App', () => {
     })
     expect(wrapper.text()).toContain('转写中')
     expect(wrapper.text()).toContain('任务状态')
+    expect(wrapper.text()).not.toContain('转写已用')
   })
 })
