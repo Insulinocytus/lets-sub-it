@@ -2,36 +2,45 @@
 
 ## Project Overview
 
-Lets Sub It is a self-hosted YouTube subtitle generation and translation tool. The pipeline: submit a YouTube public video URL, download audio, transcribe locally, translate, generate subtitles, and render them on the YouTube watch page.
+Lets Sub It is a self-hosted YouTube subtitle generation and translation tool. A user submits a public YouTube URL, the backend creates or reuses a job, downloads audio, transcribes locally, translates each cue, writes WebVTT files, and the Chrome extension renders subtitles on the YouTube watch page.
 
-This is a multi-module monorepo at MVP stage:
+This repository is a multi-module MVP, not a single-package workspace:
 
-- **`backend/`** — Go 1.22 API server with SQLite/GORM persistence, job deduplication, mock runner by default, optional real runner (yt-dlp + whisper-cli + LLM), and VTT file serving
-- **`whisper/`** — Python 3.12 `whisper-cli` package wrapping `faster-whisper`, producing validated WebVTT output
-- **`extension/`** — Chrome MV3 extension using WXT + Vue + TypeScript + Vitest + shadcn-vue, with popup submission, background API gateway, storage cache, and YouTube watch page subtitle overlay
-- **`docs/`** — PRD, specs, and implementation plans. A nested `docs/AGENTS.md` requires Chinese for all prose under `docs/`
+- `backend/` — Go 1.22 HTTP API server with SQLite/GORM persistence, job deduplication, mock runner by default, optional real runner (`yt-dlp` + `whisper-cli` + LLM), and VTT file serving.
+- `whisper/` — Python 3.12 `whisper-cli` package wrapping `faster-whisper`, producing validated WebVTT and JSON summaries.
+- `extension/` — Chrome MV3 extension using WXT, Vue, TypeScript, Vitest, Tailwind/shadcn-vue, background API gateway, storage cache, and YouTube subtitle overlay.
+- `docs/` — Chinese PRD, specs, and implementation plans. The nested `docs/AGENTS.md` takes precedence for all files under `docs/`.
 
-By default, the backend runs with a **mock runner** (no YouTube access, no Whisper, no LLM). Setting `LSI_RUNNER_MODE=real` enables actual download, transcription, and translation.
+Default behavior is offline-friendly: `backend` uses `LSI_RUNNER_MODE=mock`, so it does not contact YouTube, download Whisper models, or call an LLM. `LSI_RUNNER_MODE=real` enables actual download, transcription, translation, and packaging.
+
+## Agent Operating Rules
+
+- Communicate with users in **Simplified Chinese**.
+- Run `git status --short` before and after edits. Do not overwrite or revert unrelated user changes.
+- Keep changes surgical. Every changed line should trace to the request.
+- Prefer existing module boundaries and local patterns over new abstractions.
+- Add or update tests for behavior changes in the touched module.
+- Unit tests must stay offline and repeatable: no real YouTube, model downloads, GPU, external LLM, private local data, or provider keys.
+- Do not commit build artifacts, SQLite databases, model files, download caches, real audio samples, `.env`, API keys, or LLM request logs.
 
 ## Dev Environment Tips
 
-- AI agent shells do **not** auto-activate `mise`. Always prefix tool commands with `mise exec --` (e.g. `mise exec -- go`, `mise exec -- uv`, `mise exec -- npm`).
-- This is **not** a monorepo with a unified package manager. `cd` into the relevant subdirectory before running commands.
-- Toolchain versions are pinned in root `mise.toml`: Go 1.22, Python 3.12, Node.js 22, uv.
-- The closest `AGENTS.md` in the directory tree takes precedence. Currently `docs/AGENTS.md` mandates Chinese for `docs/` prose.
-- User instructions always override this file. If a request conflicts with these guidelines, note the conflict and risk before following the user's explicit direction.
-- This file targets coding agents. Human-facing project intro belongs in `README.md`.
-- Docker 部署通过 `docker compose up -d` 一键启动，详见 README "Docker 部署" 部分。构建镜像不需要本地安装 Go、Python、yt-dlp、ffmpeg。
+- Agent shells do **not** auto-activate `mise`; prefix tool commands with `mise exec --`.
+- Install pinned toolchains from the repository root with `mise install`.
+- This is not a unified package-manager monorepo. Enter the relevant module before running commands.
+- Tool versions are pinned in `mise.toml`: Go 1.22, Python 3.12, Node.js 22, and `uv`.
+- Use `rg` / `rg --files` for search unless unavailable.
+- For architecture or cross-module questions, read `graphify-out/GRAPH_REPORT.md` first. If `graphify-out/wiki/index.md` exists, navigate that before raw files.
 
 ## Setup Commands
 
-Install toolchain (from repo root):
+Install local toolchains:
 
 ```bash
 mise install
 ```
 
-Install dependencies per module:
+Install module dependencies:
 
 ```bash
 cd backend && mise exec -- go mod download
@@ -39,16 +48,26 @@ cd ../whisper && mise exec -- uv sync --dev
 cd ../extension && mise exec -- npm install
 ```
 
+Docker backend setup for real runner:
+
+```bash
+cp .env.example .env
+# edit .env: set LSI_LLM_API_KEY and LSI_LLM_MODEL at minimum
+docker compose up -d
+```
+
+Docker builds the Go backend, Python `whisper-cli`, `yt-dlp`, and `ffmpeg` into one backend image. Runtime data persists in the `lsi-data` Docker volume.
+
 ## Development Workflow
 
-### Start backend (mock runner)
+Start backend with the default mock runner:
 
 ```bash
 cd backend
 LSI_ADDR=127.0.0.1:8080 mise exec -- go run ./cmd/server
 ```
 
-Quick smoke test:
+Smoke test the API:
 
 ```bash
 curl -X POST "http://127.0.0.1:8080/jobs" \
@@ -56,9 +75,7 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
   -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
 ```
 
-### Start backend (real runner)
-
-Requires `yt-dlp`, `ffmpeg`, and `whisper-cli` on `PATH`, plus a Chat Completions-compatible LLM:
+Start backend with the real runner:
 
 ```bash
 cd whisper && mise exec -- uv sync --dev && cd ../backend
@@ -74,15 +91,16 @@ LSI_ADDR=127.0.0.1:8080 \
 mise exec -- go run ./cmd/server
 ```
 
-### Start extension dev server
+Start the extension dev server:
 
 ```bash
-cd extension && mise exec -- npm run dev
+cd extension
+mise exec -- npm run dev
 ```
 
-Load `.output/chrome-mv3` in Chrome extension developer mode. Popup defaults to `http://127.0.0.1:8080` — only `http://localhost:<port>` or `http://127.0.0.1:<port>` are allowed.
+Load `extension/.output/chrome-mv3` in Chrome extension developer mode. The popup defaults to `http://127.0.0.1:8080`; only `http://localhost:<port>` and `http://127.0.0.1:<port>` are valid backend origins.
 
-### Run whisper-cli locally
+Run `whisper-cli` directly:
 
 ```bash
 cd whisper
@@ -93,11 +111,11 @@ mise exec -- uv run whisper-cli \
   --language ja
 ```
 
-Real transcription triggers model downloads and may require GPU. Unit tests use a fake model and stay offline.
+Real transcription can download models and may require GPU. Tests use fake models and must remain offline.
 
 ## Testing Instructions
 
-### Run all tests per module
+Run all tests for each module:
 
 | Module | Command |
 | --- | --- |
@@ -105,188 +123,194 @@ Real transcription triggers model downloads and may require GPU. Unit tests use 
 | whisper | `cd whisper && mise exec -- uv run pytest` |
 | extension | `cd extension && mise exec -- npm run test` |
 
-### Focused tests
+Focused commands:
 
-| What | Command |
+| Scope | Command |
 | --- | --- |
-| backend single package | `cd backend && mise exec -- go test ./internal/api` |
-| whisper single file | `cd whisper && mise exec -- uv run pytest tests/test_vtt.py` |
-| whisper by name | `cd whisper && mise exec -- uv run pytest -k "vtt"` |
-| extension single file | `cd extension && mise exec -- npx vitest run src/api/backend-client.test.ts` |
-| extension type check | `cd extension && mise exec -- npm run typecheck` |
+| backend package | `cd backend && mise exec -- go test ./internal/api` |
+| backend named test | `cd backend && mise exec -- go test ./internal/runner -run TestRealRunnerCompletesJob` |
+| whisper file | `cd whisper && mise exec -- uv run pytest tests/test_vtt.py` |
+| whisper pattern | `cd whisper && mise exec -- uv run pytest -k "vtt"` |
+| extension file | `cd extension && mise exec -- npx vitest run src/api/backend-client.test.ts` |
+| extension typecheck | `cd extension && mise exec -- npm run typecheck` |
 
-### Test patterns
+Test locations and conventions:
 
-- **backend**: `*_test.go` files live alongside the tested package in `backend/internal/*/`
-- **whisper**: `test_*.py` in `whisper/tests/`; pytest config in `pyproject.toml` with `pythonpath = ["src"]`, `addopts = "-q"`
-- **extension**: `src/**/*.test.ts`; Vitest + jsdom + WXT plugin
+- `backend/internal/**/*_test.go` lives beside the tested Go package.
+- `whisper/tests/test_*.py` uses pytest with `pythonpath = ["src"]`.
+- `extension/src/**/*.test.ts` uses Vitest + jsdom + WXT prepare.
 
-### Test rules
+When changing behavior:
 
-- When changing `backend/internal/*` behavior, add or update same-package Go tests first, then verify with `go test`.
-- When changing `whisper/src/whisper_cli/` behavior, add or update adjacent pytest tests, then verify with `pytest`.
-- When changing `extension/src/` or `extension/entrypoints/`, add or update adjacent Vitest tests, then verify with `npm run test`.
-- **Unit tests must stay offline and repeatable** — no real YouTube, model downloads, GPU, external LLM, or local private data.
+- `backend/internal/*` changes need same-package Go tests.
+- `whisper/src/whisper_cli/*` changes need pytest coverage.
+- `extension/src/*` or `extension/entrypoints/*` changes need Vitest coverage, plus `npm run typecheck` for type-facing changes.
 
 ## Build Verification
 
-No CI pipeline exists. Verify builds by entering each subdirectory:
+No automated CI is configured. Verify affected modules manually:
 
-| Module | Build command | Artifacts (do not commit) |
+| Module | Build command | Generated artifacts |
 | --- | --- | --- |
-| backend | `cd backend && mise exec -- go build ./...` | Go binary (gitignored) |
-| whisper | `cd whisper && mise exec -- uv build` | `whisper/dist/` (gitignored) |
-| extension | `cd extension && mise exec -- npm run build` | `extension/.output/`, `.wxt/` (gitignored) |
+| backend | `cd backend && mise exec -- go build ./...` | Go build outputs; do not commit binaries |
+| whisper | `cd whisper && mise exec -- uv build` | `whisper/dist/` |
+| extension | `cd extension && mise exec -- npm run build` | `extension/.output/`, `extension/.wxt/` |
+
+Use Docker for backend deployment verification:
+
+```bash
+docker compose up -d --build
+docker compose logs -f
+docker compose down
+```
 
 ## Code Style
 
 ### Go backend
 
-- Go 1.22 with standard `gofmt` style.
-- Do not introduce new frameworks, queue systems, or background task systems unless the task explicitly asks for it.
-- **`backend/internal/api/`** — HTTP layer: request parsing, response structs, routing, CORS. Keep these concerns inside this package.
-- **`backend/internal/store/`** — SQLite/GORM persistence. Schema initialized via GORM `AutoMigrate`.
-- **`backend/internal/runner/`** — `MockRunner` (all stages mocked) and `RealRunner` (calls yt-dlp, whisper-cli, LLM).
-- Never expose local absolute file paths in API responses; frontend should use `/subtitle-files/:jobId/:mode`.
-- File serving must be contained within the job work directory — prevent path traversal and symlink escapes.
+- Use standard `gofmt`; do not introduce a formatter beyond Go tooling.
+- Keep HTTP parsing, response structs, routing, and CORS in `backend/internal/api/`.
+- Keep SQLite/GORM persistence in `backend/internal/store/`; schema is initialized with GORM `AutoMigrate`.
+- Keep job execution in `backend/internal/runner/`; `MockRunner` simulates all stages and `RealRunner` calls external tools.
+- Do not add frameworks, queue systems, or background task systems unless explicitly requested.
+- API responses must never expose local absolute file paths. Frontend should use `/subtitle-files/:jobId/:mode`.
+- File serving must stay contained within the job work directory; preserve path traversal and symlink escape protections.
 
 ### Python whisper-cli
 
-- Python 3.12 syntax, source in `whisper/src/whisper_cli/`.
-- Follow existing style: type annotations, `from __future__ import annotations`, 4-space indent, concise functions.
-- CLI entry point: `whisper/src/whisper_cli/cli.py`, exposed as `whisper-cli` via `pyproject.toml` `[project.scripts]`.
-- Transcription adapter: `whisper/src/whisper_cli/transcribe.py`; WebVTT validation: `whisper/src/whisper_cli/vtt.py`.
-- Do not create single-use abstractions or introduce new dependencies unless the task requires it.
-- No formatter/linter configured — do not reformat entire files unprompted.
-- `uv.lock` is committed. Update Python deps through `uv`, never edit the lockfile manually.
+- Use Python 3.12 syntax with type annotations.
+- Follow the existing style: `from __future__ import annotations`, 4-space indent, concise functions.
+- CLI entry point: `whisper/src/whisper_cli/cli.py`, exposed as `whisper-cli` in `pyproject.toml`.
+- Transcription adapter: `whisper/src/whisper_cli/transcribe.py`; WebVTT validation/rendering: `whisper/src/whisper_cli/vtt.py`.
+- Do not create single-use abstractions or add dependencies unless required.
+- No formatter/linter is configured; do not reformat entire files unprompted.
+- `uv.lock` is committed. Update dependencies through `uv`, never by manually editing the lockfile.
 
 ### Chrome extension
 
-- TypeScript, Vue SFC, WXT, npm. Path alias `@/*` → `extension/src/*`.
-- **`extension/entrypoints/popup/`** — popup UI; business validation goes in `extension/src/popup/`.
-- **`extension/src/api/`** — background message protocol and HTTP client.
-- **`extension/src/storage/`** — extension storage logic.
-- **`extension/src/subtitles/`** — WebVTT parsing and cue matching, must stay independently testable.
-- **`extension/src/youtube/`** — YouTube watch URL detection and SPA navigation.
-- **`extension/src/components/ui/`** — shadcn-vue local components. Only add components that are actually used.
-- Content scripts must **not** call the Go backend directly; all network requests go through the background service worker.
-- Never put translation provider keys or long-lived secrets in the extension.
-- `package-lock.json` is committed. Update npm deps through `npm`, never edit the lockfile manually.
+- Use TypeScript, Vue SFC, WXT, npm, Tailwind/shadcn-vue, and the `@/*` alias for `extension/src/*`.
+- Popup entry lives in `extension/entrypoints/popup/`; business validation belongs in `extension/src/popup/`.
+- Background message protocol and HTTP client belong in `extension/src/api/`.
+- Storage logic belongs in `extension/src/storage/`.
+- WebVTT parsing and cue matching belong in `extension/src/subtitles/` and must stay independently testable.
+- YouTube watch detection and SPA navigation belong in `extension/src/youtube/`.
+- shadcn-vue components live under `extension/src/components/ui/`; only add components that are actually used.
+- Content scripts must not call the Go backend directly. All network requests go through the background service worker.
+- Never store provider keys or long-lived secrets in the extension.
+- `package-lock.json` is committed. Update dependencies through `npm`, never by manually editing the lockfile.
 
 ## Key Entry Points
 
-| Module | Entry | Description |
+| Area | Path | Purpose |
 | --- | --- | --- |
-| backend server | `backend/cmd/server/main.go` | HTTP server entry |
-| backend API | `backend/internal/api/` | Routes, handlers, CORS |
-| backend store | `backend/internal/store/` | GORM models, SQLite persistence |
-| backend runner | `backend/internal/runner/` | MockRunner, RealRunner |
-| whisper CLI | `whisper/src/whisper_cli/cli.py` | CLI entry (`whisper-cli`) |
+| backend server | `backend/cmd/server/main.go` | HTTP server entry point |
+| backend config/app | `backend/internal/app/` | env config, app wiring, real-mode tool checks |
+| backend API | `backend/internal/api/` | routes, handlers, CORS, response mapping |
+| backend store | `backend/internal/store/` | GORM models and SQLite persistence |
+| backend runner | `backend/internal/runner/` | mock/real runner, download, translation, VTT packaging |
+| whisper CLI | `whisper/src/whisper_cli/cli.py` | command-line contract and exit codes |
 | whisper transcribe | `whisper/src/whisper_cli/transcribe.py` | faster-whisper adapter |
-| whisper VTT | `whisper/src/whisper_cli/vtt.py` | WebVTT timeline & cue validation |
-| extension entries | `extension/entrypoints/` | background.ts, youtube.content.ts, popup/ |
-| extension logic | `extension/src/` | api, storage, subtitles, youtube, popup |
+| whisper VTT | `whisper/src/whisper_cli/vtt.py` | cue validation and WebVTT rendering |
+| extension background | `extension/entrypoints/background.ts` | runtime message gateway |
+| extension content | `extension/entrypoints/youtube.content.ts` | YouTube page integration |
+| extension popup | `extension/entrypoints/popup/` | popup UI entry |
 
-## Backend Configuration
+## Runtime Contracts
+
+### Backend configuration
 
 | Env var | Default | Description |
 | --- | --- | --- |
-| `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address (Docker 内默认 `0.0.0.0:8080`) |
+| `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address; Docker sets `0.0.0.0:8080` inside the container |
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite database path |
-| `LSI_WORK_DIR` | `./data/jobs` | Job work directory root |
+| `LSI_WORK_DIR` | `./data/jobs` | job work directory root |
 | `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
-| `LSI_DOWNLOAD_TIMEOUT` | `10m` | Download timeout (real mode) |
-| `LSI_WHISPER_MODEL` | `small` | faster-whisper model name (real mode) |
+| `LSI_DOWNLOAD_TIMEOUT` | `10m` | download timeout in real mode |
+| `LSI_WHISPER_MODEL` | `small` | `faster-whisper` model passed to `whisper-cli --model` |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
-| `LSI_LLM_API_KEY` | _(empty)_ | Required for OpenAI default; Bearer token, backend-only |
-| `LSI_LLM_MODEL` | _(empty)_ | Required in real mode for translation |
-| `LSI_LLM_TIMEOUT` | `2m` | Per-cue translation timeout |
+| `LSI_LLM_API_KEY` | empty | required for the OpenAI default endpoint; backend-only |
+| `LSI_LLM_MODEL` | empty | required in real mode for translation |
+| `LSI_LLM_TIMEOUT` | `2m` | per-cue translation timeout |
 
-## API Reference
+### API reference
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/jobs` | Create or reuse a subtitle generation job |
-| `GET` | `/jobs/:id` | Query job status |
-| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | Query completed subtitle assets |
-| `GET` | `/subtitle-files/:jobId/:mode` | Serve VTT file; mode is `source`, `translated`, or `bilingual` |
+| `POST` | `/jobs` | create or reuse a subtitle generation job |
+| `GET` | `/jobs/:id` | query job status |
+| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | query completed subtitle assets |
+| `GET` | `/subtitle-files/:jobId/:mode` | serve VTT file; mode is `source`, `translated`, or `bilingual` |
 
-Job state flow: `queued` → `downloading` → `transcribing` → `translating` → `packaging` → `completed`. On failure, state is `failed` with `errorMessage` in the response.
+Job state flow: `queued` -> `downloading` -> `transcribing` -> `translating` -> `packaging` -> `completed`. On failure, state is `failed` and `errorMessage` contains an error summary.
 
-## Whisper CLI Contract
+### Whisper CLI contract
 
-Input: local audio file. Output: valid WebVTT to `--output`, JSON summary on stdout.
+Input: local audio file. Output: valid WebVTT at `--output` plus a JSON summary on stdout.
 
 | Param | Required | Description |
 | --- | --- | --- |
-| `--input` | yes | Local audio file path |
-| `--output` | yes | Output `.vtt` path (must differ from input) |
+| `--input` | yes | local audio file path |
+| `--output` | yes | output `.vtt` path; must differ from input |
 | `--model` | yes | faster-whisper model name, e.g. `small` |
-| `--language` | yes | Language code, e.g. `ja`, `en` |
+| `--language` | yes | language code, e.g. `ja` or `en` |
 
-Exit codes: `0` success, `2` input validation failed, `3` transcription failed, `4` output validation failed.
+Exit codes: `0` success, `2` input validation failure, `3` transcription failure, `4` output validation failure.
 
-## Extension Contract
+### Extension contract
 
-- Stack: WXT + Vue + TypeScript + Vite + Vitest + shadcn-vue, npm for packages.
-- Entry points: `extension/entrypoints/` — `background.ts`, `youtube.content.ts`, `popup/`.
-- Background service worker is the sole HTTP API gateway; popup and content script communicate via runtime messages.
-- Supported languages: `en` and `zh` only. `sourceLanguage` ≠ `targetLanguage`.
-- Subtitle modes on watch page: `translated` and `bilingual` only (backend still serves `source`).
-- Backend URL must be a localhost HTTP origin with explicit port (`http://localhost:<port>` or `http://127.0.0.1:<port>`).
-- Manifest host permissions: `http://127.0.0.1:*/*` and `http://localhost:*/*` only.
-
-## Collaboration Principles
-
-- Communicate with users in **Simplified Chinese**.
-- Make minimal viable changes — no unsolicited features, abstractions, or config.
-- Surgical edits: only touch files and lines directly related to the task.
-- If requirements are ambiguous, state assumptions; if high-risk uncertainty, ask first.
-- Do not clean up unrelated code, restyle unrelated formatting, or refactor modules not in scope.
-- Do not overwrite uncommitted changes by other agents. Run `git status --short` before and after work.
-- Never commit build artifacts, databases, model files, download caches, real audio samples, `.env` files, API keys, or LLM request logs.
-
-## Security & Data
-
-- Process **YouTube public videos only** — no private video support, login sessions, cookie import, or auth bypass.
-- Backend has no user auth; it is designed for single-user local self-hosting. Never describe it as production-ready for public internet.
-- Never commit real audio samples, model files, download caches, SQLite databases, `.env` files, API keys, or LLM logs.
-- Extension allows localhost backend URLs only — do not relax this to arbitrary remote hosts unless explicitly requested, and update the permissions spec accordingly.
-- Translation provider keys belong in server-side config only; extension must not hold secrets.
-
-## Pull Request Guidelines
-
-- PR label format: `[backend]`, `[whisper]`, `[extension]`, `[docs]` to indicate scope.
-- Follow `.github/pull_request_template.md` for structure: reference, summary, close issue, per-file explanation, verification steps, and review focus items.
-- No automated CI exists. Run relevant tests manually before submitting and list the commands and results in the PR description.
-- Pre-merge verification per scope:
-
-| Scope | Test command | Additional |
-| --- | --- | --- |
-| `backend/` behavior | `cd backend && mise exec -- go test ./...` | `cd backend && mise exec -- go build ./...` if packaging/deps changed |
-| `whisper/` behavior | `cd whisper && mise exec -- uv run pytest` | `cd whisper && mise exec -- uv build` if packaging/deps changed |
-| `extension/` behavior | `cd extension && mise exec -- npm run test` | `cd extension && mise exec -- npm run typecheck` for type changes; `cd extension && mise exec -- npm run build` if packaging/deps changed |
+- Background service worker is the only HTTP API gateway.
+- Popup and content script communicate via runtime messages.
+- Supported languages are `en` and `zh`; `sourceLanguage` must not equal `targetLanguage`.
+- YouTube watch page subtitle modes are `translated` and `bilingual` only, although backend also serves `source`.
+- Backend URL must be a localhost HTTP origin with explicit port.
+- Manifest host permissions are limited to `http://127.0.0.1:*/*` and `http://localhost:*/*`.
 
 ## Documentation Rules
 
-- All prose under `docs/` must be in Chinese. Code, commands, paths, config keys, API names, and required references may stay in English.
-- Nested `AGENTS.md` takes precedence over root. Check `docs/AGENTS.md` for subproject-specific rules.
-- When updating behavioral contracts, commands, APIs, exit codes, directory structure, supported languages, mock/real boundaries, or security boundaries, also check whether `README.md`, `backend/README.md`, `whisper/README.md`, `extension/README.md`, and relevant `docs/` files need updates.
+- All prose under `docs/` must be Chinese. Code, commands, paths, config keys, API names, and required references may remain English.
+- The closest `AGENTS.md` takes precedence; read `docs/AGENTS.md` before editing `docs/`.
+- When changing behavioral contracts, commands, APIs, exit codes, directory structure, supported languages, mock/real boundaries, or security boundaries, check whether `README.md`, `backend/README.md`, `whisper/README.md`, `extension/README.md`, and related docs also need updates.
+- Keep root `README.md` human-facing. Keep `AGENTS.md` focused on instructions for coding agents.
+
+## Security & Data Boundaries
+
+- Process **YouTube public videos only**. Do not add private video support, login sessions, cookie import, or auth bypass.
+- Backend has no user auth and is intended for single-user local self-hosting. Do not describe it as production-ready for the public internet.
+- Translation provider keys belong in backend/server config only.
+- Extension must not store secrets or call translation providers directly.
+- Do not relax localhost-only extension backend URLs unless explicitly requested, and update manifest permissions plus specs if that changes.
+- Never log, commit, or preserve LLM request logs containing private data or keys.
+
+## Pull Request Guidelines
+
+- PR label/title prefix should indicate scope: `[backend]`, `[whisper]`, `[extension]`, or `[docs]`.
+- Follow `.github/pull_request_template.md`: reference, summary, close issue, per-file explanation, verification commands, and review focus.
+- No CI pipeline exists. Run relevant checks manually and list commands/results in the PR description.
+
+Pre-merge verification by scope:
+
+| Scope | Required | Additional when relevant |
+| --- | --- | --- |
+| `backend/` behavior | `cd backend && mise exec -- go test ./...` | `cd backend && mise exec -- go build ./...` for packaging/dependency changes |
+| `whisper/` behavior | `cd whisper && mise exec -- uv run pytest` | `cd whisper && mise exec -- uv build` for packaging/dependency changes |
+| `extension/` behavior | `cd extension && mise exec -- npm run test` | `cd extension && mise exec -- npm run typecheck`; `npm run build` for packaging changes |
+| docs only | `git diff --check` | verify links/commands touched by the docs |
 
 ## Common Pitfalls
 
-- **Backend default is mock runner** — it stays offline. `LSI_RUNNER_MODE=real` triggers real download/transcription/translation.
-- **Extension v1 only supports `en` and `zh`** — do not promise a complete language list in UI or docs.
-- **CORS is localhost-only** with explicit port required.
-- **Unit tests must be offline** — no real YouTube, model downloads, GPU, external LLM, or local private data.
-- **Lockfiles**: update via tooling, never manual edits — `go.sum` via Go, `uv.lock` via uv, `package-lock.json` via npm.
+- Backend default is `mock`; only `LSI_RUNNER_MODE=real` performs real download/transcription/translation.
+- Docker backend runs real mode by default and binds host port `127.0.0.1:8080` unless `LSI_DOCKER_BIND_HOST` changes.
+- Extension MVP supports only `en` and `zh`; do not promise a broad language list.
+- CORS and backend URL validation are localhost-only with explicit ports.
+- Unit tests must stay offline.
+- Lockfiles are managed by tooling only: `go.sum` via Go, `uv.lock` via `uv`, `package-lock.json` via npm.
+- Real transcription can download large models; never trigger it from unit tests.
 
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a graphify knowledge graph at `graphify-out/`.
 
-Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- Before answering architecture or codebase questions, read `graphify-out/GRAPH_REPORT.md` for god nodes and community structure.
+- If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files.
+- For cross-module questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep because these traverse extracted and inferred edges.
+- After modifying code files in this session, run `graphify update .` to keep the graph current. This is AST-only and has no API cost.
