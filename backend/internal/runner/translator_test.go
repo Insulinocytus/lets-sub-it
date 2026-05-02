@@ -121,8 +121,47 @@ func TestChatTranslatorRequiresModel(t *testing.T) {
 	}
 }
 
-func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
+func TestChatTranslatorRetriesTransientFailuresBeforeReturningTranslation(t *testing.T) {
+	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts <= 10 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "upstream busy", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"译文\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	translator := NewChatTranslator(server.URL, "test-key", "test-model", time.Second, server.Client())
+	translations, err := translator.Translate(context.Background(), makeTranslatorTestCues(1), "en", "zh")
+	if err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if len(translations) != 1 || translations[0] != "译文" {
+		t.Fatalf("translations = %#v, want single translated cue", translations)
+	}
+	if attempts != 11 {
+		t.Fatalf("attempts = %d, want 11", attempts)
+	}
+}
+
+func TestTranslationRetryDelayIncreasesByOneSecond(t *testing.T) {
+	for i := 0; i < translationMaxRetries; i++ {
+		want := time.Duration(i+1) * time.Second
+		if got := translationRetryDelay(i); got != want {
+			t.Fatalf("translationRetryDelay(%d) = %v, want %v", i, got, want)
+		}
+	}
+}
+
+func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
 		http.Error(w, "secret-key upstream failed", http.StatusUnauthorized)
 	}))
 	t.Cleanup(server.Close)
@@ -134,6 +173,9 @@ func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret-key") {
 		t.Fatalf("Translate() error leaks api key: %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
 	}
 }
 
