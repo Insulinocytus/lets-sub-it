@@ -1,8 +1,10 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -131,6 +133,25 @@ func TestStoreReturnsErrNotFound(t *testing.T) {
 	}
 	if _, err := store.FindSubtitleAsset("missing-video", "zh"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("FindSubtitleAsset() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestStoreDoesNotLogExpectedRecordNotFound(t *testing.T) {
+	var logs bytes.Buffer
+	store, err := openWithLogWriter(filepath.Join(t.TempDir(), "test.sqlite3"), &logs)
+	if err != nil {
+		t.Fatalf("openWithLogWriter() error = %v", err)
+	}
+	if err := store.Migrate(); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+	logs.Reset()
+
+	if _, err := store.FindReusableJob("missing-video", "zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindReusableJob() error = %v, want ErrNotFound", err)
+	}
+	if strings.Contains(logs.String(), "record not found") {
+		t.Fatalf("logs contain expected record-not-found query: %q", logs.String())
 	}
 }
 

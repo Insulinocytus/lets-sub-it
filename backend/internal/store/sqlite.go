@@ -2,10 +2,15 @@ package store
 
 import (
 	"errors"
+	"io"
+	"log"
+	"os"
 	"strings"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -15,7 +20,18 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
-	db, err := gorm.Open(sqlite.Open(foreignKeyDSN(path)), &gorm.Config{})
+	return openWithLogWriter(path, os.Stdout)
+}
+
+func openWithLogWriter(path string, writer io.Writer) (*Store, error) {
+	db, err := gorm.Open(sqlite.Open(foreignKeyDSN(path)), &gorm.Config{
+		Logger: logger.New(log.New(writer, "\r\n", log.LstdFlags), logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  true,
+		}),
+	})
 	if err != nil {
 		return nil, err
 	}
