@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,6 +112,57 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	}
 	if !strings.Contains(string(bilingualContent), "real transcript\ntranslated one") {
 		t.Fatalf("bilingual.vtt content = %q, want transcript followed by translation", string(bilingualContent))
+	}
+}
+
+func TestRealRunnerLogsJobLifecycle(t *testing.T) {
+	origExec := execCommand
+	t.Cleanup(func() { execCommand = origExec })
+
+	var output bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	testStore := openTestStore(t)
+	workDir := t.TempDir()
+	jobDir := filepath.Join(workDir, "job_1")
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
+
+	if err := testStore.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		switch name {
+		case "yt-dlp":
+			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
+		case "whisper-cli":
+			outputPath := argValue(t, args, "--output")
+			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
+		default:
+			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
+		}
+	}
+
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{translations: []string{"translated"}}).Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	logs := output.String()
+	for _, want := range []string{
+		`"msg":"job started"`,
+		`"msg":"job stage started","job_id":"job_1","video_id":"abc123","stage":"downloading"`,
+		`"msg":"job stage completed","job_id":"job_1","video_id":"abc123","stage":"downloading"`,
+		`"msg":"job stage started","job_id":"job_1","video_id":"abc123","stage":"transcribing"`,
+		`"msg":"job stage started","job_id":"job_1","video_id":"abc123","stage":"translating"`,
+		`"msg":"job stage started","job_id":"job_1","video_id":"abc123","stage":"packaging"`,
+		`"msg":"job completed","job_id":"job_1","video_id":"abc123"`,
+	} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("logs = %s\nwant containing %s", logs, want)
+		}
 	}
 }
 

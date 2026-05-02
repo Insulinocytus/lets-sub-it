@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,6 +72,14 @@ func (h *Handler) handleJobs(w http.ResponseWriter, r *http.Request) {
 
 	reusableJob, err := h.store.FindReusableJob(videoID, request.TargetLanguage)
 	if err == nil {
+		slog.Info("job reused",
+			"job_id", reusableJob.ID,
+			"video_id", reusableJob.VideoID,
+			"source_language", reusableJob.SourceLanguage,
+			"target_language", reusableJob.TargetLanguage,
+			"status", reusableJob.Status,
+			"stage", reusableJob.Stage,
+		)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"job":    toJobResponse(reusableJob),
 			"reused": true,
@@ -93,18 +102,28 @@ func (h *Handler) handleJobs(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err := h.store.CreateJob(job); err != nil {
+		slog.Error("job create failed", "video_id", videoID, "target_language", request.TargetLanguage, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job")
 		return
 	}
 
 	createdJob, err := h.store.FindJob(job.ID)
 	if err != nil {
+		slog.Error("created job query failed", "job_id", job.ID, "video_id", videoID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query created job")
 		return
 	}
 
+	slog.Info("job created",
+		"job_id", createdJob.ID,
+		"video_id", createdJob.VideoID,
+		"source_language", createdJob.SourceLanguage,
+		"target_language", createdJob.TargetLanguage,
+	)
 	go func() {
-		_ = h.runner.Start(context.Background(), createdJob)
+		if err := h.runner.Start(context.Background(), createdJob); err != nil {
+			slog.Error("job runner returned error", "job_id", createdJob.ID, "video_id", createdJob.VideoID, "error", err)
+		}
 	}()
 
 	writeJSON(w, http.StatusCreated, map[string]any{

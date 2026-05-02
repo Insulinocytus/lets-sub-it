@@ -38,9 +38,16 @@ LSI_LLM_BASE_URL=https://api.openai.com \
 LSI_LLM_API_KEY="$OPENAI_API_KEY" \
 LSI_LLM_MODEL=gpt-4.1-mini \
 LSI_LLM_TIMEOUT=2m \
+LSI_LOG_LEVEL=info \
 LSI_ADDR=127.0.0.1:8080 \
 mise exec -- go run ./cmd/server
 ```
+
+## Logs
+
+backend 输出 JSON 结构化日志。`LSI_LOG_LEVEL` 默认是 `info`，可设为 `debug`、`info`、`warn` 或 `error`；`debug` 会额外输出外部命令调用和字幕 cue 数等诊断信息。
+
+每个 job 日志都会带 `job_id`、`video_id`、语言、阶段和耗时字段，覆盖从创建 job、下载、转写、翻译、打包到完成或失败的链路。
 
 ## API quick check
 

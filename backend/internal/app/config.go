@@ -17,6 +17,7 @@ type Config struct {
 	LLMAPIKey          string
 	LLMModel           string
 	LLMTimeout         time.Duration
+	LogLevel           string
 }
 
 func LoadConfig() Config {
@@ -32,6 +33,7 @@ func LoadConfig() Config {
 		LLMAPIKey:          os.Getenv("LSI_LLM_API_KEY"),
 		LLMModel:           os.Getenv("LSI_LLM_MODEL"),
 		LLMTimeout:         envDurationOrDefault("LSI_LLM_TIMEOUT", 2*time.Minute),
+		LogLevel:           envOrDefault("LSI_LOG_LEVEL", "info"),
 	}
 }
 
