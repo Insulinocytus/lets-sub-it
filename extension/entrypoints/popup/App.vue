@@ -45,11 +45,9 @@ const targetLanguage = ref<LanguageCode>('zh')
 const currentJob = ref<Job | null>(null)
 const errorMessage = ref('')
 const isSubmitting = ref(false)
-const elapsedSeconds = ref(0)
 const activeJobId = ref<string | null>(null)
 const subtitleReady = ref(false)
 const pollTimer = ref<number | null>(null)
-const elapsedTimer = ref<number | null>(null)
 
 const form = computed<CreateJobForm>(() => ({
   backendBaseUrl: backendBaseUrl.value,
@@ -127,7 +125,6 @@ async function submitJob() {
   isSubmitting.value = true
   errorMessage.value = ''
   currentJob.value = null
-  elapsedSeconds.value = 0
   subtitleReady.value = false
   clearTimers()
 
@@ -227,11 +224,6 @@ async function pollJob(jobId: string) {
 function startPolling(jobId: string) {
   activeJobId.value = jobId
   void pollJob(jobId)
-  elapsedTimer.value = window.setInterval(() => {
-    if (currentJob.value?.status === 'transcribing') {
-      elapsedSeconds.value += 1
-    }
-  }, 1000)
 }
 
 async function restoreJobForCurrentTab(
@@ -286,10 +278,6 @@ function clearTimers() {
   if (pollTimer.value !== null) {
     window.clearTimeout(pollTimer.value)
     pollTimer.value = null
-  }
-  if (elapsedTimer.value !== null) {
-    window.clearInterval(elapsedTimer.value)
-    elapsedTimer.value = null
   }
 }
 
@@ -419,12 +407,6 @@ async function notifySubtitleUpdated(videoId: string) {
           </div>
           <p class="break-words text-muted-foreground">
             {{ currentJob.progressText }}
-          </p>
-          <p
-            v-if="currentJob.status === 'transcribing'"
-            class="text-muted-foreground"
-          >
-            转写已用 {{ elapsedSeconds }} 秒
           </p>
           <p
             v-if="currentJob.status === 'completed' && subtitleReady"
