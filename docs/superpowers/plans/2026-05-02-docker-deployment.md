@@ -49,12 +49,9 @@ WORKDIR /build
 
 RUN pip install uv
 
-COPY whisper/pyproject.toml whisper/uv.lock ./
-RUN uv venv /opt/whisper-venv && \
-    uv pip install --python /opt/whisper-venv/bin/python -r uv.lock --no-dev
-
 COPY whisper/ ./
-RUN uv pip install --python /opt/whisper-venv/bin/python --no-dev .
+RUN uv venv /opt/whisper-venv && \
+    UV_PROJECT_ENVIRONMENT=/opt/whisper-venv uv sync --no-dev --no-editable
 
 # ---- Stage 3: Runtime ----
 FROM python:3.12-slim-bookworm
