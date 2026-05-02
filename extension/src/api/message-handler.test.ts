@@ -155,6 +155,35 @@ describe('handleExtensionMessage', () => {
     )
   })
 
+  it('returns the latest backend job for popup recovery', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ job: queuedJob }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const result = await handleExtensionMessage(
+      {
+        type: 'job:active',
+        payload: {
+          videoId: 'video_123',
+          targetLanguage: 'zh',
+        },
+      },
+      { fetchImpl, now: () => '2026-04-25T00:00:00Z' },
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      data: { job: queuedJob },
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/jobs/active?videoId=video_123&targetLanguage=zh',
+      undefined,
+    )
+  })
+
   it('rejects invalid backend URLs without persisting settings', async () => {
     const result = await handleExtensionMessage({
       type: 'settings:update',

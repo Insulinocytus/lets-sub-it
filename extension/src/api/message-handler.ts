@@ -58,6 +58,15 @@ export async function handleExtensionMessage(
         const client = await clientFromSettings(fetchImpl)
         return ok(await client.getJob(message.payload.jobId))
       }
+      case 'job:active': {
+        const client = await clientFromSettings(fetchImpl)
+        return ok(
+          await client.getActiveJob(
+            message.payload.videoId,
+            message.payload.targetLanguage,
+          ),
+        )
+      }
       case 'subtitle:resolve': {
         const settings = await getSettings()
         const preference = await getVideoPreference(

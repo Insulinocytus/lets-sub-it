@@ -59,6 +59,10 @@ export type ExtensionMessage =
   | { type: 'settings:update'; payload: Partial<Settings> }
   | { type: 'job:create'; payload: CreateJobInput }
   | { type: 'job:get'; payload: { jobId: string } }
+  | {
+      type: 'job:active'
+      payload: { videoId: string; targetLanguage: LanguageCode }
+    }
   | { type: 'subtitle:resolve'; payload: { videoId: string } }
   | {
       type: 'subtitle:fetch-file'

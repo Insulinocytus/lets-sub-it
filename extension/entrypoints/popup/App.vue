@@ -30,6 +30,7 @@ import {
   validateCreateJobForm,
   type CreateJobForm,
 } from '@/popup/form-validation'
+import { parseYouTubeWatchVideoId } from '@/youtube/video-id'
 
 const languages = ['en', 'zh'] satisfies LanguageCode[]
 const languageLabels: Record<LanguageCode, string> = {
@@ -88,9 +89,11 @@ const statusBadgeVariant = computed(() => {
 })
 
 onMounted(async () => {
+  let settings: Settings | null = null
   try {
     const settingsResult = await sendExtensionMessage<Settings>({ type: 'settings:get' })
     if (settingsResult.ok) {
+      settings = settingsResult.data
       backendBaseUrl.value = settingsResult.data.backendBaseUrl
       sourceLanguage.value = settingsResult.data.sourceLanguage
       targetLanguage.value = settingsResult.data.targetLanguage
@@ -103,6 +106,7 @@ onMounted(async () => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
     if (tab?.url?.startsWith('https://www.youtube.com/watch')) {
       youtubeUrl.value = tab.url
+      await restoreJobForCurrentTab(tab.url, settings?.targetLanguage ?? targetLanguage.value)
     }
   } catch {
     // Keep the URL field editable when active tab lookup is unavailable.
@@ -228,6 +232,40 @@ function startPolling(jobId: string) {
       elapsedSeconds.value += 1
     }
   }, 1000)
+}
+
+async function restoreJobForCurrentTab(
+  tabUrl: string,
+  activeTargetLanguage: LanguageCode,
+) {
+  const videoId = parseYouTubeWatchVideoId(tabUrl)
+  if (!videoId || activeJobId.value !== null) {
+    return
+  }
+
+  const result = await sendExtensionMessage<{ job: Job | null }>({
+    type: 'job:active',
+    payload: {
+      videoId,
+      targetLanguage: activeTargetLanguage,
+    },
+  })
+  if (!result.ok || result.data.job === null || activeJobId.value !== null) {
+    return
+  }
+
+  currentJob.value = result.data.job
+  if (result.data.job.status === 'failed') {
+    stopWithError(result.data.job.errorMessage ?? '任务失败')
+    return
+  }
+  if (result.data.job.status === 'completed') {
+    activeJobId.value = result.data.job.id
+    void pollJob(result.data.job.id)
+    return
+  }
+  isSubmitting.value = true
+  startPolling(result.data.job.id)
 }
 
 function scheduleNextPoll(jobId: string) {

@@ -17,6 +17,7 @@ import (
 type Store interface {
 	CreateJob(job store.Job) error
 	FindJob(id string) (store.Job, error)
+	FindLatestJob(videoID string, targetLanguage string) (store.Job, error)
 	FindReusableJob(videoID string, targetLanguage string) (store.Job, error)
 	FindSubtitleAsset(videoID string, targetLanguage string) (store.SubtitleAsset, error)
 	FindSubtitleAssetByJobID(jobID string) (store.SubtitleAsset, error)
@@ -131,6 +132,36 @@ func (h *Handler) handleJobByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query job")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"job": toJobResponse(job),
+	})
+}
+
+func (h *Handler) handleActiveJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusNotFound, "not_found", "route not found")
+		return
+	}
+
+	videoID := r.URL.Query().Get("videoId")
+	targetLanguage := r.URL.Query().Get("targetLanguage")
+	if videoID == "" || targetLanguage == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "videoId and targetLanguage are required")
+		return
+	}
+
+	job, err := h.store.FindLatestJob(videoID, targetLanguage)
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"job": nil,
+		})
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query active job")
 		return
 	}
 

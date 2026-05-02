@@ -36,3 +36,4 @@ mise exec -- npm run build
 ## Backend
 
 popup 默认连接 `http://127.0.0.1:8080`。第一版 MVP 只支持 `localhost` 和 `127.0.0.1` backend URLs。
+popup 是临时页面，关闭后会在下次打开时通过 background 查询 `GET /jobs/active?videoId=...&targetLanguage=...` 恢复当前视频的任务进度。

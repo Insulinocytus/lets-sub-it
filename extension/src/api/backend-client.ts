@@ -15,6 +15,10 @@ export type GetJobResponse = {
   job: Job
 }
 
+export type GetActiveJobResponse = {
+  job: Job | null
+}
+
 export type GetSubtitleAssetResponse = {
   asset: SubtitleAsset | null
 }
@@ -34,6 +38,10 @@ export class BackendClientError extends Error {
 export type BackendClient = {
   createJob(input: CreateJobInput): Promise<CreateJobResponse>
   getJob(jobId: string): Promise<GetJobResponse>
+  getActiveJob(
+    videoId: string,
+    targetLanguage: LanguageCode,
+  ): Promise<GetActiveJobResponse>
   getSubtitleAsset(
     videoId: string,
     targetLanguage: LanguageCode,
@@ -59,6 +67,13 @@ export function createBackendClient(
       return requestJson<GetJobResponse>(
         fetchImpl,
         `${baseUrl}/jobs/${encodeURIComponent(jobId)}`,
+      )
+    },
+    getActiveJob(videoId, targetLanguage) {
+      const params = new URLSearchParams({ videoId, targetLanguage })
+      return requestJson<GetActiveJobResponse>(
+        fetchImpl,
+        `${baseUrl}/jobs/active?${params.toString()}`,
       )
     },
     getSubtitleAsset(videoId, targetLanguage) {

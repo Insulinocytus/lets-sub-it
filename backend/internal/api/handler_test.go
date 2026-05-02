@@ -95,6 +95,49 @@ func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 	}
 }
 
+func TestActiveJobReturnsLatestJobForVideoAndLanguage(t *testing.T) {
+	server := newTestServer(t)
+	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/jobs", body)
+	createResponse := httptest.NewRecorder()
+	server.ServeHTTP(createResponse, createRequest)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body = %s", createResponse.Code, createResponse.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/jobs/active?videoId=abc123&targetLanguage=zh", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Job jobResponse `json:"job"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if payload.Job.VideoID != "abc123" || payload.Job.TargetLanguage != "zh" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestActiveJobReturnsNullWhenNoJobExists(t *testing.T) {
+	server := newTestServer(t)
+	request := httptest.NewRequest(http.MethodGet, "/jobs/active?videoId=missing&targetLanguage=zh", nil)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	if got := response.Body.String(); got != "{\"job\":null}\n" {
+		t.Fatalf("body = %s", got)
+	}
+}
+
 func TestSubtitleFileServing(t *testing.T) {
 	server := newTestServer(t)
 	body := bytes.NewBufferString(`{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
@@ -358,6 +401,10 @@ func (h handlerWithAssetPath) FindJob(id string) (store.Job, error) {
 }
 
 func (h handlerWithAssetPath) FindReusableJob(videoID string, targetLanguage string) (store.Job, error) {
+	return store.Job{}, store.ErrNotFound
+}
+
+func (h handlerWithAssetPath) FindLatestJob(videoID string, targetLanguage string) (store.Job, error) {
 	return store.Job{}, store.ErrNotFound
 }
 

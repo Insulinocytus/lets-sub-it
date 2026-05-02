@@ -232,6 +232,7 @@ VideoPreference {
 | --- | --- | --- |
 | `POST` | `/jobs` | 创建或复用字幕生成 job |
 | `GET` | `/jobs/:id` | 查询 job 状态和进度 |
+| `GET` | `/jobs/active?videoId=...&targetLanguage=...` | 查询指定视频和目标语言最近的 job，用于 popup 重新打开后恢复状态 |
 | `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 查询已完成字幕资产 |
 | `GET` | `/subtitle-files/:jobId/:mode` | 读取 VTT 文件；`mode` 为 `source`、`translated` 或 `bilingual` |
 
@@ -326,7 +327,7 @@ VideoPreference {
 - 支持语言：`en`（源语言）和 `zh`（目标语言），`sourceLanguage` ≠ `targetLanguage`。
 - 播放页字幕模式：`translated` 和 `bilingual`（backend 仍保留 `source` 文件服务）。
 - Backend URL 必须是带端口的 localhost HTTP origin。
-- 消息协议：`settings:get`、`settings:update`、`job:create`、`job:get`、`subtitle:resolve`、`subtitle:fetch-file`、`subtitle:update-mode`。
+- 消息协议：`settings:get`、`settings:update`、`job:create`、`job:get`、`job:active`、`subtitle:resolve`、`subtitle:fetch-file`、`subtitle:update-mode`。
 
 ## 5. 风险与迭代
 

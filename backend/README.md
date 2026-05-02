@@ -57,6 +57,8 @@ curl -X POST "http://127.0.0.1:8080/jobs" \
 
 接口会创建一个新 job；如果同一个视频和目标语言已有可复用 job，会返回已复用结果。
 
+popup 重新打开时可使用 `GET /jobs/active?videoId=...&targetLanguage=...` 查询指定视频和目标语言最近的 job，用于恢复任务进度展示。
+
 ## Test
 
 运行后端测试：

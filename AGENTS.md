@@ -238,6 +238,7 @@ docker compose down
 | --- | --- | --- |
 | `POST` | `/jobs` | create or reuse a subtitle generation job |
 | `GET` | `/jobs/:id` | query job status |
+| `GET` | `/jobs/active?videoId=...&targetLanguage=...` | query the latest job for a video/language pair so the popup can restore progress |
 | `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | query completed subtitle assets |
 | `GET` | `/subtitle-files/:jobId/:mode` | serve VTT file; mode is `source`, `translated`, or `bilingual` |
 
