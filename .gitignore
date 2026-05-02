@@ -13,3 +13,6 @@
 graphify-out/cache/
 graphify-out/cost.json
 graphify-out/manifest.json
+
+# Docker
+.env
