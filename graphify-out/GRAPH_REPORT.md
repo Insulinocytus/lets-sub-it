@@ -1,7 +1,7 @@
 # Graph Report - .  (2026-05-02)
 
 ## Corpus Check
-- 120 files · ~53,866 words
+- 123 files · ~55,354 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,55 +10,55 @@
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Backend Runner Pipeline|Backend Runner Pipeline]]
-- [[_COMMUNITY_Mock Runner & Testing|Mock Runner & Testing]]
-- [[_COMMUNITY_API Handler Tests|API Handler Tests]]
-- [[_COMMUNITY_Extension Backend Client|Extension Backend Client]]
-- [[_COMMUNITY_Whisper Transcription Tests|Whisper Transcription Tests]]
-- [[_COMMUNITY_Backend API Types & Handlers|Backend API Types & Handlers]]
-- [[_COMMUNITY_CORS & Routing Middleware|CORS & Routing Middleware]]
-- [[_COMMUNITY_Job Monitor & SSE|Job Monitor & SSE]]
-- [[_COMMUNITY_UI Components (shadcn-vue)|UI Components (shadcn-vue)]]
-- [[_COMMUNITY_Whisper CLI Tests|Whisper CLI Tests]]
-- [[_COMMUNITY_App Configuration|App Configuration]]
-- [[_COMMUNITY_Extension Runtime Integration|Extension Runtime Integration]]
-- [[_COMMUNITY_YouTube Overlay Content Script|YouTube Overlay Content Script]]
-- [[_COMMUNITY_Popup UI Logic|Popup UI Logic]]
-- [[_COMMUNITY_LLM Chat Translator|LLM Chat Translator]]
-- [[_COMMUNITY_Architecture Concepts & Specs|Architecture Concepts & Specs]]
-- [[_COMMUNITY_Server App Initialization|Server App Initialization]]
-- [[_COMMUNITY_SQLite Store Layer|SQLite Store Layer]]
-- [[_COMMUNITY_YouTube URL Parsing Tests|YouTube URL Parsing Tests]]
-- [[_COMMUNITY_API Route Handlers|API Route Handlers]]
-- [[_COMMUNITY_YouTube Watch Detection|YouTube Watch Detection]]
-- [[_COMMUNITY_Runner Interface & Mock|Runner Interface & Mock]]
-- [[_COMMUNITY_Extension Architecture Concepts|Extension Architecture Concepts]]
-- [[_COMMUNITY_WebVTT Parsing|WebVTT Parsing]]
-- [[_COMMUNITY_Runner-Store Integration|Runner-Store Integration]]
-- [[_COMMUNITY_Badge & Select UI|Badge & Select UI]]
-- [[_COMMUNITY_Store Interface|Store Interface]]
-- [[_COMMUNITY_Whisper CLI Design|Whisper CLI Design]]
-- [[_COMMUNITY_VTT Format Concepts|VTT Format Concepts]]
-- [[_COMMUNITY_Community 34|Community 34]]
-- [[_COMMUNITY_Community 35|Community 35]]
-- [[_COMMUNITY_Community 36|Community 36]]
-- [[_COMMUNITY_Community 37|Community 37]]
-- [[_COMMUNITY_Community 86|Community 86]]
-- [[_COMMUNITY_Community 87|Community 87]]
-- [[_COMMUNITY_Community 88|Community 88]]
-- [[_COMMUNITY_Community 89|Community 89]]
-- [[_COMMUNITY_Community 90|Community 90]]
-- [[_COMMUNITY_Community 91|Community 91]]
-- [[_COMMUNITY_Community 92|Community 92]]
-- [[_COMMUNITY_Community 93|Community 93]]
-- [[_COMMUNITY_Community 94|Community 94]]
-- [[_COMMUNITY_Community 95|Community 95]]
-- [[_COMMUNITY_Community 96|Community 96]]
-- [[_COMMUNITY_Community 97|Community 97]]
-- [[_COMMUNITY_Community 98|Community 98]]
-- [[_COMMUNITY_Community 99|Community 99]]
-- [[_COMMUNITY_Community 100|Community 100]]
-- [[_COMMUNITY_Community 101|Community 101]]
+- [[_COMMUNITY_.Start downloadAudio|.Start downloadAudio]]
+- [[_COMMUNITY_NewJob openTestStore|NewJob openTestStore]]
+- [[_COMMUNITY_handler test.go|handler test.go]]
+- [[_COMMUNITY_handleExtensionMessage normalizeBackendBaseUrl|handleExtensionMessage normalizeBackendBaseUrl]]
+- [[_COMMUNITY_Segment transcribe audio|Segment transcribe audio]]
+- [[_COMMUNITY_response.go writeError|response.go writeError]]
+- [[_COMMUNITY_YouTube subtitle translation PRD|YouTube subtitle translation PRD]]
+- [[_COMMUNITY_job-monitor.ts pollJob|job-monitor.ts pollJob]]
+- [[_COMMUNITY_cn shadcn-vue component pattern|cn shadcn-vue component pattern]]
+- [[_COMMUNITY_main test cli.py|main test cli.py]]
+- [[_COMMUNITY_LoadConfig config test.go|LoadConfig config test.go]]
+- [[_COMMUNITY_handleExtensionMessage BackendClient Interface|handleExtensionMessage BackendClient Interface]]
+- [[_COMMUNITY_YoutubeOverlay.vue changeMode|YoutubeOverlay.vue changeMode]]
+- [[_COMMUNITY_Popup App Component|Popup App Component]]
+- [[_COMMUNITY_translator.go .translateOne|translator.go .translateOne]]
+- [[_COMMUNITY_Backend Mock MVP Design Spec|Backend Mock MVP Design Spec]]
+- [[_COMMUNITY_NewHTTPHandler NewChatTranslator|NewHTTPHandler NewChatTranslator]]
+- [[_COMMUNITY_Store Open|Store Open]]
+- [[_COMMUNITY_ParseVideoID youtube test.go|ParseVideoID youtube test.go]]
+- [[_COMMUNITY_toJobResponse formatTime|toJobResponse formatTime]]
+- [[_COMMUNITY_page-watch.ts getCurrentVideoId|page-watch.ts getCurrentVideoId]]
+- [[_COMMUNITY_Runner Interface|Runner Interface]]
+- [[_COMMUNITY_BackendClient MessageHandler|BackendClient MessageHandler]]
+- [[_COMMUNITY_vtt.ts parseTimestamp|vtt.ts parseTimestamp]]
+- [[_COMMUNITY_runner.go Runner|runner.go Runner]]
+- [[_COMMUNITY_cn Badge Component Barrel|cn Badge Component Barrel]]
+- [[_COMMUNITY_runner.Store Interface|runner.Store Interface]]
+- [[_COMMUNITY_whisper-cli Command|whisper-cli Command]]
+- [[_COMMUNITY_VTT Generator|VTT Generator]]
+- [[_COMMUNITY_Extension Manifest Configuration|Extension Manifest Configuration]]
+- [[_COMMUNITY_handleSubtitleFile subtitleFilePathAllowed|handleSubtitleFile subtitleFilePathAllowed]]
+- [[_COMMUNITY_writeError writeJSON|writeError writeJSON]]
+- [[_COMMUNITY_Chat Completions Translator|Chat Completions Translator]]
+- [[_COMMUNITY_Vitest Config|Vitest Config]]
+- [[_COMMUNITY_Background Service Worker|Background Service Worker]]
+- [[_COMMUNITY_CardAction UI Component|CardAction UI Component]]
+- [[_COMMUNITY_Card Barrel Export|Card Barrel Export]]
+- [[_COMMUNITY_Input Barrel Export|Input Barrel Export]]
+- [[_COMMUNITY_Alert Barrel Export|Alert Barrel Export]]
+- [[_COMMUNITY_Separator Barrel Export|Separator Barrel Export]]
+- [[_COMMUNITY_Button Barrel Export|Button Barrel Export]]
+- [[_COMMUNITY_SelectGroup|SelectGroup]]
+- [[_COMMUNITY_Backend Server main|Backend Server main]]
+- [[_COMMUNITY_Config|Config]]
+- [[_COMMUNITY_LoadConfig|LoadConfig]]
+- [[_COMMUNITY_createJobRequest|createJobRequest]]
+- [[_COMMUNITY_jobResponse|jobResponse]]
+- [[_COMMUNITY_assetResponse|assetResponse]]
+- [[_COMMUNITY_Store|Store]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `main()` - 21 edges
@@ -106,258 +106,258 @@
 
 ## Communities
 
-### Community 0 - "Backend Runner Pipeline"
+### Community 0 - ".Start downloadAudio"
 Cohesion: 0.06
 Nodes (38): Handler, NewHTTPHandler, checkTools, ChatTranslator, Cue, Translator Interface, Chat Completion Request, Cue (+30 more)
 
-### Community 1 - "Mock Runner & Testing"
+### Community 1 - "NewJob openTestStore"
 Cohesion: 0.09
 Nodes (32): execCall, fakeTranslator, NewMockRunner(), openTestStore(), TestMockRunnerCompletesJobAndWritesAssets(), TestMockRunnerFailsJobWhenCompletionUpdateFails(), TestMockRunnerMarksCanceledJobAsFailed(), TestMockRunnerMarksFailedWhenTranscribingUpdateFails() (+24 more)
 
-### Community 2 - "API Handler Tests"
+### Community 2 - "handler test.go"
 Cohesion: 0.1
 Nodes (23): NewHandler(), newTestServer(), TestPostJobsCreatesJobAndCompletesWithMockRunner(), TestPostJobsRejectsMissingSourceLanguage(), TestSubtitleAssetReturnsAssetAfterCompletion(), TestSubtitleFileRejectsInvalidMode(), TestSubtitleFileRejectsNonRegularFile(), TestSubtitleFileRejectsPathOutsideJobDir() (+15 more)
 
-### Community 3 - "Extension Backend Client"
+### Community 3 - "handleExtensionMessage normalizeBackendBaseUrl"
 Cohesion: 0.13
 Nodes (23): BackendClientError, createBackendClient(), errorFromResponse(), invalidBackendBaseUrlError(), normalizeBackendBaseUrl(), request(), requestJson(), clientFromSettings() (+15 more)
 
-### Community 4 - "Whisper Transcription Tests"
+### Community 4 - "Segment transcribe audio"
 Cohesion: 0.14
 Nodes (21): Exception, FakeModel, FakeSegment, test_transcribe_audio_allows_empty_segment_output(), test_transcribe_audio_rejects_english_only_model_with_non_english_language(), test_transcribe_audio_uses_sdk_and_builds_result(), test_transcribe_audio_uses_sdk_reported_duration(), test_vtt_rejects_blank_lines_in_cue_text() (+13 more)
 
-### Community 5 - "Backend API Types & Handlers"
+### Community 5 - "response.go writeError"
 Cohesion: 0.13
 Nodes (18): apiError, assetResponse, createJobRequest, errorBody, Handler, subtitleFileNameForMode(), subtitleFilePathAllowed(), jobResponse (+10 more)
 
-### Community 6 - "CORS & Routing Middleware"
+### Community 6 - "YouTube subtitle translation PRD"
 Cohesion: 0.09
 Nodes (24): isAllowedLocalOrigin, routeHandler (interface), Routes (API route definition), withCORS (CORS middleware), ChatTranslator (OpenAI-compatible), CORS localhost-only policy, Job deduplication (videoId + targetLanguage), Job state machine (+16 more)
 
-### Community 7 - "Job Monitor & SSE"
+### Community 7 - "job-monitor.ts pollJob"
 Cohesion: 0.18
 Nodes (21): addPersistedJobMonitor(), cacheAndNotify(), createMonitorKey(), ensureJobMonitorAlarm(), ensurePersistedJobMonitors(), getJobMonitorAlarmName(), getMonitorBackendBaseUrl(), getMonitorClient() (+13 more)
 
-### Community 8 - "UI Components (shadcn-vue)"
+### Community 8 - "cn shadcn-vue component pattern"
 Cohesion: 0.16
 Nodes (24): Alert, AlertDescription, AlertTitle, alertVariants (cva), Button, buttonVariants (cva), Card, CardContent (+16 more)
 
-### Community 9 - "Whisper CLI Tests"
+### Community 9 - "main test cli.py"
 Cohesion: 0.16
 Nodes (20): fake_result(), test_cli_creates_parent_directory_for_output(), test_cli_prints_json_on_success(), test_cli_rejects_output_path_matching_input_path(), test_cli_requires_all_required_arguments(), test_cli_returns_code_2_when_creating_output_directory_fails(), test_cli_returns_code_2_when_input_file_is_not_readable(), test_cli_returns_code_2_when_language_code_is_invalid() (+12 more)
 
-### Community 10 - "App Configuration"
+### Community 10 - "LoadConfig config test.go"
 Cohesion: 0.18
 Nodes (16): Config, envDurationOrDefault(), envOrDefault(), LoadConfig(), TestLoadConfigDownloadTimeoutCustom(), TestLoadConfigDownloadTimeoutDefault(), TestLoadConfigDownloadTimeoutInvalid(), TestLoadConfigLLMCustomValues() (+8 more)
 
-### Community 11 - "Extension Runtime Integration"
+### Community 11 - "handleExtensionMessage BackendClient Interface"
 Cohesion: 0.13
 Nodes (19): findActiveCue, BackendClient Interface, BackendClientError, createBackendClient Factory, normalizeBackendBaseUrl Validator, PersistedJobMonitor Type, cacheAndNotify, handleJobMonitorAlarm (+11 more)
 
-### Community 12 - "YouTube Overlay Content Script"
+### Community 12 - "YoutubeOverlay.vue changeMode"
 Cohesion: 0.22
 Nodes (13): bindVideo(), canUpdate(), changeMode(), cleanupVideoListeners(), handleModeClick(), handleRuntimeMessage(), isSubtitleUpdatedMessage(), loadForVideo() (+5 more)
 
-### Community 13 - "Popup UI Logic"
+### Community 13 - "Popup App Component"
 Cohesion: 0.14
 Nodes (16): CreateJobForm Type, DEFAULT_SETTINGS Constant, Form Validation (validateCreateJobForm), Job Status Polling (popup), Subtitle Mode Switching with Rollback, YouTube Page Watch (getCurrentVideoId, watchVideoIdChanges), Popup App Component, Popup Entry Mount (+8 more)
 
-### Community 14 - "LLM Chat Translator"
+### Community 14 - "translator.go .translateOne"
 Cohesion: 0.16
 Nodes (11): chatCompletionRequest, chatCompletionResponse, chatMessage, chatResponseFormat, ChatTranslator, Translation Prompt Structure, translationCue, translationPrompt (+3 more)
 
-### Community 15 - "Architecture Concepts & Specs"
+### Community 15 - "Backend Mock MVP Design Spec"
 Cohesion: 0.17
 Nodes (15): CORS Middleware, downloadAudio Function, Job State Machine, LSI_RUNNER_MODE Configuration, MockRunner, RealRunner, Runner Interface, YouTube Video ID Parser (+7 more)
 
-### Community 16 - "Server App Initialization"
+### Community 16 - "NewHTTPHandler NewChatTranslator"
 Cohesion: 0.27
 Nodes (11): checkTools(), NewHTTPHandler(), TestCheckToolsRequiresWhisperCLIInRealMode(), NewChatTranslator(), makeTranslatorTestCues(), TestChatTranslatorFailsOnNon2xx(), TestChatTranslatorFailsWhenTranslationMissing(), TestChatTranslatorPromptRequiresTranslationField() (+3 more)
 
-### Community 17 - "SQLite Store Layer"
+### Community 17 - "Store Open"
 Cohesion: 0.2
 Nodes (4): ErrNotFound, foreignKeyDSN(), Open(), Store
 
-### Community 18 - "YouTube URL Parsing Tests"
+### Community 18 - "ParseVideoID youtube test.go"
 Cohesion: 0.39
 Nodes (6): ParseVideoID(), TestParseVideoIDRejectsNonWatchYouTubeURL(), TestParseVideoIDRejectsUnsupportedScheme(), TestParseVideoIDRejectsUnsupportedURL(), TestParseVideoIDSupportsShortURL(), TestParseVideoIDSupportsWatchURL()
 
-### Community 19 - "API Route Handlers"
+### Community 19 - "toJobResponse formatTime"
 Cohesion: 0.29
 Nodes (7): ParseVideoID, formatTime, handleJobByID, handleJobs, handleSubtitleAssets, toAssetResponse, toJobResponse
 
-### Community 20 - "YouTube Watch Detection"
+### Community 20 - "page-watch.ts getCurrentVideoId"
 Cohesion: 0.47
 Nodes (4): getCurrentVideoId(), getVideoIdFromLocationHref(), watchVideoIdChanges(), parseYouTubeWatchVideoId()
 
-### Community 21 - "Runner Interface & Mock"
+### Community 21 - "Runner Interface"
 Cohesion: 0.4
 Nodes (5): api.Runner Interface, MockRunner, RealRunner, Runner Interface, Mock VTT Constants
 
-### Community 22 - "Extension Architecture Concepts"
+### Community 22 - "BackendClient MessageHandler"
 Cohesion: 0.5
 Nodes (4): BackendClient, Backend HTTP API, Extension Storage and Cache, MessageHandler
 
-### Community 24 - "WebVTT Parsing"
+### Community 24 - "vtt.ts parseTimestamp"
 Cohesion: 1.0
 Nodes (2): parseTimestamp(), parseVtt()
 
-### Community 25 - "Runner-Store Integration"
+### Community 25 - "runner.go Runner"
 Cohesion: 0.67
 Nodes (2): Runner, Store
 
-### Community 26 - "Badge & Select UI"
+### Community 26 - "cn Badge Component Barrel"
 Cohesion: 0.67
 Nodes (3): Badge Component Barrel, cn (class merge utility), Select Component Barrel
 
-### Community 27 - "Store Interface"
+### Community 27 - "runner.Store Interface"
 Cohesion: 0.67
 Nodes (3): api.Store Interface, runner.Store Interface, recordingStore (test fake)
 
-### Community 28 - "Whisper CLI Design"
+### Community 28 - "whisper-cli Command"
 Cohesion: 1.0
 Nodes (3): whisper-cli Command, Whisper CLI Implementation Plan, Whisper CLI Design Spec
 
-### Community 29 - "VTT Format Concepts"
+### Community 29 - "VTT Generator"
 Cohesion: 1.0
 Nodes (3): VTT Generator (Whisper), VTT Parser (Extension), WebVTT Format
 
-### Community 34 - "Community 34"
+### Community 34 - "Extension Manifest Configuration"
 Cohesion: 1.0
 Nodes (2): Extension Manifest Configuration, WXT Extension Config
 
-### Community 35 - "Community 35"
+### Community 35 - "handleSubtitleFile subtitleFilePathAllowed"
 Cohesion: 1.0
 Nodes (2): handleSubtitleFile, subtitleFilePathAllowed
 
-### Community 36 - "Community 36"
+### Community 36 - "writeError writeJSON"
 Cohesion: 1.0
 Nodes (2): writeError, writeJSON
 
-### Community 37 - "Community 37"
+### Community 37 - "Chat Completions Translator"
 Cohesion: 1.0
 Nodes (2): Chat Completions Translator, Translator Interface
 
-### Community 86 - "Community 86"
+### Community 86 - "Vitest Config"
 Cohesion: 1.0
 Nodes (1): Vitest Config
 
-### Community 87 - "Community 87"
+### Community 87 - "Background Service Worker"
 Cohesion: 1.0
 Nodes (1): Background Service Worker
 
-### Community 88 - "Community 88"
+### Community 88 - "CardAction UI Component"
 Cohesion: 1.0
 Nodes (1): CardAction UI Component
 
-### Community 89 - "Community 89"
+### Community 89 - "Card Barrel Export"
 Cohesion: 1.0
 Nodes (1): Card Barrel Export
 
-### Community 90 - "Community 90"
+### Community 90 - "Input Barrel Export"
 Cohesion: 1.0
 Nodes (1): Input Barrel Export
 
-### Community 91 - "Community 91"
+### Community 91 - "Alert Barrel Export"
 Cohesion: 1.0
 Nodes (1): Alert Barrel Export (with cva variants)
 
-### Community 92 - "Community 92"
+### Community 92 - "Separator Barrel Export"
 Cohesion: 1.0
 Nodes (1): Separator Barrel Export
 
-### Community 93 - "Community 93"
+### Community 93 - "Button Barrel Export"
 Cohesion: 1.0
 Nodes (1): Button Barrel Export
 
-### Community 94 - "Community 94"
+### Community 94 - "SelectGroup"
 Cohesion: 1.0
 Nodes (1): SelectGroup
 
-### Community 95 - "Community 95"
+### Community 95 - "Backend Server main"
 Cohesion: 1.0
 Nodes (1): Backend Server main
 
-### Community 96 - "Community 96"
+### Community 96 - "Config"
 Cohesion: 1.0
 Nodes (1): Config
 
-### Community 97 - "Community 97"
+### Community 97 - "LoadConfig"
 Cohesion: 1.0
 Nodes (1): LoadConfig
 
-### Community 98 - "Community 98"
+### Community 98 - "createJobRequest"
 Cohesion: 1.0
 Nodes (1): createJobRequest
 
-### Community 99 - "Community 99"
+### Community 99 - "jobResponse"
 Cohesion: 1.0
 Nodes (1): jobResponse
 
-### Community 100 - "Community 100"
+### Community 100 - "assetResponse"
 Cohesion: 1.0
 Nodes (1): assetResponse
 
-### Community 101 - "Community 101"
+### Community 101 - "Store"
 Cohesion: 1.0
 Nodes (1): Store (SQLite persistence)
 
 ## Knowledge Gaps
 - **102 isolated node(s):** `Config`, `Runner`, `Store`, `execCall`, `Cue` (+97 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `WebVTT Parsing`** (3 nodes): `vtt.ts`, `parseTimestamp()`, `parseVtt()`
+- **Thin community `vtt.ts parseTimestamp`** (3 nodes): `vtt.ts`, `parseTimestamp()`, `parseVtt()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Runner-Store Integration`** (3 nodes): `runner.go`, `Runner`, `Store`
+- **Thin community `runner.go Runner`** (3 nodes): `runner.go`, `Runner`, `Store`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 34`** (2 nodes): `Extension Manifest Configuration`, `WXT Extension Config`
+- **Thin community `Extension Manifest Configuration`** (2 nodes): `Extension Manifest Configuration`, `WXT Extension Config`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 35`** (2 nodes): `handleSubtitleFile`, `subtitleFilePathAllowed`
+- **Thin community `handleSubtitleFile subtitleFilePathAllowed`** (2 nodes): `handleSubtitleFile`, `subtitleFilePathAllowed`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 36`** (2 nodes): `writeError`, `writeJSON`
+- **Thin community `writeError writeJSON`** (2 nodes): `writeError`, `writeJSON`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 37`** (2 nodes): `Chat Completions Translator`, `Translator Interface`
+- **Thin community `Chat Completions Translator`** (2 nodes): `Chat Completions Translator`, `Translator Interface`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 86`** (1 nodes): `Vitest Config`
+- **Thin community `Vitest Config`** (1 nodes): `Vitest Config`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 87`** (1 nodes): `Background Service Worker`
+- **Thin community `Background Service Worker`** (1 nodes): `Background Service Worker`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 88`** (1 nodes): `CardAction UI Component`
+- **Thin community `CardAction UI Component`** (1 nodes): `CardAction UI Component`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 89`** (1 nodes): `Card Barrel Export`
+- **Thin community `Card Barrel Export`** (1 nodes): `Card Barrel Export`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 90`** (1 nodes): `Input Barrel Export`
+- **Thin community `Input Barrel Export`** (1 nodes): `Input Barrel Export`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 91`** (1 nodes): `Alert Barrel Export (with cva variants)`
+- **Thin community `Alert Barrel Export`** (1 nodes): `Alert Barrel Export (with cva variants)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 92`** (1 nodes): `Separator Barrel Export`
+- **Thin community `Separator Barrel Export`** (1 nodes): `Separator Barrel Export`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 93`** (1 nodes): `Button Barrel Export`
+- **Thin community `Button Barrel Export`** (1 nodes): `Button Barrel Export`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 94`** (1 nodes): `SelectGroup`
+- **Thin community `SelectGroup`** (1 nodes): `SelectGroup`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 95`** (1 nodes): `Backend Server main`
+- **Thin community `Backend Server main`** (1 nodes): `Backend Server main`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 96`** (1 nodes): `Config`
+- **Thin community `Config`** (1 nodes): `Config`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 97`** (1 nodes): `LoadConfig`
+- **Thin community `LoadConfig`** (1 nodes): `LoadConfig`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (1 nodes): `createJobRequest`
+- **Thin community `createJobRequest`** (1 nodes): `createJobRequest`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 99`** (1 nodes): `jobResponse`
+- **Thin community `jobResponse`** (1 nodes): `jobResponse`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 100`** (1 nodes): `assetResponse`
+- **Thin community `assetResponse`** (1 nodes): `assetResponse`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 101`** (1 nodes): `Store (SQLite persistence)`
+- **Thin community `Store`** (1 nodes): `Store (SQLite persistence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `NewHTTPHandler()` connect `Server App Initialization` to `SQLite Store Layer`, `App Configuration`, `API Handler Tests`, `Mock Runner & Testing`?**
+- **Why does `NewHTTPHandler()` connect `NewHTTPHandler NewChatTranslator` to `Store Open`, `LoadConfig config test.go`, `handler test.go`, `NewJob openTestStore`?**
   _High betweenness centrality (0.126) - this node is a cross-community bridge._
-- **Why does `Open()` connect `SQLite Store Layer` to `Server App Initialization`, `Mock Runner & Testing`, `API Handler Tests`?**
+- **Why does `Open()` connect `Store Open` to `NewHTTPHandler NewChatTranslator`, `NewJob openTestStore`, `handler test.go`?**
   _High betweenness centrality (0.123) - this node is a cross-community bridge._
-- **Why does `Store` connect `SQLite Store Layer` to `CORS & Routing Middleware`?**
+- **Why does `Store` connect `Store Open` to `YouTube subtitle translation PRD`?**
   _High betweenness centrality (0.115) - this node is a cross-community bridge._
 - **Are the 14 inferred relationships involving `main()` (e.g. with `test_cli_requires_all_required_arguments()` and `test_cli_creates_parent_directory_for_output()`) actually correct?**
   _`main()` has 14 INFERRED edges - model-reasoned connections that need verification._
