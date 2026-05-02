@@ -21,6 +21,7 @@ By default, the backend runs with a **mock runner** (no YouTube access, no Whisp
 - The closest `AGENTS.md` in the directory tree takes precedence. Currently `docs/AGENTS.md` mandates Chinese for `docs/` prose.
 - User instructions always override this file. If a request conflicts with these guidelines, note the conflict and risk before following the user's explicit direction.
 - This file targets coding agents. Human-facing project intro belongs in `README.md`.
+- Docker 部署通过 `docker compose up -d` 一键启动，详见 README "Docker 部署" 部分。构建镜像不需要本地安装 Go、Python、yt-dlp、ffmpeg。
 
 ## Setup Commands
 
@@ -190,7 +191,7 @@ No CI pipeline exists. Verify builds by entering each subdirectory:
 
 | Env var | Default | Description |
 | --- | --- | --- |
-| `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address |
+| `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address (Docker 内默认 `0.0.0.0:8080`) |
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite database path |
 | `LSI_WORK_DIR` | `./data/jobs` | Job work directory root |
 | `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
