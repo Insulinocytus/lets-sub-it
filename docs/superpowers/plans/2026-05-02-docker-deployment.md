@@ -65,12 +65,13 @@ COPY --from=go-builder /build/server /usr/local/bin/server
 COPY --from=py-builder /opt/whisper-venv /opt/whisper-venv
 
 ENV PATH="/opt/whisper-venv/bin:$PATH" \
+    HF_HOME=/data/huggingface \
     LSI_ADDR=0.0.0.0:8080 \
     LSI_DB_PATH=/data/backend.sqlite3 \
     LSI_WORK_DIR=/data/jobs \
     LSI_RUNNER_MODE=real
 
-RUN mkdir -p /data
+RUN mkdir -p /data/jobs /data/huggingface
 
 EXPOSE 8080
 
@@ -120,7 +121,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "8080:8080"
+      - "${LSI_DOCKER_BIND_HOST:-127.0.0.1}:8080:8080"
     volumes:
       - lsi-data:/data
     environment:
@@ -137,7 +138,7 @@ volumes:
   lsi-data:
 ```
 
-注意：端口映射使用固定 `8080:8080` 而非 `LSI_ADDR` 变量。`LSI_ADDR` 在容器内始终为 `0.0.0.0:8080`（Dockerfile ENV 设置），绑定所有接口。用户如需更改端口，修改 compose 的 `ports` 字段即可。
+注意：端口映射默认绑定 `127.0.0.1`，避免把无鉴权 backend 暴露到局域网。用户如需局域网访问，可在 `.env` 中将 `LSI_DOCKER_BIND_HOST` 设为 `0.0.0.0`。`LSI_ADDR` 在容器内始终为 `0.0.0.0:8080`（Dockerfile ENV 设置），只控制容器内监听地址。
 
 - [ ] **Step 2: 验证 compose 配置语法**
 
@@ -162,6 +163,9 @@ git commit -m "feat: add docker-compose.yml for one-command deployment"
 - [ ] **Step 1: 创建 .env.example**
 
 ```
+# Docker 端口绑定主机（默认仅本机访问；如需局域网访问可改为 0.0.0.0）
+LSI_DOCKER_BIND_HOST=127.0.0.1
+
 # LLM 配置（real runner 必填 API_KEY 和 MODEL）
 LSI_LLM_BASE_URL=https://api.openai.com
 LSI_LLM_API_KEY=sk-your-key-here
@@ -175,7 +179,7 @@ LSI_DOWNLOAD_TIMEOUT=10m
 LSI_LLM_TIMEOUT=2m
 ```
 
-注意：没有包含 `LSI_ADDR`，因为容器内地址固定为 `0.0.0.0:8080`，端口由 compose `ports` 控制。
+注意：没有包含 `LSI_ADDR`，因为容器内地址固定为 `0.0.0.0:8080`，端口发布的绑定主机由 `LSI_DOCKER_BIND_HOST` 控制。
 
 - [ ] **Step 2: 提交**
 
@@ -330,6 +334,8 @@ docker compose up -d
 
 查看日志：`docker compose logs -f`
 停止服务：`docker compose down`
+
+Docker 默认只绑定 `127.0.0.1:8080`。如需让局域网设备访问，可在 `.env` 中将 `LSI_DOCKER_BIND_HOST` 改为 `0.0.0.0`。
 
 数据（SQLite 数据库、Job 文件、Whisper 模型缓存）持久化在 Docker named volume `lsi-data` 中。
 ```

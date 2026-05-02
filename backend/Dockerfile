@@ -32,12 +32,13 @@ COPY --from=go-builder /build/server /usr/local/bin/server
 COPY --from=py-builder /opt/whisper-venv /opt/whisper-venv
 
 ENV PATH="/opt/whisper-venv/bin:$PATH" \
+    HF_HOME=/data/huggingface \
     LSI_ADDR=0.0.0.0:8080 \
     LSI_DB_PATH=/data/backend.sqlite3 \
     LSI_WORK_DIR=/data/jobs \
     LSI_RUNNER_MODE=real
 
-RUN mkdir -p /data
+RUN mkdir -p /data/jobs /data/huggingface
 
 EXPOSE 8080
 

@@ -277,6 +277,8 @@ docker compose up -d
 查看日志：`docker compose logs -f`
 停止服务：`docker compose down`
 
+Docker 默认只绑定 `127.0.0.1:8080`。如需让局域网设备访问，可在 `.env` 中将 `LSI_DOCKER_BIND_HOST` 改为 `0.0.0.0`。
+
 数据（SQLite 数据库、Job 文件、Whisper 模型缓存）持久化在 Docker named volume `lsi-data` 中。
 
 ## 当前限制
