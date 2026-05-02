@@ -17,8 +17,9 @@ class FakeSegment:
 
 
 class FakeModel:
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, compute_type: str = "default") -> None:
         self.model_name = model_name
+        self.compute_type = compute_type
 
     def transcribe(self, input_path: str, language: str):
         info = SimpleNamespace(language=language, duration=2.5)
@@ -47,12 +48,34 @@ def test_transcribe_audio_uses_sdk_and_builds_result(monkeypatch, tmp_path):
     assert [segment.text for segment in result.segments] == ["hello", "world"]
 
 
+def test_transcribe_audio_passes_compute_type_to_sdk(monkeypatch, tmp_path):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_bytes(b"audio")
+    calls = []
+
+    class ComputeTypeModel(FakeModel):
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
+            super().__init__(model_name, compute_type=compute_type)
+            calls.append((model_name, compute_type))
+
+    monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", ComputeTypeModel)
+
+    transcribe_audio(
+        input_path=input_path,
+        model_name="small",
+        compute_type="int8",
+        language="ja",
+    )
+
+    assert calls == [("small", "int8")]
+
+
 def test_transcribe_audio_uses_sdk_reported_duration(monkeypatch, tmp_path):
     input_path = tmp_path / "audio.mp3"
     input_path.write_bytes(b"audio")
 
     class DurationModel:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
             self.model_name = model_name
 
         def transcribe(self, input_path: str, language: str):
@@ -79,7 +102,7 @@ def test_transcribe_audio_allows_empty_segment_output(monkeypatch, tmp_path):
     input_path.write_bytes(b"audio")
 
     class EmptyModel:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
             self.model_name = model_name
 
         def transcribe(self, input_path: str, language: str):
@@ -103,7 +126,7 @@ def test_transcribe_audio_rejects_english_only_model_with_non_english_language(
     input_path.write_bytes(b"audio")
 
     class EnglishOnlyModel:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
             self.model_name = model_name
             self.model = SimpleNamespace(is_multilingual=False)
 

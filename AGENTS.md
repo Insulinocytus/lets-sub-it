@@ -56,7 +56,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Docker builds the Go backend, Python `whisper-cli`, `yt-dlp`, and `ffmpeg` into one backend image. Runtime data persists in the `lsi-data` Docker volume.
+Docker builds the Go backend, Python `whisper-cli`, `yt-dlp`, and `ffmpeg` into one backend image. Runtime data persists in the `lsi-data` Docker volume, and Hugging Face model cache persists in the separate `lsi-hf-cache` volume.
 
 ## Development Workflow
 
@@ -83,6 +83,7 @@ PATH="$PWD/../whisper/.venv/bin:$PATH" \
 LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
 LSI_WHISPER_MODEL=small \
+LSI_WHISPER_COMPUTE_TYPE=int8 \
 LSI_LLM_BASE_URL=https://api.openai.com \
 LSI_LLM_API_KEY="$OPENAI_API_KEY" \
 LSI_LLM_MODEL=gpt-4.1-mini \
@@ -226,7 +227,9 @@ docker compose down
 | `LSI_WORK_DIR` | `./data/jobs` | job work directory root |
 | `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
 | `LSI_DOWNLOAD_TIMEOUT` | `10m` | download timeout in real mode |
-| `LSI_WHISPER_MODEL` | `small` | `faster-whisper` model passed to `whisper-cli --model` |
+| `LSI_WHISPER_MODEL` | `small` | `faster-whisper` model or local CTranslate2 model directory passed to `whisper-cli --model` |
+| `LSI_WHISPER_COMPUTE_TYPE` | `default` | faster-whisper compute type passed to `whisper-cli --compute-type`; use `int8` to reduce CPU memory use |
+| `HF_TOKEN` | empty | optional Hugging Face token for higher model download limits; read by backend container tooling |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
 | `LSI_LLM_API_KEY` | empty | required for the OpenAI default endpoint; backend-only |
 | `LSI_LLM_MODEL` | empty | required in real mode for translation |

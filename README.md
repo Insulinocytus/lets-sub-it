@@ -58,7 +58,7 @@ docker compose down
 
 Docker 默认只绑定 `127.0.0.1:8080`。如需让局域网设备访问，可把 `.env` 中的 `LSI_DOCKER_BIND_HOST` 改为 `0.0.0.0`。
 
-SQLite 数据库、任务文件和 Whisper 模型缓存会持久化在 Docker named volume `lsi-data` 中。
+SQLite 数据库和任务文件会持久化在 Docker named volume `lsi-data` 中；Hugging Face/Whisper 模型缓存会持久化在 `lsi-hf-cache` 中。
 
 > [!WARNING]
 > 本项目面向单用户本地自托管，没有登录、鉴权、多租户或公网部署保护。不要把服务直接暴露到公网。
@@ -129,6 +129,7 @@ PATH="$PWD/../whisper/.venv/bin:$PATH" \
 LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
 LSI_WHISPER_MODEL=small \
+LSI_WHISPER_COMPUTE_TYPE=int8 \
 LSI_LLM_BASE_URL=https://api.openai.com \
 LSI_LLM_API_KEY="$OPENAI_API_KEY" \
 LSI_LLM_MODEL=gpt-4.1-mini \
@@ -195,7 +196,9 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 | `LSI_WORK_DIR` | `./data/jobs` | job 工作目录根路径 |
 | `LSI_RUNNER_MODE` | `mock` | runner 模式：`mock` 或 `real` |
 | `LSI_DOWNLOAD_TIMEOUT` | `10m` | real 模式下单次下载超时 |
-| `LSI_WHISPER_MODEL` | `small` | 传给 `whisper-cli --model` 的模型名 |
+| `LSI_WHISPER_MODEL` | `small` | 传给 `whisper-cli --model` 的模型名或本地 CTranslate2 模型目录 |
+| `LSI_WHISPER_COMPUTE_TYPE` | `default` | 传给 `whisper-cli --compute-type` 的 faster-whisper compute type；CPU 省内存可设为 `int8` |
+| `HF_TOKEN` | 空 | 可选 Hugging Face token，用于提高模型下载限额；Docker 会传给容器内的 Hugging Face 工具链 |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
 | `LSI_LLM_API_KEY` | 空 | OpenAI 默认 endpoint 必填；仅后端读取 |
 | `LSI_LLM_MODEL` | 空 | real 模式下翻译必填的模型名 |
@@ -212,6 +215,7 @@ mise exec -- uv run whisper-cli \
   --input /path/to/audio.mp3 \
   --output /tmp/source.vtt \
   --model small \
+  --compute-type int8 \
   --language ja
 ```
 

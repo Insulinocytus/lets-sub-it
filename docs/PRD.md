@@ -289,7 +289,9 @@ VideoPreference {
 | `LSI_WORK_DIR` | `./data/jobs` | job 工作目录根路径 |
 | `LSI_RUNNER_MODE` | `mock` | runner 模式：`mock` 或 `real` |
 | `LSI_DOWNLOAD_TIMEOUT` | `10m` | `real` 模式下单次下载超时 |
-| `LSI_WHISPER_MODEL` | `small` | `real` 模式下传给 `whisper-cli --model` 的模型名 |
+| `LSI_WHISPER_MODEL` | `small` | `real` 模式下传给 `whisper-cli --model` 的模型名或本地 CTranslate2 模型目录 |
+| `LSI_WHISPER_COMPUTE_TYPE` | `default` | `real` 模式下传给 `whisper-cli --compute-type` 的 faster-whisper compute type；CPU 省内存可设为 `int8` |
+| `HF_TOKEN` | 空 | 可选 Hugging Face token，用于提高模型下载限额；仅 backend 容器读取 |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
 | `LSI_LLM_API_KEY` | 空 | OpenAI 默认 endpoint 必填；Bearer token，仅 backend 读取 |
 | `LSI_LLM_MODEL` | 空 | `real` 模式下翻译必填的模型名 |

@@ -42,7 +42,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 		}
 	}
 
-	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", translator).Start(context.Background(), job); err != nil {
+	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", "int8", translator).Start(context.Background(), job); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 
@@ -71,6 +71,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	assertArg(t, whisperCall.args, "--input", audioPath)
 	assertArg(t, whisperCall.args, "--output", sourcePath)
 	assertArg(t, whisperCall.args, "--model", "tiny")
+	assertArg(t, whisperCall.args, "--compute-type", "int8")
 	assertArg(t, whisperCall.args, "--language", "zh")
 
 	asset, assetErr := testStore.FindSubtitleAsset("abc123", "en")
@@ -128,7 +129,7 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
 	}
@@ -167,7 +168,7 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(ctx, job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(ctx, job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want context canceled")
 	}
@@ -208,7 +209,7 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want transcription error")
 	}
@@ -253,7 +254,7 @@ func TestRealRunnerTranslationFailed(t *testing.T) {
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want translation error")
 	}

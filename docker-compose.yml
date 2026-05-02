@@ -7,9 +7,12 @@ services:
       - "${LSI_DOCKER_BIND_HOST:-127.0.0.1}:8080:8080"
     volumes:
       - lsi-data:/data
+      - lsi-hf-cache:/huggingface
     environment:
       - LSI_RUNNER_MODE=real
       - LSI_WHISPER_MODEL=${LSI_WHISPER_MODEL:-small}
+      - LSI_WHISPER_COMPUTE_TYPE=${LSI_WHISPER_COMPUTE_TYPE:-default}
+      - HF_TOKEN=${HF_TOKEN:-}
       - LSI_LLM_BASE_URL=${LSI_LLM_BASE_URL:-https://api.openai.com}
       - LSI_LLM_API_KEY=${LSI_LLM_API_KEY:-}
       - LSI_LLM_MODEL=${LSI_LLM_MODEL:-}
@@ -19,3 +22,4 @@ services:
 
 volumes:
   lsi-data:
+  lsi-hf-cache:

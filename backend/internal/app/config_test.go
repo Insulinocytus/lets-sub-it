@@ -97,6 +97,22 @@ func TestLoadConfigWhisperModelCustom(t *testing.T) {
 	}
 }
 
+func TestLoadConfigWhisperComputeTypeDefault(t *testing.T) {
+	t.Setenv("LSI_WHISPER_COMPUTE_TYPE", "")
+	config := LoadConfig()
+	if config.WhisperComputeType != "default" {
+		t.Fatalf("WhisperComputeType = %q, want %q", config.WhisperComputeType, "default")
+	}
+}
+
+func TestLoadConfigWhisperComputeTypeCustom(t *testing.T) {
+	t.Setenv("LSI_WHISPER_COMPUTE_TYPE", "int8")
+	config := LoadConfig()
+	if config.WhisperComputeType != "int8" {
+		t.Fatalf("WhisperComputeType = %q, want %q", config.WhisperComputeType, "int8")
+	}
+}
+
 func TestLoadConfigLLMDefaults(t *testing.T) {
 	t.Setenv("LSI_LLM_BASE_URL", "")
 	t.Setenv("LSI_LLM_API_KEY", "")

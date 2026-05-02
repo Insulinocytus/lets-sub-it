@@ -37,7 +37,7 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 			return nil, err
 		}
 		translator := runner.NewChatTranslator(config.LLMBaseURL, config.LLMAPIKey, config.LLMModel, config.LLMTimeout, http.DefaultClient)
-		jobRunner = runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, translator)
+		jobRunner = runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, config.WhisperComputeType, translator)
 	default:
 		jobRunner = runner.NewMockRunner(database)
 	}

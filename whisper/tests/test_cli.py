@@ -151,6 +151,40 @@ def test_cli_returns_code_4_when_transcriber_returns_no_segments(
     assert "output validation failed: segments must not be empty" in captured.err
 
 
+def test_cli_passes_compute_type_to_transcriber(tmp_path, monkeypatch, capsys):
+    input_path = tmp_path / "audio.mp3"
+    input_path.write_text("audio")
+    output_path = tmp_path / "result.vtt"
+    calls = []
+
+    def fake_transcribe(**kwargs):
+        calls.append(kwargs)
+        return fake_result()
+
+    monkeypatch.setattr("whisper_cli.cli.transcribe_audio", fake_transcribe)
+
+    exit_code = main(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--model",
+            "small",
+            "--compute-type",
+            "int8",
+            "--language",
+            "ja",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert calls[0]["compute_type"] == "int8"
+
+
 def test_cli_returns_code_2_when_language_code_is_invalid(
     tmp_path, monkeypatch, capsys
 ):
@@ -159,7 +193,7 @@ def test_cli_returns_code_2_when_language_code_is_invalid(
     output_path = tmp_path / "result.vtt"
 
     class InvalidLanguageModel:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
             self.model_name = model_name
 
         def transcribe(self, input_path: str, language: str):
@@ -196,7 +230,7 @@ def test_cli_returns_code_2_when_model_name_is_invalid(tmp_path, monkeypatch, ca
     output_path = tmp_path / "result.vtt"
 
     class InvalidModelName:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, compute_type: str = "default") -> None:
             raise ValueError(f"Invalid model size '{model_name}'")
 
     monkeypatch.setattr("whisper_cli.transcribe.WhisperModel", InvalidModelName)
