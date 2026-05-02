@@ -1,177 +1,300 @@
 # Graph Report - .  (2026-05-02)
 
 ## Corpus Check
-- 124 files · ~56,617 words
+- 125 files · ~57,359 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 482 nodes · 718 edges · 21 communities detected
-- Extraction: 74% EXTRACTED · 26% INFERRED · 0% AMBIGUOUS · INFERRED: 189 edges (avg confidence: 0.79)
+- 703 nodes · 992 edges · 40 communities detected
+- Extraction: 77% EXTRACTED · 23% INFERRED · 0% AMBIGUOUS · INFERRED: 231 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Backend API Tests|Backend API Tests]]
-- [[_COMMUNITY_Runtime Contracts|Runtime Contracts]]
-- [[_COMMUNITY_MVP Design Docs|MVP Design Docs]]
-- [[_COMMUNITY_Extension Backend Client|Extension Backend Client]]
-- [[_COMMUNITY_Whisper Transcription Tests|Whisper Transcription Tests]]
-- [[_COMMUNITY_Backend Runner Store|Backend Runner Store]]
-- [[_COMMUNITY_Backend API Types|Backend API Types]]
-- [[_COMMUNITY_Extension Job Monitor|Extension Job Monitor]]
-- [[_COMMUNITY_Real Runner VTT|Real Runner VTT]]
-- [[_COMMUNITY_Chat Translation|Chat Translation]]
-- [[_COMMUNITY_Backend Config|Backend Config]]
+- [[_COMMUNITY_Backend API|Backend API]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_Backend API|Backend API]]
+- [[_COMMUNITY_Docs And Plans|Docs And Plans]]
+- [[_COMMUNITY_Backend Runner|Backend Runner]]
+- [[_COMMUNITY_Extension Storage|Extension Storage]]
+- [[_COMMUNITY_Extension Popup|Extension Popup]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_Docs And Plans|Docs And Plans]]
+- [[_COMMUNITY_Backend API|Backend API]]
+- [[_COMMUNITY_Docker Deployment|Docker Deployment]]
+- [[_COMMUNITY_Backend Runner|Backend Runner]]
+- [[_COMMUNITY_Extension Popup|Extension Popup]]
+- [[_COMMUNITY_Backend Runner|Backend Runner]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_Extension UI Components|Extension UI Components]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_Extension Storage|Extension Storage]]
 - [[_COMMUNITY_YouTube Overlay|YouTube Overlay]]
-- [[_COMMUNITY_Code When Output|Code When Output]]
-- [[_COMMUNITY_Mock Runner Newmockrunner|Mock Runner Newmockrunner]]
-- [[_COMMUNITY_Sqlite Foreignkeydsn Open|Sqlite Foreignkeydsn Open]]
-- [[_COMMUNITY_Downloader Downloadaudio Testdownloadaudiocreatesjobdir|Downloader Downloadaudio Testdownloadaudiocreatesjobdir]]
-- [[_COMMUNITY_Youtube Parsevideoid Testparsevideoidrejectsnonwatchyoutubeurl|Youtube Parsevideoid Testparsevideoidrejectsnonwatchyoutubeurl]]
-- [[_COMMUNITY_Page Watch Video|Page Watch Video]]
+- [[_COMMUNITY_Backend Store|Backend Store]]
+- [[_COMMUNITY_Backend API|Backend API]]
+- [[_COMMUNITY_Backend Store|Backend Store]]
+- [[_COMMUNITY_Extension UI Components|Extension UI Components]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_YouTube Overlay|YouTube Overlay]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
+- [[_COMMUNITY_Extension Storage|Extension Storage]]
+- [[_COMMUNITY_Testing Contracts|Testing Contracts]]
 - [[_COMMUNITY_Agent Operating Rules|Agent Operating Rules]]
-- [[_COMMUNITY_Vtt Parsetimestamp Parsevtt|Vtt Parsetimestamp Parsevtt]]
-- [[_COMMUNITY_Runner Store|Runner Store]]
+- [[_COMMUNITY_vtt ts parseTimestamp|vtt ts parseTimestamp]]
+- [[_COMMUNITY_Backend Runner|Backend Runner]]
+- [[_COMMUNITY_Docs And Plans|Docs And Plans]]
+- [[_COMMUNITY_Extension Popup|Extension Popup]]
+- [[_COMMUNITY_Backend Runner|Backend Runner]]
+- [[_COMMUNITY_Backend Store|Backend Store]]
+- [[_COMMUNITY_Docs And Plans|Docs And Plans]]
+- [[_COMMUNITY_Extension UI Components|Extension UI Components]]
+- [[_COMMUNITY_Extension UI Components|Extension UI Components]]
+- [[_COMMUNITY_Extension UI Components|Extension UI Components]]
+- [[_COMMUNITY_Extension Storage|Extension Storage]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `NewJob()` - 17 edges
-2. `main()` - 17 edges
-3. `openTestStore()` - 16 edges
-4. `LoadConfig()` - 15 edges
+1. `main()` - 18 edges
+2. `LoadConfig()` - 17 edges
+3. `NewJob()` - 17 edges
+4. `openTestStore()` - 16 edges
 5. `handleExtensionMessage()` - 12 edges
 6. `newTestServer()` - 12 edges
 7. `Segment` - 11 edges
-8. `Store` - 10 edges
-9. `render_vtt()` - 10 edges
-10. `transcribe_audio()` - 10 edges
+8. `transcribe_audio()` - 11 edges
+9. `Store` - 10 edges
+10. `render_vtt()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Backend Request Error Mapping` --implements--> `Backend Mock MVP Design`  [INFERRED]
+  extension/src/api/backend-client.ts → docs/superpowers/specs/2026-04-24-backend-mock-mvp-design.md
 - `Claude Agent Operating Rules` --semantically_similar_to--> `Agent Operating Rules`  [INFERRED] [semantically similar]
   CLAUDE.md → AGENTS.md
-- `Backend Contract` --conceptually_related_to--> `Backend Module`  [EXTRACTED]
-  AGENTS.md → README.md
-- `Backend API Server` --implements--> `Backend Module`  [EXTRACTED]
-  backend/README.md → README.md
-- `Docker Compose Backend Service` --implements--> `Real Runner`  [EXTRACTED]
-  docker-compose.yml → README.md
-- `MVP Scope` --references--> `Real Runner`  [EXTRACTED]
-  docs/PRD.md → README.md
+- `runner.RealRunner.Start` --implements--> `Real Runner Download Transcribe Translate Pipeline`  [INFERRED]
+  backend/internal/runner/real_runner.go → README.md
+- `api.Handler.handleJobs` --implements--> `Job Reuse by videoId and targetLanguage`  [INFERRED]
+  backend/internal/api/handler.go → README.md
+- `api.Handler.handleActiveJob` --conceptually_related_to--> `Job Reuse by videoId and targetLanguage`  [INFERRED]
+  backend/internal/api/handler.go → README.md
 
 ## Hyperedges (group relationships)
-- **End To End Subtitle Flow** — readme_extension_module, docs_prd_background_service_worker, backend_readme_api_server, docs_prd_embedded_runner, docs_prd_whisper_cli_contract, docs_prd_openai_compatible_llm, readme_webvtt_artifacts, docs_prd_content_script_overlay [EXTRACTED 1.00]
-- **Job Reuse And Cache Contract** — docs_prd_job, docs_prd_subtitle_asset, docs_prd_local_cache_entry, docs_prd_video_preference, extension_readme_popup_restore [EXTRACTED 1.00]
-- **Real Translation Runner Pattern** — openai_plan_llm_config, openai_plan_vtt_cue, openai_plan_translator_interface, openai_plan_chat_translator, openai_plan_realrunner_translation_integration [EXTRACTED 1.00]
-- **Real Runner End-to-End Pipeline** — 2026_04_27_real_audio_download_design_yt_dlp_download, 2026_04_23_whisper_cli_design_whisper_cli, 2026_04_29_openai_compatible_translation_design_real_translation_pipeline, 2026_04_24_backend_mock_mvp_design_http_api_contract [INFERRED 0.86]
-- **Extension Subtitle Runtime Flow** — 2026_04_25_extension_mvp_plan_background_gateway, 2026_04_25_extension_mvp_plan_storage_cache, 2026_04_25_extension_mvp_plan_youtube_overlay, 2026_04_25_extension_mvp_design_message_protocol, 2026_04_25_extension_mvp_design_webvtt_parser [EXTRACTED 1.00]
-- **Docker Real Runner Runtime Bundle** — 2026_05_02_docker_deployment_design_single_image, 2026_05_02_docker_deployment_design_lsi_data_volume, 2026_05_02_docker_deployment_design_localhost_binding, 2026_05_02_docker_deployment_plan_backend_dockerfile, 2026_05_02_docker_deployment_plan_docker_compose [EXTRACTED 1.00]
+- **End-to-end Subtitle Pipeline** — concept_chrome_extension_module, concept_backend_module, concept_whisper_cli_module, concept_real_runner_pipeline, runner_real_runner_start [EXTRACTED 1.00]
+- **Backend HTTP API Surface** — api_routes, api_handle_jobs, api_handle_active_job, api_handle_subtitle_assets, api_handle_subtitle_file [EXTRACTED 1.00]
+- **Local Security Boundaries** — concept_localhost_only_backend_origin, api_is_allowed_local_origin, concept_safe_subtitle_file_serving, api_subtitle_file_path_allowed, concept_single_user_security_boundary [INFERRED 0.88]
+- **Real Runner Subtitle Generation Pipeline** — downloader_download_audio, transcriber_transcribe_audio, translator_chattranslator, vtt_cue_parse_webvtt_cues, vtt_cue_render_translated_vtt, vtt_cue_render_bilingual_vtt, sqlite_create_subtitle_asset [INFERRED 0.87]
+- **Job And Asset Persistence Contract** — store_job, store_subtitle_asset, sqlite_store, sqlite_find_reusable_job, sqlite_find_latest_job, sqlite_update_job_status, sqlite_find_subtitle_asset [EXTRACTED 0.95]
+- **MVP End To End Contract** — PRD_self_hosted_subtitle_pipeline, PRD_extension_backend_contract, PRD_security_boundaries, 2026_04_25_extension_mvp_plan, 2026_04_29_openai_compatible_translation_plan, 2026_04_23_whisper_sdk_cli_plan, 2026_05_02_docker_deployment_plan [EXTRACTED 0.88]
+- **Extension Job Lifecycle** — 2026_04_25_extension_mvp_design_extension_mvp_design, messages_extension_message_protocol, App_submit_job, App_poll_job, backend_client_create_backend_client, job_monitor_start_job_monitor [EXTRACTED 0.89]
+- **Real Runner Pipeline** — 2026_04_27_real_audio_download_design_real_audio_download, 2026_04_23_whisper_cli_design_whisper_cli_contract, 2026_04_29_openai_compatible_translation_design_chat_completions_translation, 2026_05_02_docker_deployment_design_backend_docker_deployment, 2026_04_24_backend_mock_mvp_design_backend_mock_mvp_design [INFERRED 0.84]
+- **Popup And Background Recovery Monitoring** — README_extension_runtime_docs, App_restore_job_for_current_tab, background_background_service_worker, job_monitor_persisted_job_monitoring, job_monitor_test_persisted_monitor_tests, App_test_popup_active_job_restore_test [EXTRACTED 0.87]
+- **Extension Message Dispatch Flows** — message_handler_handleExtensionMessage, message_handler_JobCreateFlow, message_handler_SubtitleResolveFlow, message_handler_clientFromSettings, message_handler_updateSubtitleMode, message_handler_errorToMessage [EXTRACTED 0.92]
+- **Handler Behavior Test Coverage** — message_handler_test_HandleExtensionMessageSuite, message_handler_handleExtensionMessage, message_handler_test_InvalidLanguagePairBehavior, message_handler_test_JobMonitorBehavior, message_handler_test_BackendOriginCacheIsolation [EXTRACTED 0.90]
+- **shadcn-vue UI Primitive Set** — alert_Alert, badge_Badge, button_Button, card_Card, input_Input, select_SelectItem, select_SelectTrigger, ui_SharedClassPassthroughPattern, ui_RekaPrimitiveWrapperPattern [INFERRED 0.86]
+- **Select Wrappers Form Reka/Shadcn Select API** — Select_select_root_wrapper, SelectContent_select_content_wrapper, SelectGroup_select_group_wrapper, SelectSeparator_select_separator_wrapper, SelectValue_select_value_wrapper, SelectLabel_select_label_wrapper, SelectItemText_select_item_text_wrapper, index_select_component_barrel [EXTRACTED 0.93]
+- **Subtitle Cache Scopes Assets By Backend, Video, And Language** — subtitle_cache_subtitleAssetKey, subtitle_cache_videoPreferenceKey, subtitle_cache_setCachedSubtitleAsset, subtitle_cache_getCachedSubtitleAsset, subtitle_cache_updateCachedSubtitleMode, subtitle_cache_test_storage_isolation_contract [EXTRACTED 0.92]
+- **YouTube Overlay Mode Switch Rollback Workflow** — YoutubeOverlay_overlay_component, YoutubeOverlay_changeMode, YoutubeOverlay_loadVtt, YoutubeOverlay_restoreDisplayedSubtitles, YoutubeOverlay_test_mode_rollback_contract [EXTRACTED 0.91]
+- **Extension Subtitle Cue Flow** — extension_subtitles_vtt_parsevtt, extension_subtitles_vtt_parsetimestamp, extension_subtitles_vtt_vttcue, extension_subtitles_activecue_findactivecue, extension_subtitles_vtt_tests [INFERRED 0.86]
+- **Extension YouTube Watch Detection Flow** — extension_youtube_videoid_parseyoutubewatchvideoid, extension_youtube_pagewatch_getvideoidfromlocationhref, extension_youtube_pagewatch_getcurrentvideoid, extension_youtube_pagewatch_watchvideoidchanges, extension_youtube_videoid_tests, extension_youtube_pagewatch_tests [INFERRED 0.88]
+- **Whisper CLI Transcription To VTT Pipeline** — whisper_cli_build_parser, whisper_cli_main, whisper_transcribe_transcribe_audio, whisper_transcribe_transcriptionresult, whisper_vtt_segment, whisper_vtt_render_vtt, whisper_readme_cli_contract, whisper_cli_tests [INFERRED 0.90]
 
 ## Communities
 
-### Community 0 - "Backend API Tests"
-Cohesion: 0.08
-Nodes (28): NewHandler(), newTestServer(), TestActiveJobReturnsLatestJobForVideoAndLanguage(), TestActiveJobReturnsNullWhenNoJobExists(), TestPostJobsCreatesJobAndCompletesWithMockRunner(), TestPostJobsRejectsMissingSourceLanguage(), TestSubtitleAssetReturnsAssetAfterCompletion(), TestSubtitleFileRejectsInvalidMode() (+20 more)
-
-### Community 1 - "Runtime Contracts"
+### Community 0 - "Backend API"
 Cohesion: 0.07
-Nodes (40): Backend Contract, Extension Contract, Backend API Server, Backend Runner Boundary, Docker Compose Backend Service, lsi-data Docker Volume, Background Service Worker, YouTube Content Script Overlay (+32 more)
+Nodes (32): NewHandler(), newTestServer(), TestActiveJobReturnsLatestJobForVideoAndLanguage(), TestActiveJobReturnsNullWhenNoJobExists(), TestPostJobsCreatesJobAndCompletesWithMockRunner(), TestPostJobsRejectsMissingSourceLanguage(), TestSubtitleAssetReturnsAssetAfterCompletion(), TestSubtitleFileRejectsInvalidMode() (+24 more)
 
-### Community 2 - "MVP Design Docs"
+### Community 1 - "Testing Contracts"
+Cohesion: 0.1
+Nodes (31): execCall, fakeTranslator, NewMockRunner(), openTestStore(), TestMockRunnerCompletesJobAndWritesAssets(), TestMockRunnerFailsJobWhenCompletionUpdateFails(), TestMockRunnerMarksCanceledJobAsFailed(), TestMockRunnerMarksFailedWhenTranscribingUpdateFails() (+23 more)
+
+### Community 2 - "Backend API"
 Cohesion: 0.07
-Nodes (39): faster-whisper SDK, WebVTT 输出校验, whisper-cli, Backend Mock MVP 设计, Backend HTTP API 契约, Job 数据模型, SubtitleAsset 数据模型, Backend Mock MVP 实施计划 (+31 more)
+Nodes (40): Extension Contract, api.Handler.handleActiveJob, api.Handler.handleJobs, api.Handler.handleSubtitleAssets, api.Handler.handleSubtitleFile, api.isAllowedLocalOrigin, api.ParseVideoID, api.Routes (+32 more)
 
-### Community 3 - "Extension Backend Client"
+### Community 3 - "Docs And Plans"
+Cohesion: 0.07
+Nodes (38): Backend Contract, Offline Repeatable Test Rule, Backend API Server, Backend README Runner Boundary, CLAUDE Agent Instruction Mirror, Mock Runner Default, Docker Compose Backend Service, lsi-data Docker Volume (+30 more)
+
+### Community 4 - "Backend Runner"
+Cohesion: 0.1
+Nodes (23): Cue, downloadAudio(), TestDownloadAudioCreatesJobDir(), TestDownloadAudioNetworkError(), TestDownloadAudioSuccess(), TestDownloadAudioTimeout(), TestDownloadAudioVideoUnavailable(), TestDownloadAudioYtDlpMissing() (+15 more)
+
+### Community 5 - "Extension Storage"
 Cohesion: 0.13
 Nodes (23): BackendClientError, createBackendClient(), errorFromResponse(), invalidBackendBaseUrlError(), normalizeBackendBaseUrl(), request(), requestJson(), clientFromSettings() (+15 more)
 
-### Community 4 - "Whisper Transcription Tests"
-Cohesion: 0.14
-Nodes (21): Exception, FakeModel, FakeSegment, test_transcribe_audio_allows_empty_segment_output(), test_transcribe_audio_rejects_english_only_model_with_non_english_language(), test_transcribe_audio_uses_sdk_and_builds_result(), test_transcribe_audio_uses_sdk_reported_duration(), test_vtt_rejects_blank_lines_in_cue_text() (+13 more)
+### Community 6 - "Extension Popup"
+Cohesion: 0.08
+Nodes (31): Backend Mock MVP Design, Backend Mock MVP Plan, Extension MVP Design, Real Audio Download Design, pollJob, Popup App, restoreJobForCurrentTab, submitJob (+23 more)
 
-### Community 5 - "Backend Runner Store"
-Cohesion: 0.16
-Nodes (24): execCall, fakeTranslator, NewRealRunner(), argValue(), assertArg(), findExecCall(), TestRealRunnerCompletesJob(), TestRealRunnerDownloadFailed() (+16 more)
+### Community 7 - "Testing Contracts"
+Cohesion: 0.13
+Nodes (22): Exception, FakeModel, FakeSegment, test_transcribe_audio_allows_empty_segment_output(), test_transcribe_audio_passes_compute_type_to_sdk(), test_transcribe_audio_rejects_english_only_model_with_non_english_language(), test_transcribe_audio_uses_sdk_and_builds_result(), test_transcribe_audio_uses_sdk_reported_duration() (+14 more)
 
-### Community 6 - "Backend API Types"
+### Community 8 - "Docs And Plans"
+Cohesion: 0.1
+Nodes (27): Backend Mock MVP 设计, Backend HTTP API 契约, Job 数据模型, SubtitleAsset 数据模型, Backend Mock MVP 实施计划, Go Mock Backend, MockRunner 状态机, SQLite/GORM Store (+19 more)
+
+### Community 9 - "Backend API"
 Cohesion: 0.14
 Nodes (18): apiError, assetResponse, createJobRequest, errorBody, Handler, subtitleFileNameForMode(), subtitleFilePathAllowed(), jobResponse (+10 more)
 
-### Community 7 - "Extension Job Monitor"
+### Community 10 - "Docker Deployment"
+Cohesion: 0.12
+Nodes (26): faster-whisper SDK, WebVTT 输出校验, whisper-cli, Docker 默认本机端口绑定, lsi-data Named Volume, 多阶段构建单镜像, backend/Dockerfile, docker-compose.yml (+18 more)
+
+### Community 11 - "Backend Runner"
+Cohesion: 0.1
+Nodes (25): Whisper SDK CLI Plan, Real Audio Download Plan, OpenAI-Compatible Translation Plan, Docs Chinese Language Policy, Security and Privacy Boundaries, Download Audio, Fake Translator, RealRunner Pipeline Tests (+17 more)
+
+### Community 12 - "Extension Popup"
 Cohesion: 0.18
 Nodes (21): addPersistedJobMonitor(), cacheAndNotify(), createMonitorKey(), ensureJobMonitorAlarm(), ensurePersistedJobMonitors(), getJobMonitorAlarmName(), getMonitorBackendBaseUrl(), getMonitorClient() (+13 more)
 
-### Community 8 - "Real Runner VTT"
-Cohesion: 0.15
-Nodes (16): Cue, RealRunner, transcribeAudio(), newTranslationPrompt(), cueText(), nonEmptyLines(), parseWebVTTCues(), renderBilingualVTT() (+8 more)
-
-### Community 9 - "Chat Translation"
+### Community 13 - "Backend Runner"
 Cohesion: 0.15
 Nodes (17): chatCompletionRequest, chatCompletionResponse, chatMessage, chatResponseFormat, ChatTranslator, translationCue, translationPrompt, translationResponse (+9 more)
 
-### Community 10 - "Backend Config"
-Cohesion: 0.18
-Nodes (16): Config, envDurationOrDefault(), envOrDefault(), LoadConfig(), TestLoadConfigDownloadTimeoutCustom(), TestLoadConfigDownloadTimeoutDefault(), TestLoadConfigDownloadTimeoutInvalid(), TestLoadConfigLLMCustomValues() (+8 more)
+### Community 14 - "Testing Contracts"
+Cohesion: 0.16
+Nodes (18): Config, envDurationOrDefault(), envOrDefault(), LoadConfig(), TestLoadConfigDownloadTimeoutCustom(), TestLoadConfigDownloadTimeoutDefault(), TestLoadConfigDownloadTimeoutInvalid(), TestLoadConfigLLMCustomValues() (+10 more)
 
-### Community 11 - "YouTube Overlay"
+### Community 15 - "Extension UI Components"
+Cohesion: 0.13
+Nodes (20): Alert Component, AlertDescription Component, AlertTitle Component, alertVariants, Badge Component, badgeVariants, Button Component, buttonVariants (+12 more)
+
+### Community 16 - "Testing Contracts"
+Cohesion: 0.2
+Nodes (17): fake_result(), test_cli_creates_parent_directory_for_output(), test_cli_passes_compute_type_to_transcriber(), test_cli_prints_json_on_success(), test_cli_rejects_output_path_matching_input_path(), test_cli_requires_all_required_arguments(), test_cli_returns_code_2_when_creating_output_directory_fails(), test_cli_returns_code_2_when_input_file_is_not_readable() (+9 more)
+
+### Community 17 - "Extension Storage"
+Cohesion: 0.16
+Nodes (19): Bind Overlay To Video Time, Change Subtitle Mode, Subtitle Updated Message Guard, Load Subtitles For Video, Load Selected VTT File, YouTube Subtitle Overlay Component, Reset Loaded Subtitles, Restore Displayed Subtitles (+11 more)
+
+### Community 18 - "YouTube Overlay"
 Cohesion: 0.22
 Nodes (13): bindVideo(), canUpdate(), changeMode(), cleanupVideoListeners(), handleModeClick(), handleRuntimeMessage(), isSubtitleUpdatedMessage(), loadForVideo() (+5 more)
 
-### Community 12 - "Code When Output"
-Cohesion: 0.22
-Nodes (16): fake_result(), test_cli_creates_parent_directory_for_output(), test_cli_prints_json_on_success(), test_cli_rejects_output_path_matching_input_path(), test_cli_requires_all_required_arguments(), test_cli_returns_code_2_when_creating_output_directory_fails(), test_cli_returns_code_2_when_input_file_is_not_readable(), test_cli_returns_code_2_when_language_code_is_invalid() (+8 more)
+### Community 19 - "Backend Store"
+Cohesion: 0.14
+Nodes (17): Docker Deployment Plan, Job State Flow, Self-Hosted YouTube Subtitle Pipeline, Store AutoMigrate, MockRunner Failure Handling, MockRunner Start, Create Subtitle Asset, Find Latest Job (+9 more)
 
-### Community 13 - "Mock Runner Newmockrunner"
-Cohesion: 0.18
-Nodes (9): NewMockRunner(), openTestStore(), TestMockRunnerCompletesJobAndWritesAssets(), TestMockRunnerFailsJobWhenCompletionUpdateFails(), TestMockRunnerMarksCanceledJobAsFailed(), TestMockRunnerMarksFailedWhenTranscribingUpdateFails(), MockRunner, recordingStore (+1 more)
+### Community 20 - "Backend API"
+Cohesion: 0.23
+Nodes (13): Job Create Flow, MessageHandlerDeps, Subtitle Resolve Flow, clientFromSettings, errorToMessage, handleExtensionMessage, ok Result Wrapper, Backend Origin Cache Isolation (+5 more)
 
-### Community 14 - "Sqlite Foreignkeydsn Open"
-Cohesion: 0.15
-Nodes (5): foreignKeyDSN(), Open(), openWithLogWriter(), TestStoreDoesNotLogExpectedRecordNotFound(), Store
+### Community 21 - "Backend Store"
+Cohesion: 0.2
+Nodes (1): Store
 
-### Community 15 - "Downloader Downloadaudio Testdownloadaudiocreatesjobdir"
-Cohesion: 0.36
-Nodes (7): downloadAudio(), TestDownloadAudioCreatesJobDir(), TestDownloadAudioNetworkError(), TestDownloadAudioSuccess(), TestDownloadAudioTimeout(), TestDownloadAudioVideoUnavailable(), TestDownloadAudioYtDlpMissing()
+### Community 22 - "Extension UI Components"
+Cohesion: 0.24
+Nodes (10): Select Content Wrapper, Select Label Wrapper, Select Scroll Down Button Wrapper, Select Scroll Up Button Wrapper, Select Separator Wrapper, Select Root Wrapper, Separator Wrapper, Select Component Barrel (+2 more)
 
-### Community 16 - "Youtube Parsevideoid Testparsevideoidrejectsnonwatchyoutubeurl"
+### Community 23 - "Testing Contracts"
 Cohesion: 0.39
 Nodes (6): ParseVideoID(), TestParseVideoIDRejectsNonWatchYouTubeURL(), TestParseVideoIDRejectsUnsupportedScheme(), TestParseVideoIDRejectsUnsupportedURL(), TestParseVideoIDSupportsShortURL(), TestParseVideoIDSupportsWatchURL()
 
-### Community 17 - "Page Watch Video"
+### Community 24 - "YouTube Overlay"
 Cohesion: 0.47
 Nodes (4): getCurrentVideoId(), getVideoIdFromLocationHref(), watchVideoIdChanges(), parseYouTubeWatchVideoId()
 
-### Community 19 - "Agent Operating Rules"
+### Community 25 - "Testing Contracts"
+Cohesion: 0.33
+Nodes (6): getCurrentVideoId, getVideoIdFromLocationHref, YouTube Page Watch Tests, watchVideoIdChanges, parseYouTubeWatchVideoId, YouTube Video Id Tests
+
+### Community 26 - "Extension Storage"
+Cohesion: 0.5
+Nodes (5): Default Extension Settings, Create Language Pair, Read Extension Settings, Settings Storage Tests, Update Extension Settings
+
+### Community 27 - "Testing Contracts"
+Cohesion: 0.4
+Nodes (5): findActiveCue, parseTimestamp, parseVtt, Extension VTT Parser Tests, Extension VTT Cue
+
+### Community 29 - "Agent Operating Rules"
 Cohesion: 0.5
 Nodes (4): Agent Operating Rules, Claude Agent Operating Rules, Docs Chinese Language Policy, Docs Claude Chinese Language Policy
 
-### Community 20 - "Vtt Parsetimestamp Parsevtt"
+### Community 30 - "vtt ts parseTimestamp"
 Cohesion: 1.0
 Nodes (2): parseTimestamp(), parseVtt()
 
-### Community 21 - "Runner Store"
+### Community 31 - "Backend Runner"
 Cohesion: 0.67
 Nodes (2): Runner, Store
 
+### Community 32 - "Docs And Plans"
+Cohesion: 0.67
+Nodes (3): Whisper CLI Contract, Chat Completions Translation Design, Backend Docker Deployment Design
+
+### Community 33 - "Extension Popup"
+Cohesion: 0.67
+Nodes (3): Create Job Form Shape, Create Job Form Validation Tests, Create Job Form Validator
+
+### Community 38 - "Backend Runner"
+Cohesion: 1.0
+Nodes (2): MockRunner, MockRunner Failure Path Tests
+
+### Community 39 - "Backend Store"
+Cohesion: 1.0
+Nodes (2): SQLite Foreign Key DSN, SQLite Store
+
+### Community 40 - "Docs And Plans"
+Cohesion: 1.0
+Nodes (2): Extension MVP Plan, Extension Backend Contract
+
+### Community 89 - "Extension UI Components"
+Cohesion: 1.0
+Nodes (1): Select Group Wrapper
+
+### Community 90 - "Extension UI Components"
+Cohesion: 1.0
+Nodes (1): Select Value Wrapper
+
+### Community 91 - "Extension UI Components"
+Cohesion: 1.0
+Nodes (1): Select Item Text Wrapper
+
+### Community 92 - "Extension Storage"
+Cohesion: 1.0
+Nodes (1): Video Preference Shape
+
 ## Knowledge Gaps
-- **45 isolated node(s):** `Config`, `Runner`, `Store`, `execCall`, `Cue` (+40 more)
+- **120 isolated node(s):** `Config`, `Runner`, `Store`, `execCall`, `Cue` (+115 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Vtt Parsetimestamp Parsevtt`** (3 nodes): `vtt.ts`, `parseTimestamp()`, `parseVtt()`
+- **Thin community `Backend Store`** (10 nodes): `Store`, `.CreateJob()`, `.CreateSubtitleAsset()`, `.FindJob()`, `.FindLatestJob()`, `.FindReusableJob()`, `.FindSubtitleAsset()`, `.FindSubtitleAssetByJobID()`, `.Migrate()`, `.UpdateJobStatus()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Runner Store`** (3 nodes): `runner.go`, `Runner`, `Store`
+- **Thin community `vtt ts parseTimestamp`** (3 nodes): `vtt.ts`, `parseTimestamp()`, `parseVtt()`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Backend Runner`** (3 nodes): `runner.go`, `Runner`, `Store`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Backend Runner`** (2 nodes): `MockRunner`, `MockRunner Failure Path Tests`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Backend Store`** (2 nodes): `SQLite Foreign Key DSN`, `SQLite Store`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Docs And Plans`** (2 nodes): `Extension MVP Plan`, `Extension Backend Contract`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Extension UI Components`** (1 nodes): `Select Group Wrapper`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Extension UI Components`** (1 nodes): `Select Value Wrapper`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Extension UI Components`** (1 nodes): `Select Item Text Wrapper`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Extension Storage`** (1 nodes): `Video Preference Shape`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `NewHTTPHandler()` connect `Backend API Tests` to `Backend Runner Store`, `Chat Translation`, `Backend Config`, `Mock Runner Newmockrunner`, `Sqlite Foreignkeydsn Open`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Why does `NewRealRunner()` connect `Backend Runner Store` to `Real Runner VTT`, `Backend API Tests`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
-- **Why does `NewJob()` connect `Backend Runner Store` to `Mock Runner Newmockrunner`, `Backend API Types`?**
-  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Why does `NewHTTPHandler()` connect `Backend API` to `Testing Contracts`, `Backend Runner`, `Testing Contracts`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **Why does `NewJob()` connect `Testing Contracts` to `Backend API`, `Backend Store`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **Are the 15 inferred relationships involving `main()` (e.g. with `test_cli_requires_all_required_arguments()` and `test_cli_creates_parent_directory_for_output()`) actually correct?**
+  _`main()` has 15 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 14 inferred relationships involving `LoadConfig()` (e.g. with `main()` and `TestLoadConfigUsesDefaults()`) actually correct?**
+  _`LoadConfig()` has 14 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 16 inferred relationships involving `NewJob()` (e.g. with `TestRealRunnerCompletesJob()` and `TestRealRunnerDownloadFailed()`) actually correct?**
   _`NewJob()` has 16 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 14 inferred relationships involving `main()` (e.g. with `test_cli_requires_all_required_arguments()` and `test_cli_creates_parent_directory_for_output()`) actually correct?**
-  _`main()` has 14 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 6 inferred relationships involving `openTestStore()` (e.g. with `TestRealRunnerCompletesJob()` and `TestRealRunnerDownloadFailed()`) actually correct?**
   _`openTestStore()` has 6 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 12 inferred relationships involving `LoadConfig()` (e.g. with `main()` and `TestLoadConfigUsesDefaults()`) actually correct?**
-  _`LoadConfig()` has 12 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 7 inferred relationships involving `handleExtensionMessage()` (e.g. with `getSettings()` and `updateSettings()`) actually correct?**
+  _`handleExtensionMessage()` has 7 INFERRED edges - model-reasoned connections that need verification._
