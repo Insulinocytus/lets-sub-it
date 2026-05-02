@@ -195,6 +195,7 @@ queued -> downloading -> transcribing -> translating -> packaging -> completed
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite 数据库路径 |
 | `LSI_WORK_DIR` | `./data/jobs` | job 工作目录根路径 |
 | `LSI_RUNNER_MODE` | `mock` | runner 模式：`mock` 或 `real` |
+| `LSI_LOG_LEVEL` | `info` | 后端结构化日志级别：`debug`、`info`、`warn` 或 `error` |
 | `LSI_DOWNLOAD_TIMEOUT` | `10m` | real 模式下单次下载超时 |
 | `LSI_WHISPER_MODEL` | `small` | 传给 `whisper-cli --model` 的模型名或本地 CTranslate2 模型目录 |
 | `LSI_WHISPER_COMPUTE_TYPE` | `default` | 传给 `whisper-cli --compute-type` 的 faster-whisper compute type；CPU 省内存可设为 `int8` |

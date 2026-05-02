@@ -226,6 +226,7 @@ docker compose down
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite database path |
 | `LSI_WORK_DIR` | `./data/jobs` | job work directory root |
 | `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
+| `LSI_LOG_LEVEL` | `info` | backend structured log level: `debug`, `info`, `warn`, or `error` |
 | `LSI_DOWNLOAD_TIMEOUT` | `10m` | download timeout in real mode |
 | `LSI_WHISPER_MODEL` | `small` | `faster-whisper` model or local CTranslate2 model directory passed to `whisper-cli --model` |
 | `LSI_WHISPER_COMPUTE_TYPE` | `default` | faster-whisper compute type passed to `whisper-cli --compute-type`; use `int8` to reduce CPU memory use |

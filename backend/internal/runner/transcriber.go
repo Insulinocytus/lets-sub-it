@@ -3,11 +3,13 @@ package runner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 )
 
-func transcribeAudio(ctx context.Context, audioPath string, sourcePath string, model string, computeType string, language string) error {
+func transcribeAudio(ctx context.Context, jobID string, audioPath string, sourcePath string, model string, computeType string, language string) error {
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		return fmt.Errorf("create transcript directory: %w", err)
 	}
@@ -20,10 +22,14 @@ func transcribeAudio(ctx context.Context, audioPath string, sourcePath string, m
 		"--language", language,
 	}
 	cmd := execCommand(ctx, "whisper-cli", args...)
+	startedAt := time.Now()
+	slog.Debug("external command started", "job_id", jobID, "command", "whisper-cli", "model", model, "compute_type", computeType, "language", language)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		slog.Debug("external command failed", "job_id", jobID, "command", "whisper-cli", "duration_ms", time.Since(startedAt).Milliseconds())
 		return fmt.Errorf("whisper-cli failed: %w\n%s", err, string(output))
 	}
+	slog.Debug("external command completed", "job_id", jobID, "command", "whisper-cli", "duration_ms", time.Since(startedAt).Milliseconds())
 
 	info, statErr := os.Stat(sourcePath)
 	if statErr != nil {

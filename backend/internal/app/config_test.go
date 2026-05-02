@@ -156,3 +156,19 @@ func TestLoadConfigLLMCustomValues(t *testing.T) {
 		t.Fatalf("LLMTimeout = %v", config.LLMTimeout)
 	}
 }
+
+func TestLoadConfigLogLevelDefault(t *testing.T) {
+	t.Setenv("LSI_LOG_LEVEL", "")
+	config := LoadConfig()
+	if config.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want %q", config.LogLevel, "info")
+	}
+}
+
+func TestLoadConfigLogLevelCustom(t *testing.T) {
+	t.Setenv("LSI_LOG_LEVEL", "debug")
+	config := LoadConfig()
+	if config.LogLevel != "debug" {
+		t.Fatalf("LogLevel = %q, want %q", config.LogLevel, "debug")
+	}
+}
