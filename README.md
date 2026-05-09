@@ -257,7 +257,7 @@ mise exec -- uv run whisper-cli \
 ├── extension/               # Chrome MV3 extension
 │   ├── entrypoints/         # popup、background、content script
 │   └── src/                 # API、storage、subtitle、YouTube 集成和 UI
-├── docs/                    # PRD、规格说明和实施计划
+├── docs/                    # Diátaxis 文档：tutorials、how-to、reference、explanation
 ├── docker-compose.yml       # 后端 Docker 部署
 └── mise.toml                # 本地工具链版本
 ```
@@ -308,11 +308,12 @@ cd ../extension && mise exec -- npm run build
 
 ## 相关文档
 
-- [PRD](docs/PRD.md)
+- [文档入口](docs/README.md)
+- [新成员入门](docs/tutorials/onboarding.md)
+- [本地开发](docs/how-to/local-development.md)
+- [Docker 部署](docs/how-to/docker-deployment.md)
+- [后端 API](docs/reference/backend-api.md)
+- [架构总览](docs/explanation/architecture-overview.md)
 - [Backend README](backend/README.md)
 - [Whisper README](whisper/README.md)
 - [Extension README](extension/README.md)
-- [Whisper CLI 设计说明](docs/superpowers/specs/2026-04-23-whisper-cli-design.md)
-- [Extension MVP 设计](docs/superpowers/specs/2026-04-25-extension-mvp-design.md)
-- [真实音频下载设计](docs/superpowers/specs/2026-04-27-real-audio-download-design.md)
-- [Docker 部署设计](docs/superpowers/specs/2026-05-02-docker-deployment-design.md)
