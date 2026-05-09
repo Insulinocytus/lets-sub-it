@@ -42,7 +42,7 @@ YouTube watch page 字幕模式：
 
 后端同时提供 `source` 文件模式。
 
-## 消息协议
+## 运行时消息和通知
 
 - `settings:get`
 - `settings:update`
@@ -52,3 +52,4 @@ YouTube watch page 字幕模式：
 - `subtitle:resolve`
 - `subtitle:fetch-file`
 - `subtitle:update-mode`
+- `lets-sub-it:subtitle-updated`

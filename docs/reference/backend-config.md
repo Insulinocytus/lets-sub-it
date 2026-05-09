@@ -10,8 +10,8 @@
 | `LSI_WHISPER_MODEL` | `small` | 传给 `whisper-cli --model` 的模型名或本地模型目录 |
 | `LSI_WHISPER_COMPUTE_TYPE` | `default` | 传给 `whisper-cli --compute-type` 的计算类型 |
 | `HF_TOKEN` | 空 | Hugging Face 可选 token，用于提高模型下载限额 |
-| `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
-| `LSI_LLM_API_KEY` | 空 | 翻译 provider API key |
+| `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI 兼容 API 源站 |
+| `LSI_LLM_API_KEY` | 空 | OpenAI 默认 endpoint 必填；仅后端读取 |
 | `LSI_LLM_MODEL` | 空 | 翻译模型名 |
 | `LSI_LLM_TIMEOUT` | `2m` | 单段翻译超时时间 |
 

@@ -14,14 +14,14 @@ lets-sub-it/
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/cmd/server/main.go` | HTTP server entry point |
-| `backend/internal/app/` | env config, app wiring, real-mode tool checks |
-| `backend/internal/api/` | routes, handlers, CORS, response mapping |
-| `backend/internal/store/` | GORM models and SQLite persistence |
-| `backend/internal/runner/` | real runner, download, translation, VTT packaging |
-| `whisper/src/whisper_cli/cli.py` | command-line contract and exit codes |
-| `whisper/src/whisper_cli/transcribe.py` | faster-whisper adapter |
-| `whisper/src/whisper_cli/vtt.py` | cue validation and WebVTT rendering |
-| `extension/entrypoints/background.ts` | runtime message gateway |
-| `extension/entrypoints/youtube.content.ts` | YouTube page integration |
-| `extension/entrypoints/popup/` | popup UI entry |
+| `backend/cmd/server/main.go` | HTTP 服务入口 |
+| `backend/internal/app/` | 环境配置、应用装配、真实模式工具检查 |
+| `backend/internal/api/` | 路由、处理器、CORS、响应映射 |
+| `backend/internal/store/` | GORM 模型和 SQLite 持久化 |
+| `backend/internal/runner/` | 真实 runner、下载、翻译、VTT 打包 |
+| `whisper/src/whisper_cli/cli.py` | 命令行契约和退出码 |
+| `whisper/src/whisper_cli/transcribe.py` | faster-whisper 适配层 |
+| `whisper/src/whisper_cli/vtt.py` | cue 校验和 WebVTT 渲染 |
+| `extension/entrypoints/background.ts` | runtime 消息网关 |
+| `extension/entrypoints/youtube.content.ts` | YouTube 页面集成 |
+| `extension/entrypoints/popup/` | popup UI 入口 |
