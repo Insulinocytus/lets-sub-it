@@ -35,8 +35,7 @@ ENV PATH="/opt/whisper-venv/bin:$PATH" \
     HF_HOME=/huggingface \
     LSI_ADDR=0.0.0.0:8080 \
     LSI_DB_PATH=/data/backend.sqlite3 \
-    LSI_WORK_DIR=/data/jobs \
-    LSI_RUNNER_MODE=real
+    LSI_WORK_DIR=/data/jobs
 
 RUN mkdir -p /data/jobs /huggingface
 

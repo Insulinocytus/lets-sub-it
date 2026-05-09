@@ -9,7 +9,6 @@ type Config struct {
 	Addr               string
 	DBPath             string
 	WorkDir            string
-	RunnerMode         string
 	DownloadTimeout    time.Duration
 	WhisperModel       string
 	WhisperComputeType string
@@ -25,7 +24,6 @@ func LoadConfig() Config {
 		Addr:               envOrDefault("LSI_ADDR", "127.0.0.1:8080"),
 		DBPath:             envOrDefault("LSI_DB_PATH", "./data/backend.sqlite3"),
 		WorkDir:            envOrDefault("LSI_WORK_DIR", "./data/jobs"),
-		RunnerMode:         envOrDefault("LSI_RUNNER_MODE", "mock"),
 		DownloadTimeout:    envDurationOrDefault("LSI_DOWNLOAD_TIMEOUT", 10*time.Minute),
 		WhisperModel:       envOrDefault("LSI_WHISPER_MODEL", "small"),
 		WhisperComputeType: envOrDefault("LSI_WHISPER_COMPUTE_TYPE", "default"),

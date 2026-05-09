@@ -45,8 +45,8 @@
 #### 用户故事 2
 
 - extension 可以轮询任务状态，并展示当前阶段的中文标签。
-- MockRunner 的 `translating` 阶段会展示 `done/total segments` 形式的进度文本。
-- `transcribing` 阶段展示"处理中"（RealRunner）或模拟进度（MockRunner）。
+- `transcribing` 阶段展示真实转写处理状态。
+- `translating` 阶段展示真实翻译处理状态。
 - 失败任务会展示失败阶段和 `errorMessage`。
 
 #### 用户故事 3
@@ -287,14 +287,13 @@ VideoPreference {
 | `LSI_ADDR` | `127.0.0.1:8080` | HTTP 监听地址 |
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite 数据库路径 |
 | `LSI_WORK_DIR` | `./data/jobs` | job 工作目录根路径 |
-| `LSI_RUNNER_MODE` | `mock` | runner 模式：`mock` 或 `real` |
-| `LSI_DOWNLOAD_TIMEOUT` | `10m` | `real` 模式下单次下载超时 |
-| `LSI_WHISPER_MODEL` | `small` | `real` 模式下传给 `whisper-cli --model` 的模型名或本地 CTranslate2 模型目录 |
-| `LSI_WHISPER_COMPUTE_TYPE` | `default` | `real` 模式下传给 `whisper-cli --compute-type` 的 faster-whisper compute type；CPU 省内存可设为 `int8` |
+| `LSI_DOWNLOAD_TIMEOUT` | `10m` | 单次下载超时 |
+| `LSI_WHISPER_MODEL` | `small` | 传给 `whisper-cli --model` 的模型名或本地 CTranslate2 模型目录 |
+| `LSI_WHISPER_COMPUTE_TYPE` | `default` | 传给 `whisper-cli --compute-type` 的 faster-whisper compute type；CPU 省内存可设为 `int8` |
 | `HF_TOKEN` | 空 | 可选 Hugging Face token，用于提高模型下载限额；仅 backend 容器读取 |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
 | `LSI_LLM_API_KEY` | 空 | OpenAI 默认 endpoint 必填；Bearer token，仅 backend 读取 |
-| `LSI_LLM_MODEL` | 空 | `real` 模式下翻译必填的模型名 |
+| `LSI_LLM_MODEL` | 空 | 翻译必填的模型名 |
 | `LSI_LLM_TIMEOUT` | `2m` | 单条 cue 翻译请求超时 |
 
 ### Whisper CLI 契约
@@ -341,9 +340,9 @@ VideoPreference {
   - 源语言和目标语言选择（`en` → `zh`）
   - `translated` / `bilingual` 两种字幕模式
   - 本地缓存 + 服务端持久化
-  - MockRunner 完整模拟状态推进；RealRunner 支持真实下载、转写、翻译和打包
+  - 真实下载、转写、翻译和打包
 - v1.1
-  - RealRunner 翻译阶段逐段进度更新（当前只有 MockRunner 展示 `done/total segments`）
+  - 翻译阶段逐段进度更新
   - 服务重启后恢复进行中任务（当前重启会丢失非终态任务）
   - 更可读的错误提示和日志
   - 更稳的页面内快捷切换控件
@@ -405,7 +404,6 @@ VideoPreference {
 - `queued` → `completed` 状态推进
 - 工作目录管理
 - 命令执行和结果回写
-- MockRunner（模拟全阶段，含翻译进度文本）
 - RealRunner（真实下载、转写、逐段翻译含上下文窗口、VTT 打包）
 - 阶段级失败处理和 `errorMessage` 记录
 

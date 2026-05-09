@@ -11,7 +11,6 @@ services:
     env_file:
       - .env
     environment:
-      - LSI_RUNNER_MODE=real
       - LSI_WHISPER_MODEL=${LSI_WHISPER_MODEL:-small}
       - LSI_WHISPER_COMPUTE_TYPE=${LSI_WHISPER_COMPUTE_TYPE:-default}
       - HF_TOKEN=${HF_TOKEN:-}

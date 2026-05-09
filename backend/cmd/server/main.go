@@ -17,7 +17,7 @@ func main() {
 		slog.Error("server initialization failed", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("server starting", "addr", config.Addr, "runner_mode", config.RunnerMode, "log_level", config.LogLevel)
+	slog.Info("server starting", "addr", config.Addr, "log_level", config.LogLevel)
 	if err := http.ListenAndServe(config.Addr, handler); err != nil {
 		slog.Error("server stopped", "error", err)
 		os.Exit(1)

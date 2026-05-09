@@ -41,22 +41,6 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRunnerModeDefault(t *testing.T) {
-	t.Setenv("LSI_RUNNER_MODE", "")
-	config := LoadConfig()
-	if config.RunnerMode != "mock" {
-		t.Fatalf("RunnerMode = %q, want %q", config.RunnerMode, "mock")
-	}
-}
-
-func TestLoadConfigRunnerModeCustom(t *testing.T) {
-	t.Setenv("LSI_RUNNER_MODE", "real")
-	config := LoadConfig()
-	if config.RunnerMode != "real" {
-		t.Fatalf("RunnerMode = %q, want %q", config.RunnerMode, "real")
-	}
-}
-
 func TestLoadConfigDownloadTimeoutDefault(t *testing.T) {
 	t.Setenv("LSI_DOWNLOAD_TIMEOUT", "")
 	config := LoadConfig()
