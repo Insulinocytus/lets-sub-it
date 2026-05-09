@@ -23,7 +23,7 @@ func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel stri
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
-	jobStartedAt := logJobStarted(job, "real")
+	jobStartedAt := logJobStarted(job)
 	stageStartedAt := logJobStageStarted(job, store.StatusDownloading)
 	if err := r.set(job.ID, store.StatusDownloading, "正在下载音频...", ""); err != nil {
 		return r.fail(job, store.StatusDownloading, err, jobStartedAt)
