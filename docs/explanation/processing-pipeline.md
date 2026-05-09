@@ -19,6 +19,10 @@
 | `downloading` | `yt-dlp` + `ffmpeg` | 下载子进程成功退出；工作目录中存在目标媒体文件；后端可以读取最终文件路径。 |
 | `transcribing` | `whisper-cli` | `whisper-cli` 子进程退出码为 `0`；`source.vtt` 文件存在；`source.vtt` 可解析且 cue 数量大于 0。 |
 | `translating` | OpenAI-compatible LLM | 所有 source cues 都产出对应目标语言文本；每个 cue 的翻译请求携带最多前后各 10 条上下文 cue；LLM 返回 JSON 格式 `{"translation": "..."}`，翻译数量与 source cues 一致。 |
-| `packaging` | backend writes `translated.vtt` and `bilingual.vtt` | `translated.vtt` 和 `bilingual.vtt` 文件存在；两个文件都可解析，且 cue 数量与 `source.vtt` 一致。 |
+| `packaging` | 后端写入 `translated.vtt` 和 `bilingual.vtt` | `translated.vtt` 和 `bilingual.vtt` 文件存在；两个文件都可解析，且 cue 数量与 `source.vtt` 一致。 |
+
+## 当前限制
+
+当前 MVP 不会在服务重启后自动恢复进行中的 runner。服务重启后，非终态 job 的后台执行已经中断；如果旧的进行中任务被查询或复用，可能需要重新创建任务或清理旧状态。
 
 状态、字段和复用键见 [数据与任务模型](../reference/data-and-job-model.md)。
