@@ -310,8 +310,3 @@ This project has a graphify knowledge graph at `graphify-out/`.
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files.
 - For cross-module questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep because these traverse extracted and inferred edges.
 - After modifying code files in this session, run `graphify update .` to keep the graph current. This is AST-only and has no API cost.
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-<!-- SPECKIT END -->
