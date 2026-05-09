@@ -17,8 +17,8 @@
 | 阶段 | 执行者 | 完成条件 |
 | --- | --- | --- |
 | `downloading` | `yt-dlp` + `ffmpeg` | 下载子进程成功退出；工作目录中存在目标媒体文件；后端可以读取最终文件路径。 |
-| `transcribing` | `whisper-cli` | `whisper-cli` 子进程退出码为 `0`；`source.vtt` 文件存在；`source.vtt` 可解析且 cue 数量大于 0。 |
-| `translating` | OpenAI-compatible LLM | 所有 source cues 都产出对应目标语言文本；每个 cue 的翻译请求携带最多前后各 10 条上下文 cue；LLM 返回 JSON 格式 `{"translation": "..."}`，翻译数量与 source cues 一致；`translated.vtt` 写入成功。 |
+| `transcribing` | `whisper-cli` | `whisper-cli` 子进程退出码为 `0`；`source.vtt` 文件存在且非空。 |
+| `translating` | OpenAI-compatible LLM | 后端成功解析 source cues，cue 数量大于 0；所有 source cues 都产出对应目标语言文本；每个 cue 的翻译请求携带最多前后各 10 条上下文 cue；LLM 返回 JSON 格式 `{"translation": "..."}`，翻译数量与 source cues 一致；`translated.vtt` 写入成功。 |
 | `packaging` | 后端打包字幕资产 | 生成 `bilingual.vtt`；创建 `SubtitleAsset` 记录；`source.vtt`、`translated.vtt`、`bilingual.vtt` 均可通过文件服务按 mode 访问。 |
 
 ## 当前限制
