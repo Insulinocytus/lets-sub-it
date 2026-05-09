@@ -14,9 +14,9 @@
 
 ## 四象限
 
-- [Tutorials](tutorials/README.md)：按顺序学习的教程，优先服务新成员。
-- [How-to guides](how-to/README.md)：完成具体任务的操作步骤。
-- [Reference](reference/README.md)：稳定契约和查表信息。
-- [Explanation](explanation/README.md)：系统为什么这样设计和运行。
+- [教程](tutorials/README.md)（Tutorials）：按顺序学习的教程，优先服务新成员。
+- [操作指南](how-to/README.md)（How-to guides）：完成具体任务的操作步骤。
+- [参考资料](reference/README.md)（Reference）：稳定契约和查表信息。
+- [解释文档](explanation/README.md)（Explanation）：系统为什么这样设计和运行。
 
 `docs/superpowers/` 是 AI 协作过程中生成的规格和计划档案，不是人类长期文档入口。
