@@ -9,7 +9,7 @@ This repository is a multi-module MVP, not a single-package workspace:
 - `backend/` — Go 1.22 HTTP API server with SQLite/GORM persistence, job deduplication, real runner (`yt-dlp` + `whisper-cli` + LLM), and VTT file serving.
 - `whisper/` — Python 3.12 `whisper-cli` package wrapping `faster-whisper`, producing validated WebVTT and JSON summaries.
 - `extension/` — Chrome MV3 extension using WXT, Vue, TypeScript, Vitest, Tailwind/shadcn-vue, background API gateway, storage cache, and YouTube subtitle overlay.
-- `docs/` — Chinese PRD, specs, and implementation plans. The nested `docs/AGENTS.md` takes precedence for all files under `docs/`.
+- `docs/` — Chinese human documentation organized with Diátaxis (`tutorials/`, `how-to/`, `reference/`, `explanation/`) plus AI-generated archives under `docs/superpowers/`. The nested `docs/AGENTS.md` takes precedence for all files under `docs/`.
 
 Backend runtime uses the real download, transcription, translation, and packaging pipeline. Unit tests must remain offline-friendly through fakes and stubs.
 

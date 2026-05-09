@@ -1,9 +1,9 @@
-# Documentation Language Policy
+# 文档语言政策
 
-All files under `docs/` must be written in Chinese.
+`docs/` 下的人类长期文档正文、标题、说明、注释应使用中文。
 
-When creating or editing documents in `docs/`, use Chinese for headings, explanations, notes, and body text.
+代码、命令、路径、配置键、API 名、专有名词、必须保持原样的引用可以保留英文。
 
-Non-Chinese text is allowed only for code, commands, file paths, config keys, API names, proper nouns, or quoted text that must remain unchanged.
+`docs/superpowers/` 是 AI 协作生成的历史档案区，不属于人类长期文档入口。旧档案可保留生成时的语言和格式，除非本次任务明确要求编辑这些档案。
 
-If non-Chinese prose is found in `docs/`, translate it into natural Chinese while preserving the technical meaning.
+新增或主动编辑的人类文档如果出现非中文 prose，应翻译为自然中文，同时保留技术含义。
