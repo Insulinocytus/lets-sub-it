@@ -80,9 +80,6 @@
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right functional requirements.
-  Include local/self-hosted scope, public YouTube-only behavior, localhost backend
-  origin limits, secret handling, and offline testability constraints whenever
-  the feature touches those contracts.
 -->
 
 ### Functional Requirements
@@ -102,16 +99,6 @@
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
-
-### Scope & Boundaries *(mandatory)*
-
-- **In Scope**: [Public YouTube/local self-hosted behavior this feature changes]
-- **Out of Scope**: [Private video, login/cookie handling, auth bypass, public
-  internet exposure, broad language support, or other excluded behavior]
-- **Security/Secrets**: [How provider keys, local file paths, extension origins,
-  and subtitle file serving boundaries remain protected]
-- **Offline Verification**: [How behavior can be tested without real YouTube,
-  model downloads, GPU, external LLM calls, or provider keys]
 
 ## Success Criteria *(mandatory)*
 

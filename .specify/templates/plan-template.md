@@ -31,22 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **Local-first scope**: Plan keeps the feature within single-user local
-  self-hosting for public YouTube videos. Any private video, login, cookie,
-  auth-bypass, multi-tenant, or public-internet exposure change is explicitly
-  rejected or documented as a constitution amendment.
-- **Pipeline and module contracts**: Plan preserves the `backend/`, `whisper/`,
-  and `extension/` boundaries. Content scripts do not call the backend directly,
-  and API responses do not expose local absolute file paths.
-- **Offline tests**: Plan lists deterministic tests for behavior changes and
-  avoids real YouTube, model downloads, GPU, external LLM calls, provider keys,
-  private local data, or long-lived network dependencies in unit tests.
-- **Security and secrets**: Plan keeps provider keys in backend configuration,
-  preserves localhost-only extension backend origins with explicit ports, and
-  maintains safe subtitle file serving boundaries.
-- **Simplicity**: Plan justifies any new dependency, framework, queue/background
-  system, broad language support, provider abstraction, or cross-module rewrite;
-  otherwise the change follows existing local patterns.
+[Gates determined based on constitution file]
 
 ## Project Structure
 
@@ -71,29 +56,39 @@ specs/[###-feature]/
 -->
 
 ```text
-backend/
-├── cmd/server/
-└── internal/
-    ├── api/
-    ├── app/
-    ├── runner/
-    └── store/
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
 
-whisper/
-├── src/whisper_cli/
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
 └── tests/
 
-extension/
-├── entrypoints/
-└── src/
-    ├── api/
-    ├── popup/
-    ├── storage/
-    ├── subtitles/
-    └── youtube/
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
 
-docs/
-└── [Chinese project docs and plans when affected]
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real
