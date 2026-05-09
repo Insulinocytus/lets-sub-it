@@ -28,7 +28,8 @@ Backend runtime uses the real download, transcription, translation, and packagin
 - Agent shells do **not** auto-activate `mise`; prefix tool commands with `mise exec --`.
 - Install pinned toolchains from the repository root with `mise install`.
 - This is not a unified package-manager monorepo. Enter the relevant module before running commands.
-- Tool versions are pinned in `mise.toml`: Go 1.22, Python 3.12, Node.js 22, and `uv`.
+- Tool versions are pinned in `mise.toml`: Go 1.22, Python 3.12, Node.js 22, `uv`, `task`, and `actionlint`.
+- `Taskfile.yml` provides convenience wrappers; after installing tools, run `mise exec -- task --list` to inspect available tasks.
 - Use `rg` / `rg --files` for search unless unavailable.
 - For architecture or cross-module questions, read `graphify-out/GRAPH_REPORT.md` first. If `graphify-out/wiki/index.md` exists, navigate that before raw files.
 
@@ -38,6 +39,12 @@ Install local toolchains:
 
 ```bash
 mise install
+```
+
+Optional all-module setup through Taskfile:
+
+```bash
+mise exec -- task setup
 ```
 
 Install module dependencies:
@@ -116,6 +123,13 @@ Run all tests for each module:
 | whisper | `cd whisper && mise exec -- uv run pytest` |
 | extension | `cd extension && mise exec -- npm run test` |
 
+Convenience task wrappers:
+
+| Scope | Command |
+| --- | --- |
+| all tests | `mise exec -- task test` |
+| tests plus extension typecheck | `mise exec -- task check` |
+
 Focused commands:
 
 | Scope | Command |
@@ -141,7 +155,7 @@ When changing behavior:
 
 ## Build Verification
 
-No automated CI is configured. Verify affected modules manually:
+No automated PR test gate is configured. Verify affected modules manually:
 
 | Module | Build command | Generated artifacts |
 | --- | --- | --- |
@@ -149,12 +163,24 @@ No automated CI is configured. Verify affected modules manually:
 | whisper | `cd whisper && mise exec -- uv build` | `whisper/dist/` |
 | extension | `cd extension && mise exec -- npm run build` | `extension/.output/`, `extension/.wxt/` |
 
+Convenience task wrapper:
+
+```bash
+mise exec -- task build
+```
+
 Use Docker for backend deployment verification:
 
 ```bash
 docker compose up -d --build
 docker compose logs -f
 docker compose down
+```
+
+CI/CD note: `.github/workflows/backend-image.yml` builds and pushes the backend Docker image to GHCR on pushes to `main` that touch backend, whisper, Docker, or workflow files. When editing GitHub Actions, run:
+
+```bash
+mise exec -- actionlint .github/workflows/backend-image.yml
 ```
 
 ## Code Style
@@ -281,7 +307,8 @@ Exit codes: `0` success, `2` input validation failure, `3` transcription failure
 
 - PR label/title prefix should indicate scope: `[backend]`, `[whisper]`, `[extension]`, or `[docs]`.
 - Follow `.github/pull_request_template.md`: reference, summary, close issue, per-file explanation, verification commands, and review focus.
-- No CI pipeline exists. Run relevant checks manually and list commands/results in the PR description.
+- No PR test pipeline exists. Run relevant checks manually and list commands/results in the PR description.
+- Merge PRs with a regular merge commit. Do not use squash merge or rebase merge unless explicitly requested.
 
 Pre-merge verification by scope:
 
