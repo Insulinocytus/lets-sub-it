@@ -7,12 +7,11 @@ import (
 	"lets-sub-it-api/internal/store"
 )
 
-func logJobStarted(job store.Job, runnerMode string) time.Time {
+func logJobStarted(job store.Job) time.Time {
 	startedAt := time.Now()
 	slog.Info("job started",
 		"job_id", job.ID,
 		"video_id", job.VideoID,
-		"runner_mode", runnerMode,
 		"source_language", job.SourceLanguage,
 		"target_language", job.TargetLanguage,
 	)
