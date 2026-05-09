@@ -1,7 +1,7 @@
 # Graph Report - lets-sub-it  (2026-05-10)
 
 ## Corpus Check
-- 102 files · ~32,625 words
+- 102 files · ~60,830 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -44,10 +44,10 @@
 10. `render_vtt()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `cacheAndNotify()` --calls--> `getSettings()`  [INFERRED]
-  extension/src/api/job-monitor.ts → extension/src/storage/settings.ts
-- `getMonitorBackendBaseUrl()` --calls--> `getSettings()`  [INFERRED]
-  extension/src/api/job-monitor.ts → extension/src/storage/settings.ts
+- `getSettings()` --calls--> `cacheAndNotify()`  [INFERRED]
+  extension/src/storage/settings.ts → extension/src/api/job-monitor.ts
+- `getSettings()` --calls--> `getMonitorBackendBaseUrl()`  [INFERRED]
+  extension/src/storage/settings.ts → extension/src/api/job-monitor.ts
 - `getMonitorClient()` --calls--> `createBackendClient()`  [INFERRED]
   extension/src/api/job-monitor.ts → extension/src/api/backend-client.ts
 - `getMonitorBackendBaseUrl()` --calls--> `normalizeBackendBaseUrl()`  [INFERRED]
