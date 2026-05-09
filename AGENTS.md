@@ -6,12 +6,12 @@ Lets Sub It is a self-hosted YouTube subtitle generation and translation tool. A
 
 This repository is a multi-module MVP, not a single-package workspace:
 
-- `backend/` — Go 1.22 HTTP API server with SQLite/GORM persistence, job deduplication, mock runner by default, optional real runner (`yt-dlp` + `whisper-cli` + LLM), and VTT file serving.
+- `backend/` — Go 1.22 HTTP API server with SQLite/GORM persistence, job deduplication, real runner (`yt-dlp` + `whisper-cli` + LLM), and VTT file serving.
 - `whisper/` — Python 3.12 `whisper-cli` package wrapping `faster-whisper`, producing validated WebVTT and JSON summaries.
 - `extension/` — Chrome MV3 extension using WXT, Vue, TypeScript, Vitest, Tailwind/shadcn-vue, background API gateway, storage cache, and YouTube subtitle overlay.
 - `docs/` — Chinese PRD, specs, and implementation plans. The nested `docs/AGENTS.md` takes precedence for all files under `docs/`.
 
-Default behavior is offline-friendly: `backend` uses `LSI_RUNNER_MODE=mock`, so it does not contact YouTube, download Whisper models, or call an LLM. `LSI_RUNNER_MODE=real` enables actual download, transcription, translation, and packaging.
+Backend runtime uses the real download, transcription, translation, and packaging pipeline. Unit tests must remain offline-friendly through fakes and stubs.
 
 ## Agent Operating Rules
 
@@ -48,7 +48,7 @@ cd ../whisper && mise exec -- uv sync --dev
 cd ../extension && mise exec -- npm install
 ```
 
-Docker backend setup for real runner:
+Docker backend setup:
 
 ```bash
 cp .env.example .env
@@ -60,27 +60,11 @@ Docker builds the Go backend, Python `whisper-cli`, `yt-dlp`, and `ffmpeg` into 
 
 ## Development Workflow
 
-Start backend with the default mock runner:
-
-```bash
-cd backend
-LSI_ADDR=127.0.0.1:8080 mise exec -- go run ./cmd/server
-```
-
-Smoke test the API:
-
-```bash
-curl -X POST "http://127.0.0.1:8080/jobs" \
-  -H "Content-Type: application/json" \
-  -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
-```
-
-Start backend with the real runner:
+Start backend with the local real toolchain:
 
 ```bash
 cd whisper && mise exec -- uv sync --dev && cd ../backend
 PATH="$PWD/../whisper/.venv/bin:$PATH" \
-LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
 LSI_WHISPER_MODEL=small \
 LSI_WHISPER_COMPUTE_TYPE=int8 \
@@ -90,6 +74,14 @@ LSI_LLM_MODEL=gpt-4.1-mini \
 LSI_LLM_TIMEOUT=2m \
 LSI_ADDR=127.0.0.1:8080 \
 mise exec -- go run ./cmd/server
+```
+
+Smoke test the API:
+
+```bash
+curl -X POST "http://127.0.0.1:8080/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
 ```
 
 Start the extension dev server:
@@ -172,7 +164,7 @@ docker compose down
 - Use standard `gofmt`; do not introduce a formatter beyond Go tooling.
 - Keep HTTP parsing, response structs, routing, and CORS in `backend/internal/api/`.
 - Keep SQLite/GORM persistence in `backend/internal/store/`; schema is initialized with GORM `AutoMigrate`.
-- Keep job execution in `backend/internal/runner/`; `MockRunner` simulates all stages and `RealRunner` calls external tools.
+- Keep job execution in `backend/internal/runner/`; `RealRunner` calls external tools, while tests use local fakes/stubs.
 - Do not add frameworks, queue systems, or background task systems unless explicitly requested.
 - API responses must never expose local absolute file paths. Frontend should use `/subtitle-files/:jobId/:mode`.
 - File serving must stay contained within the job work directory; preserve path traversal and symlink escape protections.
@@ -208,7 +200,7 @@ docker compose down
 | backend config/app | `backend/internal/app/` | env config, app wiring, real-mode tool checks |
 | backend API | `backend/internal/api/` | routes, handlers, CORS, response mapping |
 | backend store | `backend/internal/store/` | GORM models and SQLite persistence |
-| backend runner | `backend/internal/runner/` | mock/real runner, download, translation, VTT packaging |
+| backend runner | `backend/internal/runner/` | real runner, download, translation, VTT packaging |
 | whisper CLI | `whisper/src/whisper_cli/cli.py` | command-line contract and exit codes |
 | whisper transcribe | `whisper/src/whisper_cli/transcribe.py` | faster-whisper adapter |
 | whisper VTT | `whisper/src/whisper_cli/vtt.py` | cue validation and WebVTT rendering |
@@ -225,15 +217,14 @@ docker compose down
 | `LSI_ADDR` | `127.0.0.1:8080` | HTTP listen address; Docker sets `0.0.0.0:8080` inside the container |
 | `LSI_DB_PATH` | `./data/backend.sqlite3` | SQLite database path |
 | `LSI_WORK_DIR` | `./data/jobs` | job work directory root |
-| `LSI_RUNNER_MODE` | `mock` | `mock` or `real` |
 | `LSI_LOG_LEVEL` | `info` | backend structured log level: `debug`, `info`, `warn`, or `error` |
-| `LSI_DOWNLOAD_TIMEOUT` | `10m` | download timeout in real mode |
+| `LSI_DOWNLOAD_TIMEOUT` | `10m` | download timeout |
 | `LSI_WHISPER_MODEL` | `small` | `faster-whisper` model or local CTranslate2 model directory passed to `whisper-cli --model` |
 | `LSI_WHISPER_COMPUTE_TYPE` | `default` | faster-whisper compute type passed to `whisper-cli --compute-type`; use `int8` to reduce CPU memory use |
 | `HF_TOKEN` | empty | optional Hugging Face token for higher model download limits; read by backend container tooling |
 | `LSI_LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible API origin |
 | `LSI_LLM_API_KEY` | empty | required for the OpenAI default endpoint; backend-only |
-| `LSI_LLM_MODEL` | empty | required in real mode for translation |
+| `LSI_LLM_MODEL` | empty | required for translation |
 | `LSI_LLM_TIMEOUT` | `2m` | per-cue translation timeout |
 
 ### API reference
@@ -274,7 +265,7 @@ Exit codes: `0` success, `2` input validation failure, `3` transcription failure
 
 - All prose under `docs/` must be Chinese. Code, commands, paths, config keys, API names, and required references may remain English.
 - The closest `AGENTS.md` takes precedence; read `docs/AGENTS.md` before editing `docs/`.
-- When changing behavioral contracts, commands, APIs, exit codes, directory structure, supported languages, mock/real boundaries, or security boundaries, check whether `README.md`, `backend/README.md`, `whisper/README.md`, `extension/README.md`, and related docs also need updates.
+- When changing behavioral contracts, commands, APIs, exit codes, directory structure, supported languages, runner boundaries, or security boundaries, check whether `README.md`, `backend/README.md`, `whisper/README.md`, `extension/README.md`, and related docs also need updates.
 - Keep root `README.md` human-facing. Keep `AGENTS.md` focused on instructions for coding agents.
 
 ## Security & Data Boundaries
@@ -303,8 +294,8 @@ Pre-merge verification by scope:
 
 ## Common Pitfalls
 
-- Backend default is `mock`; only `LSI_RUNNER_MODE=real` performs real download/transcription/translation.
-- Docker backend runs real mode by default and binds host port `127.0.0.1:8080` unless `LSI_DOCKER_BIND_HOST` changes.
+- Backend startup requires `yt-dlp`, `ffmpeg`, and `whisper-cli` on `PATH`.
+- Docker backend binds host port `127.0.0.1:8080` unless `LSI_DOCKER_BIND_HOST` changes.
 - Extension MVP supports only `en` and `zh`; do not promise a broad language list.
 - CORS and backend URL validation are localhost-only with explicit ports.
 - Unit tests must stay offline.

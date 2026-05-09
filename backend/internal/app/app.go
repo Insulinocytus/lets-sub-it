@@ -30,17 +30,11 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	var jobRunner runner.Runner
-	switch config.RunnerMode {
-	case "real":
-		if err := checkTools(); err != nil {
-			return nil, err
-		}
-		translator := runner.NewChatTranslator(config.LLMBaseURL, config.LLMAPIKey, config.LLMModel, config.LLMTimeout, http.DefaultClient)
-		jobRunner = runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, config.WhisperComputeType, translator)
-	default:
-		jobRunner = runner.NewMockRunner(database)
+	if err := checkTools(); err != nil {
+		return nil, err
 	}
+	translator := runner.NewChatTranslator(config.LLMBaseURL, config.LLMAPIKey, config.LLMModel, config.LLMTimeout, http.DefaultClient)
+	jobRunner := runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, config.WhisperComputeType, translator)
 
 	handler := api.NewHandler(database, jobRunner, config.WorkDir)
 	return api.Routes(handler), nil
@@ -49,7 +43,7 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 func checkTools() error {
 	for _, tool := range []string{"yt-dlp", "ffmpeg", "whisper-cli"} {
 		if _, err := lookPath(tool); err != nil {
-			return fmt.Errorf("LSI_RUNNER_MODE=real requires %s to be installed and on PATH", tool)
+			return fmt.Errorf("backend requires %s to be installed and on PATH", tool)
 		}
 	}
 	return nil

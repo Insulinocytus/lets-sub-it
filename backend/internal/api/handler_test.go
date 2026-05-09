@@ -11,16 +11,45 @@ import (
 	"testing"
 	"time"
 
-	"lets-sub-it-api/internal/runner"
 	"lets-sub-it-api/internal/store"
 )
 
-type syncRunner struct {
-	runner *runner.MockRunner
+type completingRunner struct {
+	store interface {
+		UpdateJobStatus(id string, status string, stage string, progressText string, errorMessage string) error
+		CreateSubtitleAsset(asset store.SubtitleAsset) error
+	}
 }
 
-func (r syncRunner) Start(ctx context.Context, job store.Job) error {
-	return r.runner.Start(ctx, job)
+func (r completingRunner) Start(ctx context.Context, job store.Job) error {
+	if err := r.store.UpdateJobStatus(job.ID, store.StatusPackaging, store.StatusPackaging, "生成测试字幕资产", ""); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(job.WorkingDir, 0o755); err != nil {
+		return err
+	}
+
+	sourcePath := filepath.Join(job.WorkingDir, "source.vtt")
+	translatedPath := filepath.Join(job.WorkingDir, "translated.vtt")
+	bilingualPath := filepath.Join(job.WorkingDir, "bilingual.vtt")
+	for _, filePath := range []string{sourcePath, translatedPath, bilingualPath} {
+		if err := os.WriteFile(filePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\ntest subtitle\n"), 0o644); err != nil {
+			return err
+		}
+	}
+
+	if err := r.store.CreateSubtitleAsset(store.SubtitleAsset{
+		JobID:             job.ID,
+		VideoID:           job.VideoID,
+		TargetLanguage:    job.TargetLanguage,
+		SourceLanguage:    job.SourceLanguage,
+		SourceVTTPath:     sourcePath,
+		TranslatedVTTPath: translatedPath,
+		BilingualVTTPath:  bilingualPath,
+	}); err != nil {
+		return err
+	}
+	return r.store.UpdateJobStatus(job.ID, store.StatusCompleted, store.StatusCompleted, "处理完成", "")
 }
 
 func newTestServer(t *testing.T) http.Handler {
@@ -32,11 +61,11 @@ func newTestServer(t *testing.T) http.Handler {
 	if err := testStore.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
 	}
-	handler := NewHandler(testStore, syncRunner{runner: runner.NewMockRunner(testStore)}, t.TempDir())
+	handler := NewHandler(testStore, completingRunner{store: testStore}, t.TempDir())
 	return Routes(handler)
 }
 
-func TestPostJobsCreatesJobAndCompletesWithMockRunner(t *testing.T) {
+func TestPostJobsCreatesJobAndCompletes(t *testing.T) {
 	server := newTestServer(t)
 	body := bytes.NewBufferString(`{"youtubeUrl":"https://www.youtube.com/watch?v=abc123","sourceLanguage":"ja","targetLanguage":"zh"}`)
 	request := httptest.NewRequest(http.MethodPost, "/jobs", body)

@@ -103,9 +103,6 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	if !strings.Contains(string(translatedContent), "translated one") {
 		t.Fatalf("translated.vtt content = %q, want translated one", string(translatedContent))
 	}
-	if strings.Contains(string(translatedContent), "mock 翻译") {
-		t.Fatalf("translated.vtt content = %q, want no mock translation", string(translatedContent))
-	}
 	bilingualContent, readBilingualErr := os.ReadFile(asset.BilingualVTTPath)
 	if readBilingualErr != nil {
 		t.Fatalf("os.ReadFile(bilingual.vtt) error = %v", readBilingualErr)

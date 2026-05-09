@@ -12,13 +12,7 @@ mise exec -- go mod download
 
 ## Run
 
-启动本地 mock API server：
-
-```bash
-LSI_ADDR=127.0.0.1:8080 mise exec -- go run ./cmd/server
-```
-
-启动真实下载、转写与翻译 runner 前，先同步本仓库的 `whisper-cli` 依赖：
+启动本地 API server 前，先同步本仓库的 `whisper-cli` 依赖：
 
 ```bash
 cd ../whisper
@@ -26,11 +20,10 @@ mise exec -- uv sync --dev
 cd ../backend
 ```
 
-还需要确认本机已安装 `yt-dlp` 和 `ffmpeg`；否则下载工具或 `whisper-cli` 可能无法在 runner 中找到。
+还需要确认本机已安装 `yt-dlp` 和 `ffmpeg`；否则后端启动会失败。
 
 ```bash
 PATH="$PWD/../whisper/.venv/bin:$PATH" \
-LSI_RUNNER_MODE=real \
 LSI_DOWNLOAD_TIMEOUT=10m \
 LSI_WHISPER_MODEL=small \
 LSI_WHISPER_COMPUTE_TYPE=int8 \
@@ -77,9 +70,9 @@ mise exec -- go test ./...
 
 ## Runner boundary
 
-当前 backend 已经实现了真实 HTTP API、SQLite 持久化、job 复用、mock 状态推进和 VTT 字幕文件服务，方便前端和播放页联调。
+当前 backend 已经实现了真实 HTTP API、SQLite 持久化、job 复用、真实下载、转写、翻译和 VTT 字幕文件服务。
 
-默认 mock runner 不会调用真实的 `yt-dlp`、`ffmpeg`、`whisper-cli` 或 LLM。设置 `LSI_RUNNER_MODE=real` 后，backend 会调用 `yt-dlp` 产出 `audio.mp3`，调用 PATH 中本仓库的 Python `whisper-cli` 产出真实 `source.vtt`，再调用 Chat Completions 兼容 LLM 生成真实 `translated.vtt` 和 `bilingual.vtt`。
+backend 会调用 `yt-dlp` 产出 `audio.mp3`，调用 PATH 中本仓库的 Python `whisper-cli` 产出真实 `source.vtt`，再调用 Chat Completions 兼容 LLM 生成真实 `translated.vtt` 和 `bilingual.vtt`。
 
 `LSI_LLM_API_KEY` 对 OpenAI 默认 endpoint 必填；本地无鉴权兼容服务可留空。该值只由 backend 读取，extension 不保存 provider key，也不直接调用翻译 provider。
 
