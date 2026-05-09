@@ -49,4 +49,4 @@ mise exec -- uv run whisper-cli \
 
 ## WebVTT 输出规则
 
-`--output` 必须写出合法 WebVTT。测试使用 fake models，并且必须保持离线可重复。
+`--output` 必须写出合法 WebVTT。测试使用假模型，并且必须保持离线可重复。

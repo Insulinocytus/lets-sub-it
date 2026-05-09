@@ -5,7 +5,7 @@ lets-sub-it/
 ├── backend/              # Go 后端 HTTP API、SQLite/GORM 持久化和真实任务 runner
 ├── whisper/              # Python whisper-cli，封装 faster-whisper 并输出 WebVTT
 ├── extension/            # Chrome MV3 扩展，负责弹窗、后台消息网关和 YouTube 字幕叠加
-├── docs/                 # PRD、规格、计划和 reference 文档
+├── docs/                 # Diátaxis 文档；docs/superpowers 为 AI 协作档案
 ├── docker-compose.yml    # 本地 Docker 后端编排
 └── mise.toml             # Go、Python、Node.js 和 uv 工具链版本
 ```
