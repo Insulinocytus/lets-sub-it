@@ -114,11 +114,14 @@ async function loadSettings() {
 }
 
 async function handleSettingsUpdated(settings: Settings) {
-  const previousMode = settingsSubtitleMode.value
+  const previousSettingsMode = settingsSubtitleMode.value
   applySettings(settings)
 
-  if (settingsSubtitleMode.value !== previousMode && currentAsset.value) {
-    await changeMode(settingsSubtitleMode.value)
+  if (settingsSubtitleMode.value !== previousSettingsMode && currentAsset.value) {
+    const applied = await changeMode(settingsSubtitleMode.value)
+    if (!applied) {
+      settingsSubtitleMode.value = previousSettingsMode
+    }
   }
 }
 
@@ -220,9 +223,9 @@ async function loadVtt(token = requestToken): Promise<boolean> {
   return true
 }
 
-async function changeMode(mode: SubtitleMode) {
+async function changeMode(mode: SubtitleMode): Promise<boolean> {
   if (selectedMode.value === mode) {
-    return
+    return true
   }
 
   const token = requestToken
@@ -231,7 +234,7 @@ async function changeMode(mode: SubtitleMode) {
   const previousActiveText = activeText.value
   const asset = currentAsset.value
   if (!asset) {
-    return
+    return false
   }
   const videoId = asset.videoId
   const jobId = asset.jobId
@@ -260,7 +263,7 @@ async function changeMode(mode: SubtitleMode) {
       restoreDisplayedSubtitles(token, previousCues, previousActiveText)
       status.value = readableError(error)
     }
-    return
+    return false
   }
 
   if (
@@ -269,21 +272,21 @@ async function changeMode(mode: SubtitleMode) {
     currentAsset.value?.jobId !== jobId ||
     selectedMode.value !== mode
   ) {
-    return
+    return false
   }
 
   if (!result.ok) {
     selectedMode.value = previousMode
     restoreDisplayedSubtitles(token, previousCues, previousActiveText)
     status.value = result.error.message
-    return
+    return false
   }
 
   if (!result.data) {
     selectedMode.value = previousMode
     restoreDisplayedSubtitles(token, previousCues, previousActiveText)
     status.value = '字幕模式切换失败'
-    return
+    return false
   }
 
   currentAsset.value = result.data
@@ -317,17 +320,17 @@ async function changeMode(mode: SubtitleMode) {
         currentAsset.value?.jobId !== jobId ||
         selectedMode.value !== previousMode
       ) {
-        return
+        return false
       }
       if (!rollbackResult.ok) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = rollbackResult.error.message
-        return
+        return false
       }
       if (!rollbackResult.data) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = '字幕模式回滚失败'
-        return
+        return false
       }
       currentAsset.value = rollbackResult.data
     } catch (error) {
@@ -340,10 +343,13 @@ async function changeMode(mode: SubtitleMode) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = readableError(error)
       }
-      return
+      return false
     }
     await loadVtt(token)
+    return false
   }
+
+  return true
 }
 
 function bindVideo(token: number) {
@@ -446,9 +452,11 @@ function isSettings(value: unknown): value is Settings {
   }
 
   const candidate = value as Partial<Settings>
+  const fontSize = candidate.subtitleFontSizePx
   return (
-    typeof candidate.subtitleFontSizePx === 'number' &&
-    candidate.subtitleFontSizePx > 0 &&
+    typeof fontSize === 'number' &&
+    Number.isFinite(fontSize) &&
+    fontSize > 0 &&
     SUBTITLE_MODES.includes(candidate.subtitleMode as SubtitleMode)
   )
 }

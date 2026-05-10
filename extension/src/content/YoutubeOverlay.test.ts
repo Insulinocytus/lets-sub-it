@@ -200,6 +200,68 @@ describe('YoutubeOverlay', () => {
     )
   })
 
+  it('ignores settings update messages with non-finite subtitle font sizes', async () => {
+    const wrapper = await mountLoadedOverlay()
+
+    sendSettingsUpdated({
+      ...settings,
+      subtitleFontSizePx: Infinity,
+      subtitleMode: 'bilingual',
+    })
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:update-mode')).toHaveLength(0)
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).toContain(
+      'font-size: 20px',
+    )
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).not.toContain(
+      'Infinitypx',
+    )
+  })
+
+  it('retries the same settings mode after a failed mode change rollback', async () => {
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'bilingual' as const },
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: {
+          code: 'subtitle_file_missing',
+          message: '字幕文件不存在',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'translated' as const },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'bilingual' as const },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+
+    expect(
+      getMessagesByType('subtitle:update-mode').filter(
+        (message) => message?.payload?.mode === 'bilingual',
+      ),
+    ).toHaveLength(2)
+    expect(
+      getMessagesByType('subtitle:fetch-file').filter(
+        (message) => message?.payload?.mode === 'bilingual',
+      ),
+    ).toHaveLength(2)
+    expect(wrapper.text()).toContain('hello')
+  })
+
   it('does not register listeners after unmounting during settings load', async () => {
     let resolveSettings: (value: unknown) => void = () => {}
     sendExtensionMessage.mockReturnValueOnce(
