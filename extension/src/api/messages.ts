@@ -46,6 +46,8 @@ export type Settings = {
   backendBaseUrl: string
   sourceLanguage: LanguageCode
   targetLanguage: LanguageCode
+  subtitleFontSizePx: number
+  subtitleMode: SubtitleMode
 }
 
 export type CreateJobInput = {
