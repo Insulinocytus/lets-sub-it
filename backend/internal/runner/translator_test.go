@@ -149,6 +149,32 @@ func TestChatTranslatorRetriesTransientFailuresBeforeReturningTranslation(t *tes
 	}
 }
 
+func TestChatTranslatorRetriesMalformedTranslationResponseBeforeReturningTranslation(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		if attempts == 1 {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"bad\"}{\"translation\":\"format\"}"}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"译文\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	translator := NewChatTranslator(server.URL, "test-key", "test-model", time.Second, server.Client())
+	translations, err := translator.Translate(context.Background(), makeTranslatorTestCues(1), "en", "zh")
+	if err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if len(translations) != 1 || translations[0] != "译文" {
+		t.Fatalf("translations = %#v, want single translated cue", translations)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
 func TestTranslationRetryDelayIncreasesByOneSecond(t *testing.T) {
 	for i := 0; i < translationMaxRetries; i++ {
 		want := time.Duration(i+1) * time.Second

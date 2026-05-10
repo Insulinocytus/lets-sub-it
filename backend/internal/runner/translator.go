@@ -110,6 +110,8 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 }
 
 func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte) (string, bool, *time.Duration, error) {
+	retryImmediately := time.Duration(0)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", false, nil, fmt.Errorf("create chat completion request: %w", err)
@@ -136,18 +138,18 @@ func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte
 
 	var chatResp chatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return "", false, nil, fmt.Errorf("decode chat completion response: %w", err)
+		return "", true, &retryImmediately, fmt.Errorf("decode chat completion response: %w", err)
 	}
 	if len(chatResp.Choices) == 0 {
-		return "", false, nil, fmt.Errorf("chat completion response has no choices")
+		return "", true, &retryImmediately, fmt.Errorf("chat completion response has no choices")
 	}
 
 	var translationResp translationResponse
 	if err := json.Unmarshal([]byte(chatResp.Choices[0].Message.Content), &translationResp); err != nil {
-		return "", false, nil, fmt.Errorf("decode translation response: %w", err)
+		return "", true, &retryImmediately, fmt.Errorf("decode translation response: %w", err)
 	}
 	if strings.TrimSpace(translationResp.Translation) == "" {
-		return "", false, nil, fmt.Errorf("translation is required")
+		return "", true, &retryImmediately, fmt.Errorf("translation is required")
 	}
 	return translationResp.Translation, false, nil, nil
 }
