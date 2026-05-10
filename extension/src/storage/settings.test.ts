@@ -30,6 +30,7 @@ describe('settings storage', () => {
       backendBaseUrl: 'http://localhost:9090',
       sourceLanguage: 'zh',
       targetLanguage: 'en',
+      subtitleFontSize: 20,
     })
     await expect(getSettings()).resolves.toEqual(settings)
   })

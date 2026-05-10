@@ -46,6 +46,7 @@ export type Settings = {
   backendBaseUrl: string
   sourceLanguage: LanguageCode
   targetLanguage: LanguageCode
+  subtitleFontSize: number
 }
 
 export type CreateJobInput = {
