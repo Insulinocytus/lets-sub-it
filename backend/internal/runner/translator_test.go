@@ -162,7 +162,7 @@ func TestChatTranslatorLogsRetryDiagnosticsWithoutSecrets(t *testing.T) {
 		attempts++
 		if attempts == 1 {
 			w.Header().Set("Retry-After", "0")
-			http.Error(w, "secret-key upstream busy", http.StatusServiceUnavailable)
+			http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusServiceUnavailable)
 			return
 		}
 
@@ -188,6 +188,7 @@ func TestChatTranslatorLogsRetryDiagnosticsWithoutSecrets(t *testing.T) {
 		`"status":503`,
 		`"retry_after_ms":0`,
 		`"duration_ms":`,
+		`"error_kind":"http_status"`,
 		`"msg":"translation request completed"`,
 		`"status":200`,
 	} {
@@ -195,7 +196,7 @@ func TestChatTranslatorLogsRetryDiagnosticsWithoutSecrets(t *testing.T) {
 			t.Fatalf("logs = %s\nwant containing %s", output, want)
 		}
 	}
-	for _, leaked := range []string{"secret-key", "cue text"} {
+	for _, leaked := range []string{"secret-key", "upstream echoed prompt", "cue text"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("logs leaked %q: %s", leaked, output)
 		}

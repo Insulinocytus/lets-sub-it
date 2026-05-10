@@ -110,7 +110,7 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 				"status", statusCode,
 				"retryable", retryable,
 				"duration_ms", duration.Milliseconds(),
-				"error", err,
+				"error_kind", translationRequestErrorKind(statusCode),
 			)
 			return "", err
 		}
@@ -125,7 +125,7 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 			"status", statusCode,
 			"retry_after_ms", delay.Milliseconds(),
 			"duration_ms", duration.Milliseconds(),
-			"error", err,
+			"error_kind", translationRequestErrorKind(statusCode),
 		)
 		if err := sleepContext(requestCtx, delay); err != nil {
 			return "", fmt.Errorf("wait before retrying chat completion request: %w", err)
@@ -181,6 +181,16 @@ func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte
 
 func isRetryableTranslationStatus(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests || statusCode >= 500
+}
+
+func translationRequestErrorKind(statusCode int) string {
+	if statusCode == 0 {
+		return "transport"
+	}
+	if statusCode < 200 || statusCode > 299 {
+		return "http_status"
+	}
+	return "response_format"
 }
 
 func translationRetryDelay(retryIndex int) time.Duration {
