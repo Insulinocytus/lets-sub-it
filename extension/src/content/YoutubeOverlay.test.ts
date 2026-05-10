@@ -1,5 +1,4 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import type { VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import YoutubeOverlay from './YoutubeOverlay.vue'
 
@@ -9,12 +8,18 @@ const {
   watchVideoIdChanges,
   addRuntimeListener,
   removeRuntimeListener,
+  getSettings,
 } = vi.hoisted(() => ({
   sendExtensionMessage: vi.fn(),
   getCurrentVideoId: vi.fn(),
   watchVideoIdChanges: vi.fn(),
   addRuntimeListener: vi.fn(),
   removeRuntimeListener: vi.fn(),
+  getSettings: vi.fn(),
+}))
+
+vi.mock('@/storage/settings', () => ({
+  getSettings,
 }))
 
 vi.mock('wxt/browser', () => ({
@@ -35,20 +40,6 @@ vi.mock('@/api/messages', () => ({
 vi.mock('@/youtube/page-watch', () => ({
   getCurrentVideoId,
   watchVideoIdChanges,
-}))
-
-vi.mock('@/components/ui/button', () => ({
-  Button: {
-    name: 'Button',
-    template: '<button v-bind="$attrs" @click="$emit(\'click\')"><slot /></button>',
-  },
-}))
-
-vi.mock('@/components/ui/badge', () => ({
-  Badge: {
-    name: 'Badge',
-    template: '<div v-bind="$attrs"><slot /></div>',
-  },
 }))
 
 const asset = {
@@ -72,18 +63,6 @@ const validVtt = `WEBVTT
 hello
 `
 
-function getButtonByText(wrapper: VueWrapper, label: string) {
-  const button = wrapper
-    .findAll('button')
-    .find((candidate) => candidate.text() === label)
-
-  if (!button) {
-    throw new Error(`button not found: ${label}`)
-  }
-
-  return button
-}
-
 function getSentMessages() {
   return sendExtensionMessage.mock.calls.map(([message]) => message)
 }
@@ -99,9 +78,11 @@ describe('YoutubeOverlay', () => {
     watchVideoIdChanges.mockReset()
     addRuntimeListener.mockReset()
     removeRuntimeListener.mockReset()
+    getSettings.mockReset()
 
     getCurrentVideoId.mockReturnValue('video_123')
     watchVideoIdChanges.mockReturnValue(() => {})
+    getSettings.mockResolvedValue({ subtitleFontSize: 20 })
 
     document.body.innerHTML = ''
     document.body.appendChild(document.createElement('video'))
@@ -131,7 +112,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -159,8 +140,7 @@ describe('YoutubeOverlay', () => {
         (message) => message?.payload?.mode === 'translated',
       ),
     ).toHaveLength(2)
-    expect(wrapper.text()).toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('字幕已加载')
   })
 
   it('stops and surfaces rollback persistence failures instead of pretending rollback succeeded', async () => {
@@ -189,7 +169,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -210,9 +190,8 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('回滚模式失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('回滚模式失败')
+    expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 
   it('treats rollback success without data as a failure and stops reloading subtitles', async () => {
@@ -238,7 +217,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -258,9 +237,8 @@ describe('YoutubeOverlay', () => {
         (message) => message?.payload?.mode === 'translated',
       ),
     ).toHaveLength(1)
-    expect(wrapper.text()).toContain('字幕模式回滚失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('字幕模式回滚失败')
+    expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 
   it('restores previous subtitles when the first mode update returns an error', async () => {
@@ -278,7 +256,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -299,9 +277,8 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('切换模式失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('切换模式失败')
+    expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 
   it('restores previous subtitles when the first mode update throws', async () => {
@@ -313,7 +290,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -334,9 +311,8 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('切换模式异常')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('切换模式异常')
+    expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 
   it('treats the first mode update success without data as a failure', async () => {
@@ -351,7 +327,7 @@ describe('YoutubeOverlay', () => {
     const wrapper = mount(YoutubeOverlay)
     await flushPromises()
 
-    await getButtonByText(wrapper, '双语').trigger('click')
+    await (wrapper.vm as any).changeMode('bilingual')
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -377,8 +353,7 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(0)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('字幕模式切换失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect((wrapper.vm as any).status).toBe('字幕模式切换失败')
+    expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 })

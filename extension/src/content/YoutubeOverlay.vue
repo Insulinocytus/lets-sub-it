@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { browser } from 'wxt/browser'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   type SubtitleMode,
   sendExtensionMessage,
 } from '@/api/messages'
 import type { SubtitleAssetCacheEntry } from '@/storage/subtitle-cache'
+import { getSettings } from '@/storage/settings'
 import { findActiveCue } from '@/subtitles/active-cue'
 import { parseVtt, type VttCue } from '@/subtitles/vtt'
 import {
@@ -22,6 +21,9 @@ const currentAsset = ref<SubtitleAssetCacheEntry | null>(null)
 const selectedMode = ref<SubtitleMode>('translated')
 const cues = ref<VttCue[]>([])
 const activeText = ref('')
+const fontSize = ref(20)
+
+defineExpose({ toggleEnabled: () => { enabled.value = !enabled.value }, enabled })
 
 let removeVideoListeners: (() => void) | null = null
 let removeVideoIdWatch: (() => void) | null = null
@@ -31,9 +33,16 @@ let requestToken = 0
 
 const hasSubtitle = computed(() => cues.value.length > 0)
 const isWatchPage = computed(() => currentVideoId.value !== null)
+const subtitleStyle = computed(() => ({
+  fontSize: `${fontSize.value}px`,
+}))
 
-onMounted(() => {
+onMounted(async () => {
   isMounted = true
+  try {
+    const settings = await getSettings()
+    fontSize.value = settings.subtitleFontSize ?? 20
+  } catch { /* keep default */ }
   const videoId = getCurrentVideoId()
   currentVideoId.value = videoId
   void loadForVideo(videoId)
@@ -44,14 +53,20 @@ onMounted(() => {
   })
 
   const handleRuntimeMessage = (message: unknown) => {
-    if (!isSubtitleUpdatedMessage(message)) {
+    if (isSubtitleUpdatedMessage(message)) {
+      if (message.videoId !== currentVideoId.value) return
+      void loadForVideo(currentVideoId.value)
       return
     }
-    if (message.videoId !== currentVideoId.value) {
+    if (isSettingsChangedMessage(message)) {
+      if (message.payload.fontSize !== undefined) {
+        fontSize.value = message.payload.fontSize
+      }
+      if (message.payload.mode !== undefined) {
+        void changeMode(message.payload.mode)
+      }
       return
     }
-
-    void loadForVideo(currentVideoId.value)
   }
   browser.runtime.onMessage.addListener(handleRuntimeMessage)
   removeRuntimeListener = () => {
@@ -367,6 +382,11 @@ type SubtitleUpdatedMessage = {
   videoId: string
 }
 
+type SubtitleSettingsChangedMessage = {
+  type: 'subtitle:settings-changed'
+  payload: { fontSize?: number; mode?: SubtitleMode }
+}
+
 function isSubtitleUpdatedMessage(message: unknown): message is SubtitleUpdatedMessage {
   if (typeof message !== 'object' || message === null) {
     return false
@@ -375,58 +395,25 @@ function isSubtitleUpdatedMessage(message: unknown): message is SubtitleUpdatedM
   const candidate = message as Partial<SubtitleUpdatedMessage>
   return candidate.type === 'lets-sub-it:subtitle-updated' && typeof candidate.videoId === 'string'
 }
+
+function isSettingsChangedMessage(message: unknown): message is SubtitleSettingsChangedMessage {
+  if (typeof message !== 'object' || message === null) return false
+  const candidate = message as Partial<SubtitleSettingsChangedMessage>
+  return candidate.type === 'subtitle:settings-changed' && typeof candidate.payload === 'object'
+}
 </script>
 
 <template>
   <div
-    v-if="isWatchPage"
-    class="pointer-events-none fixed inset-x-0 bottom-7 z-[2147483647] flex justify-center px-4"
+    v-if="isWatchPage && enabled && hasSubtitle && activeText"
+    class="flex h-full items-end justify-center"
+    style="padding-bottom: 12%;"
   >
-    <div class="flex max-w-[min(720px,calc(100vw-32px))] flex-col items-center gap-2">
-      <div class="pointer-events-auto flex items-center gap-1.5 rounded-md border border-white/15 bg-black/70 px-2 py-1.5 text-white shadow-lg backdrop-blur">
-        <Button
-          type="button"
-          size="sm"
-          :variant="enabled ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs"
-          @click="enabled = !enabled"
-        >
-          {{ enabled ? '字幕开' : '字幕关' }}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          :variant="selectedMode === 'translated' ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs text-white hover:text-white"
-          :disabled="!currentAsset"
-          @click="handleModeClick('translated')"
-        >
-          翻译
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          :variant="selectedMode === 'bilingual' ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs text-white hover:text-white"
-          :disabled="!currentAsset"
-          @click="handleModeClick('bilingual')"
-        >
-          双语
-        </Button>
-        <Badge
-          variant="outline"
-          class="border-white/20 bg-white/10 text-[11px] leading-5 text-white"
-        >
-          {{ status }}
-        </Badge>
-      </div>
-
-      <div
-        v-if="enabled && hasSubtitle && activeText"
-        class="pointer-events-auto max-w-full whitespace-pre-line rounded-md bg-black/78 px-4 py-2 text-center text-xl font-semibold leading-snug text-white shadow-lg [text-shadow:0_1px_2px_rgb(0_0_0/0.85)]"
-      >
-        {{ activeText }}
-      </div>
+    <div
+      class="pointer-events-auto max-w-[90%] whitespace-pre-line rounded-md bg-black/78 px-4 py-2 text-center font-semibold leading-snug text-white shadow-lg [text-shadow:0_1px_2px_rgb(0_0_0/0.85)]"
+      :style="subtitleStyle"
+    >
+      {{ activeText }}
     </div>
   </div>
 </template>
