@@ -94,7 +94,7 @@ export async function handleExtensionMessage(
 
         const entry = await setCachedSubtitleAsset(
           response.asset,
-          preference?.selectedMode ?? 'translated',
+          preference?.selectedMode ?? settings.subtitleMode,
           now(),
           settings.backendBaseUrl,
         )
