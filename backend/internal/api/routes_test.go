@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +81,40 @@ func TestCORSMiddlewareRejectsExternalOrigin(t *testing.T) {
 	}
 	if got := response.Header().Get("Access-Control-Allow-Headers"); got != "" {
 		t.Fatalf("Access-Control-Allow-Headers = %q, want empty", got)
+	}
+}
+
+func TestRequestLoggingRecordsRequestWithoutQuery(t *testing.T) {
+	var output bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	handler := withRequestLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/jobs/active?videoId=abc123&targetLanguage=zh", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if got, want := response.Code, http.StatusTeapot; got != want {
+		t.Fatalf("status code = %d, want %d", got, want)
+	}
+	logs := output.String()
+	for _, want := range []string{
+		`"msg":"http request completed"`,
+		`"method":"GET"`,
+		`"path":"/jobs/active"`,
+		`"status":418`,
+		`"duration_ms":`,
+	} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("logs = %s\nwant containing %s", logs, want)
+		}
+	}
+	if strings.Contains(logs, "videoId") || strings.Contains(logs, "targetLanguage") {
+		t.Fatalf("logs include query string: %s", logs)
 	}
 }

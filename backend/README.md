@@ -38,9 +38,11 @@ mise exec -- go run ./cmd/server
 
 ## Logs
 
-backend 输出 JSON 结构化日志。`LSI_LOG_LEVEL` 默认是 `info`，可设为 `debug`、`info`、`warn` 或 `error`；`debug` 会额外输出外部命令调用和字幕 cue 数等诊断信息。
+backend 输出 JSON 结构化日志。`LSI_LOG_LEVEL` 默认是 `info`，可设为 `debug`、`info`、`warn` 或 `error`；非法值会回退到 `info`。
 
-每个 job 日志都会带 `job_id`、`video_id`、语言、阶段和耗时字段，覆盖从创建 job、下载、转写、翻译、打包到完成或失败的链路。
+默认 `info` 级别会记录 server 启停、HTTP 请求方法/路径/状态/耗时、job 创建或复用、job 阶段开始/完成/失败，以及非预期 store 查询错误。job 链路日志会携带 `job_id`、`video_id`、语言、阶段或耗时等字段，覆盖从创建 job、下载、转写、翻译、打包到完成或失败的链路。
+
+`debug` 会额外输出外部命令调用、字幕 cue 数、逐条翻译请求成功诊断和数据库查询耗时。数据库慢查询和查询错误分别使用 `warn` 和 `error`。日志不会记录完整 LLM 请求体、字幕正文、provider key 或 HTTP query string。
 
 ## API quick check
 
@@ -76,4 +78,4 @@ backend 会调用 `yt-dlp` 产出 `audio.mp3`，调用 PATH 中本仓库的 Pyth
 
 `LSI_LLM_API_KEY` 对 OpenAI 默认 endpoint 必填；本地无鉴权兼容服务可留空。该值只由 backend 读取，extension 不保存 provider key，也不直接调用翻译 provider。
 
-当前 LLM 翻译链路没有请求重试、并发控制或成本统计。
+当前 LLM 翻译链路会对临时上游错误和格式错误响应重试；尚未实现并发控制或成本统计。

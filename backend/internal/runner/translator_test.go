@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -149,6 +151,58 @@ func TestChatTranslatorRetriesTransientFailuresBeforeReturningTranslation(t *tes
 	}
 }
 
+func TestChatTranslatorLogsRetryDiagnosticsWithoutSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"译文\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	translator := NewChatTranslator(server.URL, "secret-key", "test-model", time.Second, server.Client())
+	translations, err := translator.Translate(context.Background(), makeTranslatorTestCues(1), "en", "zh")
+	if err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if len(translations) != 1 || translations[0] != "译文" {
+		t.Fatalf("translations = %#v, want single translated cue", translations)
+	}
+
+	output := logs.String()
+	for _, want := range []string{
+		`"msg":"translation request retrying"`,
+		`"cue_index":0`,
+		`"attempt":1`,
+		`"status":503`,
+		`"retry_after_ms":0`,
+		`"duration_ms":`,
+		`"error_kind":"http_status"`,
+		`"msg":"translation request completed"`,
+		`"status":200`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("logs = %s\nwant containing %s", output, want)
+		}
+	}
+	for _, leaked := range []string{"secret-key", "upstream echoed prompt", "cue text"} {
+		if strings.Contains(output, leaked) {
+			t.Fatalf("logs leaked %q: %s", leaked, output)
+		}
+	}
+}
+
 func TestChatTranslatorRetriesMalformedTranslationResponseBeforeReturningTranslation(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +242,7 @@ func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
-		http.Error(w, "secret-key upstream failed", http.StatusUnauthorized)
+		http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusUnauthorized)
 	}))
 	t.Cleanup(server.Close)
 
@@ -197,8 +251,10 @@ func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
 	if err == nil {
 		t.Fatal("Translate() error = nil, want error")
 	}
-	if strings.Contains(err.Error(), "secret-key") {
-		t.Fatalf("Translate() error leaks api key: %v", err)
+	for _, leaked := range []string{"secret-key", "upstream echoed prompt", "cue text"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("Translate() error leaks %q: %v", leaked, err)
+		}
 	}
 	if attempts != 1 {
 		t.Fatalf("attempts = %d, want 1", attempts)

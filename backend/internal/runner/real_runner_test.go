@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -196,6 +198,70 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 	}
 	if updatedJob.ErrorMessage == nil || !strings.Contains(*updatedJob.ErrorMessage, "Video unavailable") {
 		t.Fatalf("ErrorMessage = %v, want containing 'Video unavailable'", updatedJob.ErrorMessage)
+	}
+}
+
+func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
+	origExec := execCommand
+	t.Cleanup(func() { execCommand = origExec })
+
+	var output bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	testStore := openTestStore(t)
+	workDir := t.TempDir()
+	jobDir := filepath.Join(workDir, "job_1")
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
+
+	if err := testStore.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		switch name {
+		case "yt-dlp":
+			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
+		case "whisper-cli":
+			outputPath := argValue(t, args, "--output")
+			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
+		default:
+			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
+		}
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusUnauthorized)
+	}))
+	t.Cleanup(server.Close)
+	translator := NewChatTranslator(server.URL, "secret-key", "test-model", time.Second, server.Client())
+
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", translator).Start(context.Background(), job)
+	if err == nil {
+		t.Fatal("Start() error = nil, want translation error")
+	}
+
+	updatedJob, findErr := testStore.FindJob("job_1")
+	if findErr != nil {
+		t.Fatalf("FindJob() error = %v", findErr)
+	}
+	if updatedJob.Status != store.StatusFailed {
+		t.Fatalf("Status = %q, want %q", updatedJob.Status, store.StatusFailed)
+	}
+
+	logs := output.String()
+	errorMessage := ""
+	if updatedJob.ErrorMessage != nil {
+		errorMessage = *updatedJob.ErrorMessage
+	}
+	for _, leaked := range []string{"secret-key", "upstream echoed prompt", "cue text"} {
+		if strings.Contains(logs, leaked) {
+			t.Fatalf("logs leaked %q: %s", leaked, logs)
+		}
+		if strings.Contains(errorMessage, leaked) {
+			t.Fatalf("job error message leaked %q: %s", leaked, errorMessage)
+		}
 	}
 }
 

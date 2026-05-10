@@ -1,16 +1,16 @@
 package store
 
 import (
+	"context"
 	"errors"
-	"io"
-	"log"
-	"os"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -20,22 +20,76 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
-	return openWithLogWriter(path, os.Stdout)
-}
-
-func openWithLogWriter(path string, writer io.Writer) (*Store, error) {
 	db, err := gorm.Open(sqlite.Open(foreignKeyDSN(path)), &gorm.Config{
-		Logger: logger.New(log.New(writer, "\r\n", log.LstdFlags), logger.Config{
-			SlowThreshold:             200 * time.Millisecond,
-			LogLevel:                  logger.Warn,
-			IgnoreRecordNotFoundError: true,
-			Colorful:                  true,
-		}),
+		Logger: newGormSlogLogger(200 * time.Millisecond),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+type gormSlogLogger struct {
+	slowThreshold time.Duration
+	level         gormlogger.LogLevel
+}
+
+func newGormSlogLogger(slowThreshold time.Duration) gormlogger.Interface {
+	return gormSlogLogger{
+		slowThreshold: slowThreshold,
+		level:         gormlogger.Info,
+	}
+}
+
+func (l gormSlogLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
+	l.level = level
+	return l
+}
+
+func (l gormSlogLogger) Info(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Info {
+		slog.InfoContext(ctx, fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l gormSlogLogger) Warn(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Warn {
+		slog.WarnContext(ctx, fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l gormSlogLogger) Error(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Error {
+		slog.ErrorContext(ctx, fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l gormSlogLogger) Trace(ctx context.Context, startedAt time.Time, fc func() (string, int64), err error) {
+	if l.level == gormlogger.Silent {
+		return
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return
+	}
+
+	duration := time.Since(startedAt)
+	_, rows := fc()
+	attrs := []any{
+		"duration_ms", duration.Milliseconds(),
+		"rows", rows,
+	}
+
+	if err != nil && l.level >= gormlogger.Error {
+		slog.ErrorContext(ctx, "database query failed", append(attrs, "error", err)...)
+		return
+	}
+	if l.slowThreshold > 0 && duration > l.slowThreshold && l.level >= gormlogger.Warn {
+		slog.WarnContext(ctx, "database query slow", append(attrs, "slow_threshold_ms", l.slowThreshold.Milliseconds())...)
+		return
+	}
+	if l.level >= gormlogger.Info {
+		slog.DebugContext(ctx, "database query", attrs...)
+	}
 }
 
 func foreignKeyDSN(path string) string {

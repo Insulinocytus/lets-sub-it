@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,6 +105,42 @@ func TestPostJobsRejectsMissingSourceLanguage(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d", response.Code)
 	}
+}
+
+func TestHandlerLogsUnexpectedStoreErrors(t *testing.T) {
+	var logs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	handler := NewHandler(failingFindJobStore{}, noopRunner{}, t.TempDir())
+	server := Routes(handler)
+	request := httptest.NewRequest(http.MethodGet, "/jobs/job_1", nil)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+	output := logs.String()
+	for _, want := range []string{
+		`"msg":"job query failed"`,
+		`"job_id":"job_1"`,
+		`"error":"database offline"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("logs = %s\nwant containing %s", output, want)
+		}
+	}
+}
+
+type failingFindJobStore struct {
+	handlerWithAssetPath
+}
+
+func (failingFindJobStore) FindJob(id string) (store.Job, error) {
+	return store.Job{}, errors.New("database offline")
 }
 
 func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,12 +90,28 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 
 	var lastErr error
 	for attempt := 0; attempt <= translationMaxRetries; attempt++ {
-		translation, retryable, retryAfter, err := t.sendTranslationRequest(requestCtx, body)
+		attemptStartedAt := time.Now()
+		translation, retryable, retryAfter, statusCode, err := t.sendTranslationRequest(requestCtx, body)
+		duration := time.Since(attemptStartedAt)
 		if err == nil {
+			slog.Debug("translation request completed",
+				"cue_index", index,
+				"attempt", attempt+1,
+				"status", statusCode,
+				"duration_ms", duration.Milliseconds(),
+			)
 			return translation, nil
 		}
 		lastErr = err
 		if !retryable || attempt == translationMaxRetries {
+			slog.Warn("translation request failed",
+				"cue_index", index,
+				"attempt", attempt+1,
+				"status", statusCode,
+				"retryable", retryable,
+				"duration_ms", duration.Milliseconds(),
+				"error_kind", translationRequestErrorKind(statusCode),
+			)
 			return "", err
 		}
 
@@ -102,6 +119,14 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 		if retryAfter != nil {
 			delay = *retryAfter
 		}
+		slog.Warn("translation request retrying",
+			"cue_index", index,
+			"attempt", attempt+1,
+			"status", statusCode,
+			"retry_after_ms", delay.Milliseconds(),
+			"duration_ms", duration.Milliseconds(),
+			"error_kind", translationRequestErrorKind(statusCode),
+		)
 		if err := sleepContext(requestCtx, delay); err != nil {
 			return "", fmt.Errorf("wait before retrying chat completion request: %w", err)
 		}
@@ -109,12 +134,12 @@ func (t *ChatTranslator) translateOne(ctx context.Context, cues []Cue, index int
 	return "", lastErr
 }
 
-func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte) (string, bool, *time.Duration, error) {
+func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte) (string, bool, *time.Duration, int, error) {
 	retryImmediately := time.Duration(0)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", false, nil, fmt.Errorf("create chat completion request: %w", err)
+		return "", false, nil, 0, fmt.Errorf("create chat completion request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if t.apiKey != "" {
@@ -124,38 +149,48 @@ func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte
 	resp, err := t.client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return "", false, nil, fmt.Errorf("send chat completion request: %w", err)
+			return "", false, nil, 0, fmt.Errorf("send chat completion request: %w", err)
 		}
-		return "", true, nil, fmt.Errorf("send chat completion request: %w", err)
+		return "", true, nil, 0, fmt.Errorf("send chat completion request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		summary, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return "", isRetryableTranslationStatus(resp.StatusCode), retryAfter, fmt.Errorf("chat completion request failed with status %d: %s", resp.StatusCode, t.redactAPIKey(strings.TrimSpace(string(summary))))
+		return "", isRetryableTranslationStatus(resp.StatusCode), retryAfter, resp.StatusCode, fmt.Errorf("chat completion request failed with status %d", resp.StatusCode)
 	}
 
 	var chatResp chatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return "", true, &retryImmediately, fmt.Errorf("decode chat completion response: %w", err)
+		return "", true, &retryImmediately, resp.StatusCode, fmt.Errorf("decode chat completion response: %w", err)
 	}
 	if len(chatResp.Choices) == 0 {
-		return "", true, &retryImmediately, fmt.Errorf("chat completion response has no choices")
+		return "", true, &retryImmediately, resp.StatusCode, fmt.Errorf("chat completion response has no choices")
 	}
 
 	var translationResp translationResponse
 	if err := json.Unmarshal([]byte(chatResp.Choices[0].Message.Content), &translationResp); err != nil {
-		return "", true, &retryImmediately, fmt.Errorf("decode translation response: %w", err)
+		return "", true, &retryImmediately, resp.StatusCode, fmt.Errorf("decode translation response: %w", err)
 	}
 	if strings.TrimSpace(translationResp.Translation) == "" {
-		return "", true, &retryImmediately, fmt.Errorf("translation is required")
+		return "", true, &retryImmediately, resp.StatusCode, fmt.Errorf("translation is required")
 	}
-	return translationResp.Translation, false, nil, nil
+	return translationResp.Translation, false, nil, resp.StatusCode, nil
 }
 
 func isRetryableTranslationStatus(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests || statusCode >= 500
+}
+
+func translationRequestErrorKind(statusCode int) string {
+	if statusCode == 0 {
+		return "transport"
+	}
+	if statusCode < 200 || statusCode > 299 {
+		return "http_status"
+	}
+	return "response_format"
 }
 
 func translationRetryDelay(retryIndex int) time.Duration {
@@ -194,13 +229,6 @@ func sleepContext(ctx context.Context, delay time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-func (t *ChatTranslator) redactAPIKey(message string) string {
-	if t.apiKey == "" {
-		return message
-	}
-	return strings.ReplaceAll(message, t.apiKey, "[redacted]")
 }
 
 func newTranslationPrompt(cues []Cue, index int, sourceLanguage string, targetLanguage string) translationPrompt {
