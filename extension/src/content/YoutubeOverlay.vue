@@ -126,10 +126,7 @@ async function handleSettingsUpdated(settings: Settings) {
   applySettings(settings)
 
   if (settingsSubtitleMode.value !== previousSettingsMode && currentAsset.value) {
-    const result = await changeMode(settingsSubtitleMode.value)
-    if (result === 'failed') {
-      settingsSubtitleMode.value = previousSettingsMode
-    }
+    await changeMode(settingsSubtitleMode.value)
   }
 }
 
@@ -178,7 +175,7 @@ async function loadForVideo(videoId: string | null) {
   }
 
   currentAsset.value = result.data
-  selectedMode.value = settingsSubtitleMode.value
+  selectedMode.value = result.data.selectedMode
   await loadVtt(token)
 }
 

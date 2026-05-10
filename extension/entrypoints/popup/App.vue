@@ -376,10 +376,11 @@ async function notifySettingsUpdated(settings: Settings) {
       </CardHeader>
 
       <CardContent class="space-y-4 px-4">
-        <div class="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
+        <div class="grid grid-cols-2 gap-2 rounded-md bg-muted p-1" role="group" aria-label="功能切换">
           <Button
             data-testid="generate-tab"
             type="button"
+            :aria-pressed="activeTab === 'generate'"
             :variant="activeTab === 'generate' ? 'secondary' : 'ghost'"
             class="h-8 text-xs"
             @click="activeTab = 'generate'"
@@ -389,6 +390,7 @@ async function notifySettingsUpdated(settings: Settings) {
           <Button
             data-testid="subtitle-settings-tab"
             type="button"
+            :aria-pressed="activeTab === 'settings'"
             :variant="activeTab === 'settings' ? 'secondary' : 'ghost'"
             class="h-8 text-xs"
             @click="activeTab = 'settings'"
@@ -505,10 +507,11 @@ async function notifySettingsUpdated(settings: Settings) {
 
           <section class="space-y-2 text-xs">
             <p class="font-medium">显示模式</p>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2" role="group" aria-label="字幕显示模式">
               <Button
                 data-testid="subtitle-mode-translated"
                 type="button"
+                :aria-pressed="subtitleMode === 'translated'"
                 :variant="subtitleMode === 'translated' ? 'secondary' : 'outline'"
                 class="h-8 text-xs"
                 @click="subtitleMode = 'translated'"
@@ -518,6 +521,7 @@ async function notifySettingsUpdated(settings: Settings) {
               <Button
                 data-testid="subtitle-mode-bilingual"
                 type="button"
+                :aria-pressed="subtitleMode === 'bilingual'"
                 :variant="subtitleMode === 'bilingual' ? 'secondary' : 'outline'"
                 class="h-8 text-xs"
                 @click="subtitleMode = 'bilingual'"

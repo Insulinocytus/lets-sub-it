@@ -184,8 +184,8 @@ describe('YoutubeOverlay', () => {
     expectOldControlsHidden(wrapper)
   })
 
-  it('uses the initial settings mode for the first VTT request', async () => {
-    mockInitialLoad({ settingsOverride: { subtitleMode: 'bilingual' } })
+  it('uses the resolved selected mode for the first VTT request', async () => {
+    mockInitialLoad({ assetOverride: { selectedMode: 'bilingual' } })
 
     mountOverlay()
     await flushPromises()
@@ -263,7 +263,7 @@ describe('YoutubeOverlay', () => {
     )
   })
 
-  it('retries the same settings mode after a failed mode change rollback', async () => {
+  it('does not roll back the saved settings mode after a failed mode change', async () => {
     const wrapper = await mountLoadedOverlay()
     sendExtensionMessage
       .mockResolvedValueOnce({
@@ -293,17 +293,12 @@ describe('YoutubeOverlay', () => {
     sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
+    expect(wrapper.text()).toContain('hello')
     expect(
       getMessagesByType('subtitle:update-mode').filter(
         (message) => message?.payload?.mode === 'bilingual',
       ),
-    ).toHaveLength(2)
-    expect(
-      getMessagesByType('subtitle:fetch-file').filter(
-        (message) => message?.payload?.mode === 'bilingual',
-      ),
-    ).toHaveLength(2)
-    expect(wrapper.text()).toContain('hello')
+    ).toHaveLength(1)
   })
 
   it('keeps the latest settings mode when an in-flight mode change is aborted by video navigation', async () => {
@@ -317,12 +312,22 @@ describe('YoutubeOverlay', () => {
     sendExtensionMessage
       .mockResolvedValueOnce({
         ok: true,
-        data: { ...asset, jobId: 'job_456', videoId: 'video_456' },
+        data: {
+          ...asset,
+          jobId: 'job_456',
+          videoId: 'video_456',
+          selectedMode: 'translated' as const,
+        },
       })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
       .mockResolvedValueOnce({
         ok: true,
-        data: { ...asset, jobId: 'job_789', videoId: 'video_789' },
+        data: {
+          ...asset,
+          jobId: 'job_789',
+          videoId: 'video_789',
+          selectedMode: 'translated' as const,
+        },
       })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
 
@@ -336,20 +341,24 @@ describe('YoutubeOverlay', () => {
     await flushPromises()
     sendVideoIdChange('video_789')
     await flushPromises()
+    const modeUpdatesAfterNavigation = getMessagesByType('subtitle:update-mode').length
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
 
     expect(initialWrapper.text()).toContain('hello')
     expect(getMessagesByType('subtitle:fetch-file')).toEqual(
       expect.arrayContaining([
         {
           type: 'subtitle:fetch-file',
-          payload: { jobId: 'job_456', mode: 'bilingual' },
+          payload: { jobId: 'job_456', mode: 'translated' },
         },
         {
           type: 'subtitle:fetch-file',
-          payload: { jobId: 'job_789', mode: 'bilingual' },
+          payload: { jobId: 'job_789', mode: 'translated' },
         },
       ]),
     )
+    expect(getMessagesByType('subtitle:update-mode')).toHaveLength(modeUpdatesAfterNavigation)
   })
 
   it('removes the window subtitle toggle listener on unmount', async () => {

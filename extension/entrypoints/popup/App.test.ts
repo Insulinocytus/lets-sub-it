@@ -188,6 +188,45 @@ describe('popup App', () => {
     expect(wrapper.text()).toContain('双语')
   })
 
+  it('exposes the pressed state for popup view buttons', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+
+    const viewGroup = wrapper.get('[aria-label="功能切换"]')
+    const generateTab = wrapper.get('button[data-testid="generate-tab"]')
+    const settingsTab = wrapper.get('button[data-testid="subtitle-settings-tab"]')
+
+    expect(viewGroup.attributes('role')).toBe('group')
+    expect(generateTab.attributes('aria-pressed')).toBe('true')
+    expect(settingsTab.attributes('aria-pressed')).toBe('false')
+
+    await settingsTab.trigger('click')
+
+    expect(generateTab.attributes('aria-pressed')).toBe('false')
+    expect(settingsTab.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('exposes the pressed state for subtitle display mode buttons', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+
+    const modeGroup = wrapper.get('[aria-label="字幕显示模式"]')
+    const translatedMode = wrapper.get('button[data-testid="subtitle-mode-translated"]')
+    const bilingualMode = wrapper.get('button[data-testid="subtitle-mode-bilingual"]')
+
+    expect(modeGroup.attributes('role')).toBe('group')
+    expect(translatedMode.attributes('aria-pressed')).toBe('true')
+    expect(bilingualMode.attributes('aria-pressed')).toBe('false')
+
+    await bilingualMode.trigger('click')
+
+    expect(translatedMode.attributes('aria-pressed')).toBe('false')
+    expect(bilingualMode.attributes('aria-pressed')).toBe('true')
+  })
+
   it('saves subtitle settings and notifies the current YouTube tab', async () => {
     const wrapper = mount(App)
 
