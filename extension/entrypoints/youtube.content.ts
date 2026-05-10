@@ -1,26 +1,46 @@
 import '@/style.css'
 import { createApp } from 'vue'
-import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root'
 import YoutubeOverlay from '@/content/YoutubeOverlay.vue'
+import {
+  ensurePlayerOverlayHost,
+  findYouTubePlayer,
+  mountSubtitleToggleButton,
+  type PlayerOverlayHost,
+} from '@/youtube/player-ui'
 
 export default defineContentScript({
   matches: ['https://www.youtube.com/watch*'],
   cssInjectionMode: 'ui',
-  async main(ctx) {
-    const ui = await createShadowRootUi(ctx, {
-      name: 'lets-sub-it-youtube-ui',
-      position: 'inline',
-      anchor: 'body',
-      onMount: (container) => {
-        const app = createApp(YoutubeOverlay)
-        app.mount(container)
-        return app
-      },
-      onRemove: (app) => {
-        app?.unmount()
-      },
-    })
+  main(ctx) {
+    let mountedHost: PlayerOverlayHost | null = null
+    let observer: MutationObserver | null = null
 
-    ui.mount()
+    const dispatchToggle = () => {
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    }
+
+    const mount = () => {
+      const host = ensurePlayerOverlayHost(findYouTubePlayer())
+      if (host && host !== mountedHost) {
+        mountedHost = host
+        const app = createApp(YoutubeOverlay)
+        app.mount(host)
+        host.__letsSubItCleanup = () => app.unmount()
+      }
+      mountSubtitleToggleButton(true, dispatchToggle)
+    }
+
+    mount()
+
+    observer = new MutationObserver(() => mount())
+    observer.observe(document.documentElement, { childList: true, subtree: true })
+
+    ctx.onInvalidated(() => {
+      observer?.disconnect()
+      observer = null
+      mountedHost?.__letsSubItCleanup?.()
+      mountedHost?.remove()
+      mountedHost = null
+    })
   },
 })

@@ -52,6 +52,24 @@ describe('YouTube player UI helpers', () => {
     expect(host?.parentElement).toBe(newPlayer)
   })
 
+  it('runs overlay cleanup before replacing an old host', () => {
+    document.body.innerHTML = `
+      <div id="old-player" class="html5-video-player"></div>
+      <div id="movie_player" class="html5-video-player"></div>
+    `
+    const cleanup = vi.fn()
+    const oldHost = document.createElement('div') as HTMLElement & {
+      __letsSubItCleanup?: () => void
+    }
+    oldHost.id = PLAYER_OVERLAY_HOST_ID
+    oldHost.__letsSubItCleanup = cleanup
+    document.querySelector('#old-player')!.append(oldHost)
+
+    ensurePlayerOverlayHost(findYouTubePlayer())
+
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
   it('creates a toggle button that stops player event propagation', () => {
     const onToggle = vi.fn()
     const button = createSubtitleToggleButton(true, onToggle)

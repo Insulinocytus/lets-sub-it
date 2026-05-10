@@ -1,6 +1,10 @@
 export const PLAYER_OVERLAY_HOST_ID = 'lets-sub-it-player-overlay-host'
 export const SUBTITLE_TOGGLE_BUTTON_ID = 'lets-sub-it-subtitle-toggle'
 
+export type PlayerOverlayHost = HTMLElement & {
+  __letsSubItCleanup?: () => void
+}
+
 const PLAYER_SELECTOR = '#movie_player.html5-video-player'
 const RIGHT_CONTROLS_SELECTOR = '#movie_player .ytp-right-controls'
 const STOPPED_EVENTS = ['click', 'mousedown', 'pointerdown', 'dblclick'] as const
@@ -9,22 +13,25 @@ export function findYouTubePlayer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(PLAYER_SELECTOR)
 }
 
-export function ensurePlayerOverlayHost(player: HTMLElement | null): HTMLElement | null {
+export function ensurePlayerOverlayHost(player: HTMLElement | null): PlayerOverlayHost | null {
   if (!player) {
     return null
   }
 
   const existing = document.getElementById(PLAYER_OVERLAY_HOST_ID)
   if (existing?.parentElement === player) {
-    return existing
+    return existing as PlayerOverlayHost
   }
-  existing?.remove()
+  if (existing) {
+    ;(existing as PlayerOverlayHost).__letsSubItCleanup?.()
+    existing.remove()
+  }
 
   if (window.getComputedStyle(player).position === 'static') {
     player.style.position = 'relative'
   }
 
-  const host = document.createElement('div')
+  const host = document.createElement('div') as PlayerOverlayHost
   host.id = PLAYER_OVERLAY_HOST_ID
   Object.assign(host.style, {
     position: 'absolute',
