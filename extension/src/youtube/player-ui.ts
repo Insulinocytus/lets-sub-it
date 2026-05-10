@@ -93,3 +93,7 @@ export function mountSubtitleToggleButton(
   controls.prepend(button)
   return button
 }
+
+export function removeSubtitleToggleButton(): void {
+  document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)?.remove()
+}

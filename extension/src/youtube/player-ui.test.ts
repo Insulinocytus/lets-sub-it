@@ -5,6 +5,7 @@ import {
   findYouTubePlayer,
   mountSubtitleToggleButton,
   PLAYER_OVERLAY_HOST_ID,
+  removeSubtitleToggleButton,
   SUBTITLE_TOGGLE_BUTTON_ID,
 } from './player-ui'
 
@@ -100,5 +101,18 @@ describe('YouTube player UI helpers', () => {
     expect(first).toBe(second)
     expect(document.querySelectorAll(`#${SUBTITLE_TOGGLE_BUTTON_ID}`)).toHaveLength(1)
     expect(first?.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('removes the toggle button from YouTube right controls', () => {
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player">
+        <div class="ytp-right-controls"></div>
+      </div>
+    `
+    mountSubtitleToggleButton(true, vi.fn())
+
+    removeSubtitleToggleButton()
+
+    expect(document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)).toBeNull()
   })
 })

@@ -5,6 +5,7 @@ import {
   ensurePlayerOverlayHost,
   findYouTubePlayer,
   mountSubtitleToggleButton,
+  removeSubtitleToggleButton,
   type PlayerOverlayHost,
 } from '@/youtube/player-ui'
 
@@ -38,6 +39,7 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       observer?.disconnect()
       observer = null
+      removeSubtitleToggleButton()
       mountedHost?.__letsSubItCleanup?.()
       mountedHost?.remove()
       mountedHost = null
