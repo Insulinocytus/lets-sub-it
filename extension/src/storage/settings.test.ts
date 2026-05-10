@@ -99,6 +99,13 @@ describe('settings storage', () => {
     await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
   })
 
+  it('rejects invalid subtitle modes without persisting settings', async () => {
+    await expect(
+      updateSettings({ subtitleMode: 'invalid' as any }),
+    ).rejects.toThrow('subtitleMode must be translated or bilingual')
+    await expect(getSettings()).resolves.toEqual(DEFAULT_SETTINGS)
+  })
+
   it('rejects same source and target languages', async () => {
     await expect(
       updateSettings({ sourceLanguage: 'en', targetLanguage: 'en' }),
