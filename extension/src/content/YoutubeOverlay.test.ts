@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import type { Settings } from '@/api/messages'
 import type { SubtitleAssetCacheEntry } from '@/storage/subtitle-cache'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import YoutubeOverlay from './YoutubeOverlay.vue'
 
 const {
@@ -69,6 +69,8 @@ const validVtt = `WEBVTT
 hello
 `
 
+let wrapper: VueWrapper | null = null
+
 function mockInitialLoad(options: {
   settingsOverride?: Partial<Settings>
   assetOverride?: Partial<SubtitleAssetCacheEntry>
@@ -98,9 +100,22 @@ function sendSettingsUpdated(nextSettings: unknown) {
 
 async function mountLoadedOverlay() {
   mockInitialLoad()
-  const wrapper = mount(YoutubeOverlay)
+  wrapper = mount(YoutubeOverlay)
   await flushPromises()
   return wrapper
+}
+
+function mountOverlay() {
+  wrapper = mount(YoutubeOverlay)
+  return wrapper
+}
+
+function sendVideoIdChange(nextVideoId: string | null) {
+  const listener = watchVideoIdChanges.mock.calls[0]?.[0]
+  if (!listener) {
+    throw new Error('video id listener not registered')
+  }
+  listener(nextVideoId)
 }
 
 function expectOldControlsHidden(wrapper: VueWrapper) {
@@ -123,6 +138,11 @@ describe('YoutubeOverlay', () => {
 
     document.body.innerHTML = ''
     document.body.appendChild(document.createElement('video'))
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
   })
 
   it('renders only subtitle text without the old floating controls or status', async () => {
@@ -167,7 +187,7 @@ describe('YoutubeOverlay', () => {
   it('uses the initial settings mode for the first VTT request', async () => {
     mockInitialLoad({ settingsOverride: { subtitleMode: 'bilingual' } })
 
-    mount(YoutubeOverlay)
+    mountOverlay()
     await flushPromises()
 
     expect(getMessagesByType('subtitle:fetch-file')[0]).toEqual({
@@ -262,6 +282,66 @@ describe('YoutubeOverlay', () => {
     expect(wrapper.text()).toContain('hello')
   })
 
+  it('keeps the latest settings mode when an in-flight mode change is aborted by video navigation', async () => {
+    const initialWrapper = await mountLoadedOverlay()
+    let resolveModeUpdate: (value: unknown) => void = () => {}
+    sendExtensionMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveModeUpdate = resolve
+      }),
+    )
+    sendExtensionMessage
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, jobId: 'job_456', videoId: 'video_456' },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, jobId: 'job_789', videoId: 'video_789' },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    sendVideoIdChange('video_456')
+    await flushPromises()
+    resolveModeUpdate({
+      ok: true,
+      data: { ...asset, selectedMode: 'bilingual' as const },
+    })
+    await flushPromises()
+    sendVideoIdChange('video_789')
+    await flushPromises()
+
+    expect(initialWrapper.text()).toContain('hello')
+    expect(getMessagesByType('subtitle:fetch-file')).toEqual(
+      expect.arrayContaining([
+        {
+          type: 'subtitle:fetch-file',
+          payload: { jobId: 'job_456', mode: 'bilingual' },
+        },
+        {
+          type: 'subtitle:fetch-file',
+          payload: { jobId: 'job_789', mode: 'bilingual' },
+        },
+      ]),
+    )
+  })
+
+  it('removes the window subtitle toggle listener on unmount', async () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const mounted = await mountLoadedOverlay()
+
+    mounted.unmount()
+    wrapper = null
+
+    expect(removeSpy).toHaveBeenCalledWith(
+      'lets-sub-it:toggle-subtitles',
+      expect.any(Function),
+    )
+    removeSpy.mockRestore()
+  })
+
   it('does not register listeners after unmounting during settings load', async () => {
     let resolveSettings: (value: unknown) => void = () => {}
     sendExtensionMessage.mockReturnValueOnce(
@@ -270,8 +350,9 @@ describe('YoutubeOverlay', () => {
       }),
     )
 
-    const wrapper = mount(YoutubeOverlay)
-    wrapper.unmount()
+    const mounted = mountOverlay()
+    mounted.unmount()
+    wrapper = null
     resolveSettings({ ok: true, data: settings })
     await flushPromises()
 

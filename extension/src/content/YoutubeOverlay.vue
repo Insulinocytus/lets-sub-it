@@ -32,6 +32,8 @@ let removeToggleListener: (() => void) | null = null
 let isMounted = false
 let requestToken = 0
 
+type ModeChangeResult = 'applied' | 'failed' | 'aborted'
+
 const hasSubtitle = computed(() => cues.value.length > 0)
 const isWatchPage = computed(() => currentVideoId.value !== null)
 const subtitleStyle = computed(() => ({
@@ -118,8 +120,8 @@ async function handleSettingsUpdated(settings: Settings) {
   applySettings(settings)
 
   if (settingsSubtitleMode.value !== previousSettingsMode && currentAsset.value) {
-    const applied = await changeMode(settingsSubtitleMode.value)
-    if (!applied) {
+    const result = await changeMode(settingsSubtitleMode.value)
+    if (result === 'failed') {
       settingsSubtitleMode.value = previousSettingsMode
     }
   }
@@ -223,9 +225,9 @@ async function loadVtt(token = requestToken): Promise<boolean> {
   return true
 }
 
-async function changeMode(mode: SubtitleMode): Promise<boolean> {
+async function changeMode(mode: SubtitleMode): Promise<ModeChangeResult> {
   if (selectedMode.value === mode) {
-    return true
+    return 'applied'
   }
 
   const token = requestToken
@@ -234,7 +236,7 @@ async function changeMode(mode: SubtitleMode): Promise<boolean> {
   const previousActiveText = activeText.value
   const asset = currentAsset.value
   if (!asset) {
-    return false
+    return 'failed'
   }
   const videoId = asset.videoId
   const jobId = asset.jobId
@@ -262,8 +264,9 @@ async function changeMode(mode: SubtitleMode): Promise<boolean> {
       selectedMode.value = previousMode
       restoreDisplayedSubtitles(token, previousCues, previousActiveText)
       status.value = readableError(error)
+      return 'failed'
     }
-    return false
+    return 'aborted'
   }
 
   if (
@@ -272,21 +275,21 @@ async function changeMode(mode: SubtitleMode): Promise<boolean> {
     currentAsset.value?.jobId !== jobId ||
     selectedMode.value !== mode
   ) {
-    return false
+    return 'aborted'
   }
 
   if (!result.ok) {
     selectedMode.value = previousMode
     restoreDisplayedSubtitles(token, previousCues, previousActiveText)
     status.value = result.error.message
-    return false
+    return 'failed'
   }
 
   if (!result.data) {
     selectedMode.value = previousMode
     restoreDisplayedSubtitles(token, previousCues, previousActiveText)
     status.value = '字幕模式切换失败'
-    return false
+    return 'failed'
   }
 
   currentAsset.value = result.data
@@ -320,17 +323,17 @@ async function changeMode(mode: SubtitleMode): Promise<boolean> {
         currentAsset.value?.jobId !== jobId ||
         selectedMode.value !== previousMode
       ) {
-        return false
+        return 'aborted'
       }
       if (!rollbackResult.ok) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = rollbackResult.error.message
-        return false
+        return 'failed'
       }
       if (!rollbackResult.data) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = '字幕模式回滚失败'
-        return false
+        return 'failed'
       }
       currentAsset.value = rollbackResult.data
     } catch (error) {
@@ -342,14 +345,15 @@ async function changeMode(mode: SubtitleMode): Promise<boolean> {
       ) {
         restoreDisplayedSubtitles(token, previousCues, previousActiveText)
         status.value = readableError(error)
+        return 'failed'
       }
-      return false
+      return 'aborted'
     }
     await loadVtt(token)
-    return false
+    return 'failed'
   }
 
-  return true
+  return 'applied'
 }
 
 function bindVideo(token: number) {
