@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   default:
@@ -50,11 +50,6 @@ tasks:
         LSI_LLM_TIMEOUT=${LSI_LLM_TIMEOUT:-2m}
         LSI_ADDR=${LSI_ADDR:-127.0.0.1:8080}
         mise exec -- go run ./cmd/server
-
-  dev:backend:real:
-    desc: Alias for dev:backend
-    cmds:
-      - task dev:backend
 
   dev:extension:
     desc: Run the extension dev server
