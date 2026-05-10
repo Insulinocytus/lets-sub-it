@@ -156,9 +156,9 @@ func (t *ChatTranslator) sendTranslationRequest(ctx context.Context, body []byte
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		summary, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return "", isRetryableTranslationStatus(resp.StatusCode), retryAfter, resp.StatusCode, fmt.Errorf("chat completion request failed with status %d: %s", resp.StatusCode, t.redactAPIKey(strings.TrimSpace(string(summary))))
+		return "", isRetryableTranslationStatus(resp.StatusCode), retryAfter, resp.StatusCode, fmt.Errorf("chat completion request failed with status %d", resp.StatusCode)
 	}
 
 	var chatResp chatCompletionResponse
@@ -229,13 +229,6 @@ func sleepContext(ctx context.Context, delay time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-func (t *ChatTranslator) redactAPIKey(message string) string {
-	if t.apiKey == "" {
-		return message
-	}
-	return strings.ReplaceAll(message, t.apiKey, "[redacted]")
 }
 
 func newTranslationPrompt(cues []Cue, index int, sourceLanguage string, targetLanguage string) translationPrompt {

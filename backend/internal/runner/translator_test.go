@@ -242,7 +242,7 @@ func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
-		http.Error(w, "secret-key upstream failed", http.StatusUnauthorized)
+		http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusUnauthorized)
 	}))
 	t.Cleanup(server.Close)
 
@@ -251,8 +251,10 @@ func TestChatTranslatorFailsOnNon2xx(t *testing.T) {
 	if err == nil {
 		t.Fatal("Translate() error = nil, want error")
 	}
-	if strings.Contains(err.Error(), "secret-key") {
-		t.Fatalf("Translate() error leaks api key: %v", err)
+	for _, leaked := range []string{"secret-key", "upstream echoed prompt", "cue text"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("Translate() error leaks %q: %v", leaked, err)
+		}
 	}
 	if attempts != 1 {
 		t.Fatalf("attempts = %d, want 1", attempts)
