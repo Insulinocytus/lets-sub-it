@@ -73,6 +73,10 @@ export type ExtensionMessage =
       type: 'subtitle:update-mode'
       payload: { videoId: string; targetLanguage: LanguageCode; mode: SubtitleMode }
     }
+  | {
+      type: 'settings:update-subtitle'
+      payload: { fontSize?: number; mode?: SubtitleMode }
+    }
 
 export type MessageError = {
   code: string

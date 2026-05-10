@@ -1,9 +1,11 @@
 import { BackendClientError, createBackendClient } from './backend-client'
+import { browser } from 'wxt/browser'
 import {
   assertDifferentLanguages,
   type ExtensionMessage,
   type MessageError,
   type MessageResult,
+  type Settings,
 } from './messages'
 import { getSettings, updateSettings } from '@/storage/settings'
 import {
@@ -108,6 +110,26 @@ export async function handleExtensionMessage(
       }
       case 'subtitle:update-mode':
         return ok(await updateSubtitleMode(message, deps))
+      case 'settings:update-subtitle': {
+        const patch: Partial<Settings> = {}
+        if (message.payload.fontSize !== undefined) {
+          patch.subtitleFontSize = message.payload.fontSize
+        }
+        const updated = await updateSettings(patch)
+        const tabs = await browser.tabs.query({
+          url: ['https://www.youtube.com/watch*'],
+        })
+        await Promise.allSettled(
+          tabs.map(async (tab) => {
+            if (!tab.id) return
+            await browser.tabs.sendMessage(tab.id, {
+              type: 'subtitle:settings-changed',
+              payload: message.payload,
+            })
+          }),
+        )
+        return ok(updated)
+      }
     }
   } catch (error) {
     return { ok: false, error: errorToMessage(error) }
