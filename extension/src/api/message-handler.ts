@@ -80,6 +80,16 @@ export async function handleExtensionMessage(
           targetLanguage,
         )
         if (cached) {
+          if (cached.selectedMode !== settings.subtitleMode) {
+            return ok(
+              await updateCachedSubtitleMode(
+                settings.backendBaseUrl,
+                cached.videoId,
+                cached.targetLanguage,
+                settings.subtitleMode,
+              ),
+            )
+          }
           return ok(cached)
         }
 
@@ -94,7 +104,7 @@ export async function handleExtensionMessage(
 
         const entry = await setCachedSubtitleAsset(
           response.asset,
-          preference?.selectedMode ?? settings.subtitleMode,
+          settings.subtitleMode,
           now(),
           settings.backendBaseUrl,
         )

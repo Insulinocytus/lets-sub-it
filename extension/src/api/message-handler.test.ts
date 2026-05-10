@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { DEFAULT_SETTINGS, getSettings } from '@/storage/settings'
-import { getCachedSubtitleAsset } from '@/storage/subtitle-cache'
+import { getCachedSubtitleAsset, setVideoPreference } from '@/storage/subtitle-cache'
 import type { Job } from './messages'
 import { handleExtensionMessage } from './message-handler'
 
@@ -274,6 +274,96 @@ describe('handleExtensionMessage', () => {
       jobId: 'job_123',
       selectedMode: 'bilingual',
     })
+  })
+
+  it('ignores an old video preference mode when caching a newly resolved subtitle asset', async () => {
+    await setVideoPreference({
+      backendBaseUrl: DEFAULT_SETTINGS.backendBaseUrl,
+      videoId: 'video_123',
+      targetLanguage: 'zh',
+      selectedMode: 'translated',
+    })
+    await handleExtensionMessage({
+      type: 'settings:update',
+      payload: { subtitleMode: 'bilingual' },
+    })
+
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          asset: {
+            jobId: 'job_123',
+            videoId: 'video_123',
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            files: {
+              source: '/subtitle-files/job_123/source',
+              translated: '/subtitle-files/job_123/translated',
+              bilingual: '/subtitle-files/job_123/bilingual',
+            },
+            createdAt: '2026-04-25T00:00:00Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    await handleExtensionMessage(
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123' } },
+      { fetchImpl, now: () => '2026-04-25T00:01:00Z' },
+    )
+
+    await expect(
+      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh'),
+    ).resolves.toMatchObject({ selectedMode: 'bilingual' })
+  })
+
+  it('uses the global subtitle mode when returning a cached subtitle asset', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          asset: {
+            jobId: 'job_123',
+            videoId: 'video_123',
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            files: {
+              source: '/subtitle-files/job_123/source',
+              translated: '/subtitle-files/job_123/translated',
+              bilingual: '/subtitle-files/job_123/bilingual',
+            },
+            createdAt: '2026-04-25T00:00:00Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    await handleExtensionMessage(
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123' } },
+      { fetchImpl, now: () => '2026-04-25T00:01:00Z' },
+    )
+    await handleExtensionMessage({
+      type: 'settings:update',
+      payload: { subtitleMode: 'bilingual' },
+    })
+
+    const result = await handleExtensionMessage(
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123' } },
+      { fetchImpl, now: () => '2026-04-25T00:02:00Z' },
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      data: expect.objectContaining({
+        jobId: 'job_123',
+        selectedMode: 'bilingual',
+      }),
+    })
+    await expect(
+      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh'),
+    ).resolves.toMatchObject({ selectedMode: 'bilingual' })
+    expect(fetchImpl).toHaveBeenCalledOnce()
   })
 
   it('does not reuse cached subtitles from a different backend origin', async () => {

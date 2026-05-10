@@ -24,6 +24,13 @@ export default defineContentScript({
 
     const mount = () => {
       const host = ensurePlayerOverlayHost(findYouTubePlayer())
+      if (!host) {
+        cleanupPlayerOverlayHost(mountedHost)
+        mountedHost = null
+        removeSubtitleToggleButton()
+        return
+      }
+
       if (host && host !== mountedHost) {
         cleanupPlayerOverlayHost(mountedHost)
         mountedHost = host

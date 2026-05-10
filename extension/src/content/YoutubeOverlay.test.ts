@@ -316,7 +316,7 @@ describe('YoutubeOverlay', () => {
           ...asset,
           jobId: 'job_456',
           videoId: 'video_456',
-          selectedMode: 'translated' as const,
+          selectedMode: 'bilingual' as const,
         },
       })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
@@ -326,7 +326,7 @@ describe('YoutubeOverlay', () => {
           ...asset,
           jobId: 'job_789',
           videoId: 'video_789',
-          selectedMode: 'translated' as const,
+          selectedMode: 'bilingual' as const,
         },
       })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
@@ -350,11 +350,11 @@ describe('YoutubeOverlay', () => {
       expect.arrayContaining([
         {
           type: 'subtitle:fetch-file',
-          payload: { jobId: 'job_456', mode: 'translated' },
+          payload: { jobId: 'job_456', mode: 'bilingual' },
         },
         {
           type: 'subtitle:fetch-file',
-          payload: { jobId: 'job_789', mode: 'translated' },
+          payload: { jobId: 'job_789', mode: 'bilingual' },
         },
       ]),
     )
