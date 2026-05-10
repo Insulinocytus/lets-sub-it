@@ -11,3 +11,263 @@
   color: #fff;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+#lets-sub-it-player-overlay-host button {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+#lets-sub-it-player-overlay-host button:disabled {
+  cursor: not-allowed;
+}
+
+#lets-sub-it-player-overlay-host .fixed {
+  position: absolute;
+}
+
+#lets-sub-it-player-overlay-host .inset-x-0 {
+  left: 0;
+  right: 0;
+}
+
+#lets-sub-it-player-overlay-host .bottom-7 {
+  bottom: 1.75rem;
+}
+
+#lets-sub-it-player-overlay-host .z-\[2147483647\] {
+  z-index: 2147483647;
+}
+
+#lets-sub-it-player-overlay-host .flex,
+#lets-sub-it-player-overlay-host .inline-flex {
+  display: flex;
+}
+
+#lets-sub-it-player-overlay-host .flex-col {
+  flex-direction: column;
+}
+
+#lets-sub-it-player-overlay-host .items-center {
+  align-items: center;
+}
+
+#lets-sub-it-player-overlay-host .justify-center {
+  justify-content: center;
+}
+
+#lets-sub-it-player-overlay-host .gap-1 {
+  gap: 0.25rem;
+}
+
+#lets-sub-it-player-overlay-host .gap-1\.5 {
+  gap: 0.375rem;
+}
+
+#lets-sub-it-player-overlay-host .gap-2 {
+  gap: 0.5rem;
+}
+
+#lets-sub-it-player-overlay-host .h-8 {
+  height: 2rem;
+}
+
+#lets-sub-it-player-overlay-host .h-7 {
+  height: 1.75rem;
+}
+
+#lets-sub-it-player-overlay-host .px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+#lets-sub-it-player-overlay-host .px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+#lets-sub-it-player-overlay-host .px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+#lets-sub-it-player-overlay-host .py-0\.5 {
+  padding-bottom: 0.125rem;
+  padding-top: 0.125rem;
+}
+
+#lets-sub-it-player-overlay-host .py-1\.5 {
+  padding-bottom: 0.375rem;
+  padding-top: 0.375rem;
+}
+
+#lets-sub-it-player-overlay-host .py-2 {
+  padding-bottom: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+#lets-sub-it-player-overlay-host .max-w-full {
+  max-width: 100%;
+}
+
+#lets-sub-it-player-overlay-host [class~="max-w-[min(720px,calc(100vw-32px))]"] {
+  max-width: min(720px, calc(100vw - 32px));
+}
+
+#lets-sub-it-player-overlay-host .w-fit {
+  width: fit-content;
+}
+
+#lets-sub-it-player-overlay-host .shrink-0 {
+  flex-shrink: 0;
+}
+
+#lets-sub-it-player-overlay-host .rounded-full {
+  border-radius: 9999px;
+}
+
+#lets-sub-it-player-overlay-host .rounded-md {
+  border-radius: 0.375rem;
+}
+
+#lets-sub-it-player-overlay-host .border {
+  border-style: solid;
+  border-width: 1px;
+}
+
+#lets-sub-it-player-overlay-host .border-transparent {
+  border-color: transparent;
+}
+
+#lets-sub-it-player-overlay-host .border-white\/15 {
+  border-color: rgb(255 255 255 / 0.15);
+}
+
+#lets-sub-it-player-overlay-host .border-white\/20 {
+  border-color: rgb(255 255 255 / 0.2);
+}
+
+#lets-sub-it-player-overlay-host .bg-black\/70 {
+  background-color: rgb(0 0 0 / 0.7);
+}
+
+#lets-sub-it-player-overlay-host .bg-black\/78 {
+  background-color: rgb(0 0 0 / 0.78);
+}
+
+#lets-sub-it-player-overlay-host .bg-secondary {
+  background-color: rgb(255 255 255 / 0.9);
+}
+
+#lets-sub-it-player-overlay-host .bg-white\/10 {
+  background-color: rgb(255 255 255 / 0.1);
+}
+
+#lets-sub-it-player-overlay-host .text-center {
+  text-align: center;
+}
+
+#lets-sub-it-player-overlay-host .text-secondary-foreground {
+  color: rgb(24 24 27);
+}
+
+#lets-sub-it-player-overlay-host .text-white {
+  color: #fff;
+}
+
+#lets-sub-it-player-overlay-host .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+#lets-sub-it-player-overlay-host .text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+#lets-sub-it-player-overlay-host .text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+#lets-sub-it-player-overlay-host .text-\[11px\] {
+  font-size: 11px;
+}
+
+#lets-sub-it-player-overlay-host .font-medium {
+  font-weight: 500;
+}
+
+#lets-sub-it-player-overlay-host .font-semibold {
+  font-weight: 600;
+}
+
+#lets-sub-it-player-overlay-host .leading-5 {
+  line-height: 1.25rem;
+}
+
+#lets-sub-it-player-overlay-host .leading-snug {
+  line-height: 1.375;
+}
+
+#lets-sub-it-player-overlay-host .whitespace-nowrap {
+  white-space: nowrap;
+}
+
+#lets-sub-it-player-overlay-host .whitespace-pre-line {
+  white-space: pre-line;
+}
+
+#lets-sub-it-player-overlay-host .pointer-events-auto {
+  pointer-events: auto;
+}
+
+#lets-sub-it-player-overlay-host .pointer-events-none {
+  pointer-events: none;
+}
+
+#lets-sub-it-player-overlay-host .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35);
+}
+
+#lets-sub-it-player-overlay-host .transition-all {
+  transition-duration: 150ms;
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#lets-sub-it-player-overlay-host .backdrop-blur {
+  backdrop-filter: blur(8px);
+}
+
+#lets-sub-it-player-overlay-host .outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+#lets-sub-it-player-overlay-host .overflow-hidden {
+  overflow: hidden;
+}
+
+#lets-sub-it-player-overlay-host .disabled\:pointer-events-none:disabled {
+  pointer-events: none;
+}
+
+#lets-sub-it-player-overlay-host .disabled\:opacity-50:disabled {
+  opacity: 0.5;
+}
+
+#lets-sub-it-player-overlay-host .hover\:bg-accent:hover,
+#lets-sub-it-player-overlay-host .hover\:bg-secondary\/80:hover {
+  background-color: rgb(255 255 255 / 0.16);
+}
+
+#lets-sub-it-player-overlay-host .hover\:text-accent-foreground:hover,
+#lets-sub-it-player-overlay-host .hover\:text-white:hover {
+  color: #fff;
+}
+
+#lets-sub-it-player-overlay-host [class~="[text-shadow:0_1px_2px_rgb(0_0_0/0.85)]"] {
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+}
