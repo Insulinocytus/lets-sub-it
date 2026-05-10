@@ -208,6 +208,30 @@ describe('YoutubeOverlay', () => {
     expect(wrapper.text()).toContain('hello')
   })
 
+  it('publishes subtitle enabled state changes for the player button', async () => {
+    const events: boolean[] = []
+    const handleEnabledChanged = (event: Event) => {
+      events.push((event as CustomEvent<{ enabled: boolean }>).detail.enabled)
+    }
+    window.addEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+
+    try {
+      mockInitialLoad()
+
+      mountOverlay()
+      await flushPromises()
+
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+      await flushPromises()
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+      await flushPromises()
+
+      expect(events).toEqual([true, false, true])
+    } finally {
+      window.removeEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+    }
+  })
+
   it('ignores settings update messages with non-object settings payloads', async () => {
     const wrapper = await mountLoadedOverlay()
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { browser } from 'wxt/browser'
 import {
   SUBTITLE_MODES,
@@ -24,6 +24,12 @@ const settingsSubtitleMode = ref<SubtitleMode>('translated')
 const subtitleFontSizePx = ref(20)
 const cues = ref<VttCue[]>([])
 const activeText = ref('')
+
+watch(enabled, (next) => {
+  window.dispatchEvent(new CustomEvent('lets-sub-it:subtitle-enabled-changed', {
+    detail: { enabled: next },
+  }))
+}, { immediate: true })
 
 let removeVideoListeners: (() => void) | null = null
 let removeVideoIdWatch: (() => void) | null = null
