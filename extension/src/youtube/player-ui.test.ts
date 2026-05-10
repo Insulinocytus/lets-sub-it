@@ -85,6 +85,23 @@ describe('YouTube player UI helpers', () => {
     expect(cleanup).toHaveBeenCalledOnce()
   })
 
+  it('runs overlay cleanup only once for the same host', () => {
+    document.body.innerHTML = '<div id="movie_player" class="html5-video-player"></div>'
+    const cleanup = vi.fn()
+    const host = document.createElement('div') as HTMLElement & {
+      __letsSubItCleanup?: () => void
+    }
+    host.id = PLAYER_OVERLAY_HOST_ID
+    host.__letsSubItCleanup = cleanup
+    findYouTubePlayer()!.append(host)
+
+    cleanupPlayerOverlayHost(host)
+    cleanupPlayerOverlayHost(host)
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(host.isConnected).toBe(false)
+  })
+
   it('creates a toggle button that stops player event propagation', () => {
     const onToggle = vi.fn()
     const button = createSubtitleToggleButton(true, onToggle)

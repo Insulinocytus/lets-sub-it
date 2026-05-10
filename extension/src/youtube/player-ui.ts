@@ -2,6 +2,7 @@ export const PLAYER_OVERLAY_HOST_ID = 'lets-sub-it-player-overlay-host'
 export const SUBTITLE_TOGGLE_BUTTON_ID = 'lets-sub-it-subtitle-toggle'
 
 export type PlayerOverlayHost = HTMLElement & {
+  __letsSubItCleanedUp?: boolean
   __letsSubItCleanup?: () => void
 }
 
@@ -14,8 +15,13 @@ export function findYouTubePlayer(): HTMLElement | null {
 }
 
 export function cleanupPlayerOverlayHost(host: PlayerOverlayHost | null): void {
-  host?.__letsSubItCleanup?.()
-  host?.remove()
+  if (!host || host.__letsSubItCleanedUp) {
+    return
+  }
+
+  host.__letsSubItCleanedUp = true
+  host.__letsSubItCleanup?.()
+  host.remove()
 }
 
 export function ensurePlayerOverlayHost(player: HTMLElement | null): PlayerOverlayHost | null {
