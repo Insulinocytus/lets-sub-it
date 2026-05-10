@@ -1,6 +1,5 @@
 import '@/style.css'
 import { createApp } from 'vue'
-import { browser } from 'wxt/browser'
 import YoutubeOverlay from '@/content/YoutubeOverlay.vue'
 import { injectPlayerButton, removePlayerButton } from '@/content/player-button'
 
