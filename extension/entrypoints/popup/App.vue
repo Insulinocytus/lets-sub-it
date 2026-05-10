@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { browser } from 'wxt/browser'
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -48,6 +49,8 @@ const isSubmitting = ref(false)
 const activeJobId = ref<string | null>(null)
 const subtitleReady = ref(false)
 const pollTimer = ref<number | null>(null)
+const subtitleFontSize = ref(20)
+const subtitleMode = ref<'translated' | 'bilingual'>('translated')
 
 const form = computed<CreateJobForm>(() => ({
   backendBaseUrl: backendBaseUrl.value,
@@ -95,6 +98,7 @@ onMounted(async () => {
       backendBaseUrl.value = settingsResult.data.backendBaseUrl
       sourceLanguage.value = settingsResult.data.sourceLanguage
       targetLanguage.value = settingsResult.data.targetLanguage
+      subtitleFontSize.value = settingsResult.data.subtitleFontSize ?? 20
     }
   } catch {
     // Keep defaults when extension storage is not available.
@@ -295,6 +299,20 @@ function readableError(error: unknown) {
   return '操作失败，请稍后重试'
 }
 
+async function applySubtitleSettings() {
+  try {
+    await sendExtensionMessage({
+      type: 'settings:update-subtitle',
+      payload: {
+        fontSize: subtitleFontSize.value,
+        mode: subtitleMode.value,
+      },
+    })
+  } catch {
+    errorMessage.value = '设置同步失败'
+  }
+}
+
 async function notifySubtitleUpdated(videoId: string) {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
@@ -314,108 +332,178 @@ async function notifySubtitleUpdated(videoId: string) {
 
 <template>
   <main class="w-[380px] bg-background p-4 text-foreground">
-    <Card class="gap-4 rounded-lg py-4 shadow-none">
-      <CardHeader class="gap-1 px-4">
-        <CardTitle class="text-base">Lets Sub It</CardTitle>
-        <CardDescription class="text-xs">
-          提交当前 YouTube 视频并生成双语字幕。
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent class="space-y-4 px-4">
-        <form class="space-y-3" @submit.prevent="submitJob">
-          <label class="grid gap-1.5 text-xs font-medium">
-            backend URL
-            <Input
-              v-model="backendBaseUrl"
-              class="h-8 text-xs"
-              placeholder="http://127.0.0.1:8080"
-            />
-          </label>
-
-          <label class="grid gap-1.5 text-xs font-medium">
-            YouTube URL
-            <Input
-              v-model="youtubeUrl"
-              class="h-8 text-xs"
-              placeholder="https://www.youtube.com/watch?v=..."
-            />
-          </label>
-
-          <div class="grid grid-cols-2 gap-3">
-            <label class="grid min-w-0 gap-1.5 text-xs font-medium">
-              源语言
-              <Select v-model="sourceLanguage">
-                <SelectTrigger class="h-8 w-full text-xs">
-                  <SelectValue placeholder="源语言" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="language in languages"
-                    :key="language"
-                    :value="language"
-                  >
-                    {{ languageLabels[language] }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-
-            <label class="grid min-w-0 gap-1.5 text-xs font-medium">
-              目标语言
-              <Select v-model="targetLanguage">
-                <SelectTrigger class="h-8 w-full text-xs">
-                  <SelectValue placeholder="目标语言" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="language in languages"
-                    :key="language"
-                    :value="language"
-                  >
-                    {{ languageLabels[language] }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-          </div>
-
-          <Alert v-if="alertMessage" variant="destructive" class="py-2">
-            <AlertDescription class="text-xs">
-              {{ alertMessage }}
-            </AlertDescription>
-          </Alert>
-
-          <Button
-            class="h-8 w-full text-xs"
-            type="submit"
-            :disabled="isSubmitDisabled"
-          >
-            {{ isSubmitting ? '处理中...' : '生成字幕' }}
-          </Button>
-        </form>
-
-        <section
-          v-if="currentJob"
-          class="space-y-2 rounded-md border bg-muted/40 p-3 text-xs"
+    <TabsRoot default-value="generation" class="space-y-4">
+      <TabsList class="flex gap-1 rounded-lg bg-muted p-1">
+        <TabsTrigger
+          value="generation"
+          class="flex-1 rounded-md px-3 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-medium">任务状态</span>
-            <Badge :variant="statusBadgeVariant">
-              {{ statusLabel }}
-            </Badge>
-          </div>
-          <p class="break-words text-muted-foreground">
-            {{ currentJob.progressText }}
-          </p>
-          <p
-            v-if="currentJob.status === 'completed' && subtitleReady"
-            class="text-muted-foreground"
-          >
-            字幕已生成并写入本地缓存。
-          </p>
-        </section>
-      </CardContent>
-    </Card>
+          字幕生成
+        </TabsTrigger>
+        <TabsTrigger
+          value="settings"
+          class="flex-1 rounded-md px-3 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+        >
+          字幕设置
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="generation">
+        <Card class="gap-4 rounded-lg py-4 shadow-none">
+          <CardHeader class="gap-1 px-4">
+            <CardTitle class="text-base">Lets Sub It</CardTitle>
+            <CardDescription class="text-xs">
+              提交当前 YouTube 视频并生成双语字幕。
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent class="space-y-4 px-4">
+            <form class="space-y-3" @submit.prevent="submitJob">
+              <label class="grid gap-1.5 text-xs font-medium">
+                backend URL
+                <Input
+                  v-model="backendBaseUrl"
+                  class="h-8 text-xs"
+                  placeholder="http://127.0.0.1:8080"
+                />
+              </label>
+
+              <label class="grid gap-1.5 text-xs font-medium">
+                YouTube URL
+                <Input
+                  v-model="youtubeUrl"
+                  class="h-8 text-xs"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </label>
+
+              <div class="grid grid-cols-2 gap-3">
+                <label class="grid min-w-0 gap-1.5 text-xs font-medium">
+                  源语言
+                  <Select v-model="sourceLanguage">
+                    <SelectTrigger class="h-8 w-full text-xs">
+                      <SelectValue placeholder="源语言" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="language in languages"
+                        :key="language"
+                        :value="language"
+                      >
+                        {{ languageLabels[language] }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label class="grid min-w-0 gap-1.5 text-xs font-medium">
+                  目标语言
+                  <Select v-model="targetLanguage">
+                    <SelectTrigger class="h-8 w-full text-xs">
+                      <SelectValue placeholder="目标语言" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="language in languages"
+                        :key="language"
+                        :value="language"
+                      >
+                        {{ languageLabels[language] }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
+
+              <Alert v-if="alertMessage" variant="destructive" class="py-2">
+                <AlertDescription class="text-xs">
+                  {{ alertMessage }}
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                class="h-8 w-full text-xs"
+                type="submit"
+                :disabled="isSubmitDisabled"
+              >
+                {{ isSubmitting ? '处理中...' : '生成字幕' }}
+              </Button>
+            </form>
+
+            <section
+              v-if="currentJob"
+              class="space-y-2 rounded-md border bg-muted/40 p-3 text-xs"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-medium">任务状态</span>
+                <Badge :variant="statusBadgeVariant">
+                  {{ statusLabel }}
+                </Badge>
+              </div>
+              <p class="break-words text-muted-foreground">
+                {{ currentJob.progressText }}
+              </p>
+              <p
+                v-if="currentJob.status === 'completed' && subtitleReady"
+                class="text-muted-foreground"
+              >
+                字幕已生成并写入本地缓存。
+              </p>
+            </section>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="settings">
+        <Card class="gap-4 rounded-lg py-4 shadow-none">
+          <CardHeader class="gap-1 px-4">
+            <CardTitle class="text-base">字幕设置</CardTitle>
+            <CardDescription class="text-xs">
+              调整字幕显示样式和模式。
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent class="space-y-4 px-4">
+            <label class="grid gap-1.5 text-xs font-medium">
+              字体大小 (px)
+              <Input
+                v-model.number="subtitleFontSize"
+                class="h-8 text-xs"
+                type="number"
+                :min="8"
+                :max="72"
+                placeholder="20"
+              />
+            </label>
+
+            <div class="grid gap-1.5 text-xs font-medium">
+              <span>字幕模式</span>
+              <div class="flex gap-2">
+                <Button
+                  size="sm"
+                  class="h-8 flex-1 text-xs"
+                  :variant="subtitleMode === 'translated' ? 'secondary' : 'outline'"
+                  @click="subtitleMode = 'translated'"
+                >
+                  翻译
+                </Button>
+                <Button
+                  size="sm"
+                  class="h-8 flex-1 text-xs"
+                  :variant="subtitleMode === 'bilingual' ? 'secondary' : 'outline'"
+                  @click="subtitleMode = 'bilingual'"
+                >
+                  双语
+                </Button>
+              </div>
+            </div>
+
+            <Button class="h-8 w-full text-xs" @click="applySubtitleSettings">
+              应用设置
+            </Button>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </TabsRoot>
   </main>
 </template>
