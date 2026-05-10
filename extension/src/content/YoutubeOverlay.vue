@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { browser } from 'wxt/browser'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
+  SUBTITLE_MODES,
+  type Settings,
   type SubtitleMode,
   sendExtensionMessage,
 } from '@/api/messages'
@@ -20,20 +20,31 @@ const status = ref('查找字幕')
 const currentVideoId = ref<string | null>(null)
 const currentAsset = ref<SubtitleAssetCacheEntry | null>(null)
 const selectedMode = ref<SubtitleMode>('translated')
+const settingsSubtitleMode = ref<SubtitleMode>('translated')
+const subtitleFontSizePx = ref(20)
 const cues = ref<VttCue[]>([])
 const activeText = ref('')
 
 let removeVideoListeners: (() => void) | null = null
 let removeVideoIdWatch: (() => void) | null = null
 let removeRuntimeListener: (() => void) | null = null
+let removeToggleListener: (() => void) | null = null
 let isMounted = false
 let requestToken = 0
 
 const hasSubtitle = computed(() => cues.value.length > 0)
 const isWatchPage = computed(() => currentVideoId.value !== null)
+const subtitleStyle = computed(() => ({
+  fontSize: `${subtitleFontSizePx.value}px`,
+}))
 
-onMounted(() => {
+onMounted(async () => {
   isMounted = true
+  await loadSettings()
+  if (!isMounted) {
+    return
+  }
+
   const videoId = getCurrentVideoId()
   currentVideoId.value = videoId
   void loadForVideo(videoId)
@@ -44,9 +55,15 @@ onMounted(() => {
   })
 
   const handleRuntimeMessage = (message: unknown) => {
+    if (isSettingsUpdatedMessage(message)) {
+      void handleSettingsUpdated(message.settings)
+      return
+    }
+
     if (!isSubtitleUpdatedMessage(message)) {
       return
     }
+
     if (message.videoId !== currentVideoId.value) {
       return
     }
@@ -56,6 +73,14 @@ onMounted(() => {
   browser.runtime.onMessage.addListener(handleRuntimeMessage)
   removeRuntimeListener = () => {
     browser.runtime.onMessage.removeListener(handleRuntimeMessage)
+  }
+
+  const handleToggleSubtitles = () => {
+    enabled.value = !enabled.value
+  }
+  window.addEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
+  removeToggleListener = () => {
+    window.removeEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
   }
 })
 
@@ -67,7 +92,40 @@ onUnmounted(() => {
   removeVideoIdWatch = null
   removeRuntimeListener?.()
   removeRuntimeListener = null
+  removeToggleListener?.()
+  removeToggleListener = null
 })
+
+async function loadSettings() {
+  let result
+  try {
+    result = await sendExtensionMessage<Settings>({ type: 'settings:get' })
+  } catch (error) {
+    status.value = readableError(error)
+    return
+  }
+
+  if (!result.ok) {
+    status.value = result.error.message
+    return
+  }
+
+  applySettings(result.data)
+}
+
+async function handleSettingsUpdated(settings: Settings) {
+  const previousMode = settingsSubtitleMode.value
+  applySettings(settings)
+
+  if (settingsSubtitleMode.value !== previousMode && currentAsset.value) {
+    await changeMode(settingsSubtitleMode.value)
+  }
+}
+
+function applySettings(settings: Settings) {
+  subtitleFontSizePx.value = settings.subtitleFontSizePx
+  settingsSubtitleMode.value = settings.subtitleMode
+}
 
 async function loadForVideo(videoId: string | null) {
   const token = ++requestToken
@@ -109,7 +167,7 @@ async function loadForVideo(videoId: string | null) {
   }
 
   currentAsset.value = result.data
-  selectedMode.value = result.data.selectedMode
+  selectedMode.value = settingsSubtitleMode.value
   await loadVtt(token)
 }
 
@@ -350,14 +408,6 @@ function restoreDisplayedSubtitles(
   }
 }
 
-function handleModeClick(mode: SubtitleMode) {
-  void changeMode(mode).catch((error: unknown) => {
-    if (isMounted) {
-      status.value = readableError(error)
-    }
-  })
-}
-
 function readableError(error: unknown) {
   return error instanceof Error ? error.message : '字幕操作失败'
 }
@@ -375,58 +425,45 @@ function isSubtitleUpdatedMessage(message: unknown): message is SubtitleUpdatedM
   const candidate = message as Partial<SubtitleUpdatedMessage>
   return candidate.type === 'lets-sub-it:subtitle-updated' && typeof candidate.videoId === 'string'
 }
+
+type SettingsUpdatedMessage = {
+  type: 'lets-sub-it:settings-updated'
+  settings: Settings
+}
+
+function isSettingsUpdatedMessage(message: unknown): message is SettingsUpdatedMessage {
+  if (typeof message !== 'object' || message === null) {
+    return false
+  }
+
+  const candidate = message as Partial<SettingsUpdatedMessage>
+  return candidate.type === 'lets-sub-it:settings-updated' && isSettings(candidate.settings)
+}
+
+function isSettings(value: unknown): value is Settings {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Partial<Settings>
+  return (
+    typeof candidate.subtitleFontSizePx === 'number' &&
+    candidate.subtitleFontSizePx > 0 &&
+    SUBTITLE_MODES.includes(candidate.subtitleMode as SubtitleMode)
+  )
+}
 </script>
 
 <template>
   <div
-    v-if="isWatchPage"
-    class="pointer-events-none fixed inset-x-0 bottom-7 z-[2147483647] flex justify-center px-4"
+    v-if="isWatchPage && enabled && hasSubtitle && activeText"
+    class="lets-sub-it-subtitle-layer"
   >
-    <div class="flex max-w-[min(720px,calc(100vw-32px))] flex-col items-center gap-2">
-      <div class="pointer-events-auto flex items-center gap-1.5 rounded-md border border-white/15 bg-black/70 px-2 py-1.5 text-white shadow-lg backdrop-blur">
-        <Button
-          type="button"
-          size="sm"
-          :variant="enabled ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs"
-          @click="enabled = !enabled"
-        >
-          {{ enabled ? '字幕开' : '字幕关' }}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          :variant="selectedMode === 'translated' ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs text-white hover:text-white"
-          :disabled="!currentAsset"
-          @click="handleModeClick('translated')"
-        >
-          翻译
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          :variant="selectedMode === 'bilingual' ? 'secondary' : 'ghost'"
-          class="h-7 px-2 text-xs text-white hover:text-white"
-          :disabled="!currentAsset"
-          @click="handleModeClick('bilingual')"
-        >
-          双语
-        </Button>
-        <Badge
-          variant="outline"
-          class="border-white/20 bg-white/10 text-[11px] leading-5 text-white"
-        >
-          {{ status }}
-        </Badge>
-      </div>
-
-      <div
-        v-if="enabled && hasSubtitle && activeText"
-        class="pointer-events-auto max-w-full whitespace-pre-line rounded-md bg-black/78 px-4 py-2 text-center text-xl font-semibold leading-snug text-white shadow-lg [text-shadow:0_1px_2px_rgb(0_0_0/0.85)]"
-      >
-        {{ activeText }}
-      </div>
+    <div
+      class="lets-sub-it-subtitle-text"
+      :style="subtitleStyle"
+    >
+      {{ activeText }}
     </div>
   </div>
 </template>
