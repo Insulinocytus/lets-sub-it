@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  cleanupPlayerOverlayHost,
   createSubtitleToggleButton,
   ensurePlayerOverlayHost,
   findYouTubePlayer,
@@ -67,6 +68,19 @@ describe('YouTube player UI helpers', () => {
     document.querySelector('#old-player')!.append(oldHost)
 
     ensurePlayerOverlayHost(findYouTubePlayer())
+
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
+  it('runs overlay cleanup for a detached host', () => {
+    const cleanup = vi.fn()
+    const host = document.createElement('div') as HTMLElement & {
+      __letsSubItCleanup?: () => void
+    }
+    host.id = PLAYER_OVERLAY_HOST_ID
+    host.__letsSubItCleanup = cleanup
+
+    cleanupPlayerOverlayHost(host)
 
     expect(cleanup).toHaveBeenCalledOnce()
   })

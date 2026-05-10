@@ -13,6 +13,11 @@ export function findYouTubePlayer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(PLAYER_SELECTOR)
 }
 
+export function cleanupPlayerOverlayHost(host: PlayerOverlayHost | null): void {
+  host?.__letsSubItCleanup?.()
+  host?.remove()
+}
+
 export function ensurePlayerOverlayHost(player: HTMLElement | null): PlayerOverlayHost | null {
   if (!player) {
     return null
@@ -23,8 +28,7 @@ export function ensurePlayerOverlayHost(player: HTMLElement | null): PlayerOverl
     return existing as PlayerOverlayHost
   }
   if (existing) {
-    ;(existing as PlayerOverlayHost).__letsSubItCleanup?.()
-    existing.remove()
+    cleanupPlayerOverlayHost(existing as PlayerOverlayHost)
   }
 
   if (window.getComputedStyle(player).position === 'static') {
