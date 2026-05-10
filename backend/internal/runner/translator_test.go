@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -146,6 +148,57 @@ func TestChatTranslatorRetriesTransientFailuresBeforeReturningTranslation(t *tes
 	}
 	if attempts != 11 {
 		t.Fatalf("attempts = %d, want 11", attempts)
+	}
+}
+
+func TestChatTranslatorLogsRetryDiagnosticsWithoutSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "secret-key upstream busy", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translation\":\"译文\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	translator := NewChatTranslator(server.URL, "secret-key", "test-model", time.Second, server.Client())
+	translations, err := translator.Translate(context.Background(), makeTranslatorTestCues(1), "en", "zh")
+	if err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if len(translations) != 1 || translations[0] != "译文" {
+		t.Fatalf("translations = %#v, want single translated cue", translations)
+	}
+
+	output := logs.String()
+	for _, want := range []string{
+		`"msg":"translation request retrying"`,
+		`"cue_index":0`,
+		`"attempt":1`,
+		`"status":503`,
+		`"retry_after_ms":0`,
+		`"duration_ms":`,
+		`"msg":"translation request completed"`,
+		`"status":200`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("logs = %s\nwant containing %s", output, want)
+		}
+	}
+	for _, leaked := range []string{"secret-key", "cue text"} {
+		if strings.Contains(output, leaked) {
+			t.Fatalf("logs leaked %q: %s", leaked, output)
+		}
 	}
 }
 

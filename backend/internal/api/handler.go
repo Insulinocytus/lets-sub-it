@@ -87,6 +87,7 @@ func (h *Handler) handleJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !errors.Is(err, store.ErrNotFound) {
+		slog.Error("reusable job query failed", "video_id", videoID, "target_language", request.TargetLanguage, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query reusable job")
 		return
 	}
@@ -150,6 +151,7 @@ func (h *Handler) handleJobByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("job query failed", "job_id", jobID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query job")
 		return
 	}
@@ -180,6 +182,7 @@ func (h *Handler) handleActiveJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("active job query failed", "video_id", videoID, "target_language", targetLanguage, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query active job")
 		return
 	}
@@ -210,6 +213,7 @@ func (h *Handler) handleSubtitleAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("subtitle asset query failed", "video_id", videoID, "target_language", targetLanguage, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query subtitle asset")
 		return
 	}
@@ -244,6 +248,7 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("subtitle asset query failed", "job_id", jobID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query subtitle asset")
 		return
 	}
@@ -254,6 +259,7 @@ func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("job query failed", "job_id", jobID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query job")
 		return
 	}

@@ -1,8 +1,10 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type routeHandler interface {
@@ -20,7 +22,31 @@ func Routes(handler routeHandler) http.Handler {
 	mux.HandleFunc("/jobs/", handler.handleJobByID)
 	mux.HandleFunc("/subtitle-assets", handler.handleSubtitleAssets)
 	mux.HandleFunc("/subtitle-files/", handler.handleSubtitleFile)
-	return withCORS(mux)
+	return withRequestLogging(withCORS(mux))
+}
+
+func withRequestLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedAt := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		slog.Info("http request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", recorder.status,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+		)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
 }
 
 func withCORS(next http.Handler) http.Handler {

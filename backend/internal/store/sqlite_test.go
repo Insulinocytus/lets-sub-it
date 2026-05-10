@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -162,9 +163,13 @@ func TestStoreReturnsErrNotFound(t *testing.T) {
 
 func TestStoreDoesNotLogExpectedRecordNotFound(t *testing.T) {
 	var logs bytes.Buffer
-	store, err := openWithLogWriter(filepath.Join(t.TempDir(), "test.sqlite3"), &logs)
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	store, err := Open(filepath.Join(t.TempDir(), "test.sqlite3"))
 	if err != nil {
-		t.Fatalf("openWithLogWriter() error = %v", err)
+		t.Fatalf("Open() error = %v", err)
 	}
 	if err := store.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
@@ -176,6 +181,45 @@ func TestStoreDoesNotLogExpectedRecordNotFound(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), "record not found") {
 		t.Fatalf("logs contain expected record-not-found query: %q", logs.String())
+	}
+	if logs.String() != "" {
+		t.Fatalf("logs contain expected record-not-found query: %q", logs.String())
+	}
+}
+
+func TestStoreLogsDatabaseQueriesThroughSlogAtDebug(t *testing.T) {
+	var logs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	store, err := Open(filepath.Join(t.TempDir(), "test.sqlite3"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := store.Migrate(); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+	logs.Reset()
+
+	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")
+	if err := store.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	output := logs.String()
+	for _, want := range []string{
+		`"level":"DEBUG"`,
+		`"msg":"database query"`,
+		`"duration_ms":`,
+		`"rows":1`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("logs = %s\nwant containing %s", output, want)
+		}
+	}
+	if strings.Contains(output, job.YoutubeURL) {
+		t.Fatalf("logs leaked stored YouTube URL: %s", output)
 	}
 }
 
