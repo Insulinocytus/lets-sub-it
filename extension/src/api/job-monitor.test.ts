@@ -100,6 +100,32 @@ describe('job monitor', () => {
     expect(notifySubtitleUpdated).toHaveBeenCalledWith('video_123')
   })
 
+  it('uses the global subtitle mode when caching a completed job', async () => {
+    await updateSettings({ subtitleMode: 'bilingual' })
+    const client = fakeClient({
+      getJob: vi.fn(async () => ({ job: completedJob })),
+      getSubtitleAsset: vi.fn(async () => ({ asset })),
+    })
+    const setCachedSubtitleAsset = vi.fn()
+
+    await startJobMonitor(queuedJob, {
+      backendBaseUrl: defaultBackendBaseUrl,
+      client,
+      now: () => '2026-04-25T00:02:00Z',
+      setCachedSubtitleAsset,
+      notifySubtitleUpdated: vi.fn(),
+    })
+
+    await vi.waitFor(() => {
+      expect(setCachedSubtitleAsset).toHaveBeenCalledWith(
+        asset,
+        'bilingual',
+        '2026-04-25T00:02:00Z',
+        defaultBackendBaseUrl,
+      )
+    })
+  })
+
   it('does not start duplicate monitors for the same job', async () => {
     const client = fakeClient({
       getJob: vi.fn(async () => ({ job: queuedJob })),

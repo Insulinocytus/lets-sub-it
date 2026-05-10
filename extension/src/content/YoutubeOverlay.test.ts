@@ -208,6 +208,50 @@ describe('YoutubeOverlay', () => {
     expect(wrapper.text()).toContain('hello')
   })
 
+  it('handles subtitle toggle events while settings are still loading', async () => {
+    let resolveSettings: (value: unknown) => void = () => {}
+    sendExtensionMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSettings = resolve
+      }),
+    )
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: asset })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mountOverlay()
+    window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    resolveSettings({ ok: true, data: settings })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('hello')
+  })
+
+  it('binds cue updates to the video inside the current player', async () => {
+    document.body.innerHTML = `
+      <video id="outside-video"></video>
+      <div id="movie_player" class="html5-video-player">
+        <video id="player-video"></video>
+        <div id="lets-sub-it-player-overlay-host"></div>
+      </div>
+    `
+    const outsideVideo = document.getElementById('outside-video') as HTMLVideoElement
+    const playerVideo = document.getElementById('player-video') as HTMLVideoElement
+    const host = document.getElementById('lets-sub-it-player-overlay-host') as HTMLElement
+    outsideVideo.currentTime = 0.5
+    playerVideo.currentTime = 2
+    mockInitialLoad()
+
+    wrapper = mount(YoutubeOverlay, { attachTo: host })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('hello')
+    playerVideo.currentTime = 0.5
+    playerVideo.dispatchEvent(new Event('timeupdate'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('hello')
+  })
+
   it('publishes subtitle enabled state changes for the player button', async () => {
     const events: boolean[] = []
     const handleEnabledChanged = (event: Event) => {
@@ -263,7 +307,7 @@ describe('YoutubeOverlay', () => {
     )
   })
 
-  it('does not roll back the saved settings mode after a failed mode change', async () => {
+  it('retries a saved settings mode after a failed mode change', async () => {
     const wrapper = await mountLoadedOverlay()
     sendExtensionMessage
       .mockResolvedValueOnce({
@@ -298,7 +342,7 @@ describe('YoutubeOverlay', () => {
       getMessagesByType('subtitle:update-mode').filter(
         (message) => message?.payload?.mode === 'bilingual',
       ),
-    ).toHaveLength(1)
+    ).toHaveLength(2)
   })
 
   it('keeps the latest settings mode when an in-flight mode change is aborted by video navigation', async () => {

@@ -48,6 +48,14 @@ const subtitleStyle = computed(() => ({
 
 onMounted(async () => {
   isMounted = true
+  const handleToggleSubtitles = () => {
+    enabled.value = !enabled.value
+  }
+  window.addEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
+  removeToggleListener = () => {
+    window.removeEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
+  }
+
   await loadSettings()
   if (!isMounted) {
     return
@@ -83,13 +91,6 @@ onMounted(async () => {
     browser.runtime.onMessage.removeListener(handleRuntimeMessage)
   }
 
-  const handleToggleSubtitles = () => {
-    enabled.value = !enabled.value
-  }
-  window.addEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
-  removeToggleListener = () => {
-    window.removeEventListener('lets-sub-it:toggle-subtitles', handleToggleSubtitles)
-  }
 })
 
 onUnmounted(() => {
@@ -126,7 +127,10 @@ async function handleSettingsUpdated(settings: Settings) {
   applySettings(settings)
 
   if (settingsSubtitleMode.value !== previousSettingsMode && currentAsset.value) {
-    await changeMode(settingsSubtitleMode.value)
+    const result = await changeMode(settingsSubtitleMode.value)
+    if (result === 'failed') {
+      settingsSubtitleMode.value = previousSettingsMode
+    }
   }
 }
 
@@ -366,7 +370,7 @@ function bindVideo(token: number) {
 
   cleanupVideoListeners()
 
-  const video = document.querySelector('video')
+  const video = findPlayerVideo()
   if (!video) {
     status.value = '未找到视频'
     return
@@ -387,6 +391,11 @@ function bindVideo(token: number) {
     video.removeEventListener('timeupdate', updateActiveCue)
     video.removeEventListener('seeked', updateActiveCue)
   }
+}
+
+function findPlayerVideo(): HTMLVideoElement | null {
+  const host = document.getElementById('lets-sub-it-player-overlay-host')
+  return host?.closest('#movie_player')?.querySelector('video') ?? document.querySelector('video')
 }
 
 function canUpdate(token: number) {

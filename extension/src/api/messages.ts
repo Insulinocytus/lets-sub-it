@@ -88,6 +88,10 @@ export function isSupportedLanguage(value: string): value is LanguageCode {
   return SUPPORTED_LANGUAGES.includes(value as LanguageCode)
 }
 
+export function isSubtitleMode(value: unknown): value is SubtitleMode {
+  return typeof value === 'string' && SUBTITLE_MODES.includes(value as SubtitleMode)
+}
+
 export function assertDifferentLanguages(
   source: LanguageCode,
   target: LanguageCode,

@@ -366,6 +366,46 @@ describe('handleExtensionMessage', () => {
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
 
+  it('rejects subtitle file requests with invalid modes at runtime', async () => {
+    const fetchImpl = vi.fn()
+
+    const result = await handleExtensionMessage(
+      {
+        type: 'subtitle:fetch-file',
+        payload: { jobId: 'job_123', mode: 'source' },
+      } as never,
+      { fetchImpl },
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'invalid_subtitle_mode',
+        message: 'subtitleMode must be translated or bilingual',
+      },
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('rejects subtitle mode updates with invalid modes at runtime', async () => {
+    const result = await handleExtensionMessage({
+      type: 'subtitle:update-mode',
+      payload: {
+        videoId: 'video_123',
+        targetLanguage: 'zh',
+        mode: 'invalid',
+      },
+    } as never)
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'invalid_subtitle_mode',
+        message: 'subtitleMode must be translated or bilingual',
+      },
+    })
+  })
+
   it('does not reuse cached subtitles from a different backend origin', async () => {
     await handleExtensionMessage({
       type: 'settings:update',
