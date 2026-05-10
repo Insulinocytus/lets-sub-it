@@ -19,6 +19,7 @@ describe('YouTube content script', () => {
   const disconnect = vi.fn()
   const onInvalidated = vi.fn()
   const originalMutationObserver = globalThis.MutationObserver
+  const originalLocation = window.location
 
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -40,21 +41,34 @@ describe('YouTube content script', () => {
 
   afterEach(() => {
     globalThis.MutationObserver = originalMutationObserver
+    setLocationHref(originalLocation.href)
   })
 
+  function setLocationHref(href: string) {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL(href),
+    })
+  }
+
+  function runContentScript() {
+    const run = contentScript.main as (ctx: {
+      onInvalidated: typeof onInvalidated
+    }) => void
+    run({
+      onInvalidated,
+    })
+  }
+
   it('cleans up the mounted overlay when the YouTube player disappears', () => {
+    setLocationHref('https://www.youtube.com/watch?v=video_123')
     document.body.innerHTML = `
       <div id="movie_player" class="html5-video-player">
         <div class="ytp-right-controls"></div>
       </div>
     `
 
-    const runContentScript = contentScript.main as (ctx: {
-      onInvalidated: typeof onInvalidated
-    }) => void
-    runContentScript({
-      onInvalidated,
-    })
+    runContentScript()
     expect(document.getElementById(PLAYER_OVERLAY_HOST_ID)).not.toBeNull()
     expect(document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)).not.toBeNull()
 
@@ -64,5 +78,25 @@ describe('YouTube content script', () => {
     expect(unmount).toHaveBeenCalledOnce()
     expect(document.getElementById(PLAYER_OVERLAY_HOST_ID)).toBeNull()
     expect(document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)).toBeNull()
+  })
+
+  it('waits to mount the player UI until a SPA navigation reaches a watch page', () => {
+    setLocationHref('https://www.youtube.com/')
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player">
+        <div class="ytp-right-controls"></div>
+      </div>
+    `
+
+    runContentScript()
+
+    expect(document.getElementById(PLAYER_OVERLAY_HOST_ID)).toBeNull()
+    expect(document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)).toBeNull()
+
+    setLocationHref('https://www.youtube.com/watch?v=video_123')
+    mutationCallback?.([], {} as MutationObserver)
+
+    expect(document.getElementById(PLAYER_OVERLAY_HOST_ID)).not.toBeNull()
+    expect(document.getElementById(SUBTITLE_TOGGLE_BUTTON_ID)).not.toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import '@/youtube/youtube-content.css'
 import { createApp } from 'vue'
 import YoutubeOverlay from '@/content/YoutubeOverlay.vue'
+import { getCurrentVideoId } from '@/youtube/page-watch'
 import {
   cleanupPlayerOverlayHost,
   ensurePlayerOverlayHost,
@@ -11,7 +12,7 @@ import {
 } from '@/youtube/player-ui'
 
 export default defineContentScript({
-  matches: ['https://www.youtube.com/watch*'],
+  matches: ['https://www.youtube.com/*'],
   cssInjectionMode: 'manifest',
   main(ctx) {
     let mountedHost: PlayerOverlayHost | null = null
@@ -23,6 +24,13 @@ export default defineContentScript({
     }
 
     const mount = () => {
+      if (!getCurrentVideoId()) {
+        cleanupPlayerOverlayHost(mountedHost)
+        mountedHost = null
+        removeSubtitleToggleButton()
+        return
+      }
+
       const host = ensurePlayerOverlayHost(findYouTubePlayer())
       if (!host) {
         cleanupPlayerOverlayHost(mountedHost)
