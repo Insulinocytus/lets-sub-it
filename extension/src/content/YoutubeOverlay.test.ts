@@ -315,6 +315,71 @@ describe('YoutubeOverlay', () => {
     expect((wrapper.vm as any).status).not.toBe('字幕已加载')
   })
 
+  it('initializes fontSize from settings', async () => {
+    getSettings.mockResolvedValue({ subtitleFontSize: 24 })
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: asset })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mount(YoutubeOverlay)
+    await flushPromises()
+
+    const subtitleDiv = wrapper.find('[style*="font-size"]')
+    expect(subtitleDiv.attributes('style')).toContain('font-size: 24px')
+  })
+
+  it('updates fontSize when subtitle:settings-changed message arrives', async () => {
+    getSettings.mockResolvedValue({ subtitleFontSize: 20 })
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: asset })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mount(YoutubeOverlay)
+    await flushPromises()
+
+    const messageHandler = addRuntimeListener.mock.calls[0]?.[0]
+    if (messageHandler) {
+      messageHandler({
+        type: 'subtitle:settings-changed',
+        payload: { fontSize: 36 },
+      })
+      await flushPromises()
+
+      const subtitleDiv = wrapper.find('[style*="font-size"]')
+      expect(subtitleDiv.attributes('style')).toContain('font-size: 36px')
+    }
+  })
+
+  it('exposes toggleEnabled to toggle subtitle visibility', async () => {
+    getSettings.mockResolvedValue({ subtitleFontSize: 20 })
+    const assetWithEmptyFiles = {
+      jobId: 'job_123',
+      videoId: 'video_123',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+      files: { source: '', translated: '', bilingual: '' },
+      createdAt: '2026-04-26T00:00:00Z',
+      lastSyncedAt: '2026-04-26T00:00:00Z',
+      selectedMode: 'translated' as const,
+    }
+
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: assetWithEmptyFiles })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mount(YoutubeOverlay)
+    await flushPromises()
+
+    expect(wrapper.find('[style*="font-size"]').exists()).toBe(true)
+    expect((wrapper.vm as any).enabled).toBe(true)
+
+    ;(wrapper.vm as any).toggleEnabled()
+    await flushPromises()
+
+    expect((wrapper.vm as any).enabled).toBe(false)
+    expect(wrapper.find('[style*="font-size"]').exists()).toBe(false)
+  })
+
   it('treats the first mode update success without data as a failure', async () => {
     sendExtensionMessage
       .mockResolvedValueOnce({ ok: true, data: asset })

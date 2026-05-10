@@ -365,14 +365,6 @@ function restoreDisplayedSubtitles(
   }
 }
 
-function handleModeClick(mode: SubtitleMode) {
-  void changeMode(mode).catch((error: unknown) => {
-    if (isMounted) {
-      status.value = readableError(error)
-    }
-  })
-}
-
 function readableError(error: unknown) {
   return error instanceof Error ? error.message : '字幕操作失败'
 }
