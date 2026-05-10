@@ -11,7 +11,7 @@ import {
 
 export default defineContentScript({
   matches: ['https://www.youtube.com/watch*'],
-  cssInjectionMode: 'ui',
+  cssInjectionMode: 'manifest',
   main(ctx) {
     let mountedHost: PlayerOverlayHost | null = null
     let observer: MutationObserver | null = null
