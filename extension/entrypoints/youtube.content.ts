@@ -1,26 +1,72 @@
-import '@/style.css'
+import '@/youtube/youtube-content.css'
 import { createApp } from 'vue'
-import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root'
 import YoutubeOverlay from '@/content/YoutubeOverlay.vue'
+import { getCurrentVideoId } from '@/youtube/page-watch'
+import {
+  cleanupPlayerOverlayHost,
+  ensurePlayerOverlayHost,
+  findYouTubePlayer,
+  mountSubtitleToggleButton,
+  removeSubtitleToggleButton,
+  type PlayerOverlayHost,
+} from '@/youtube/player-ui'
 
 export default defineContentScript({
-  matches: ['https://www.youtube.com/watch*'],
-  cssInjectionMode: 'ui',
-  async main(ctx) {
-    const ui = await createShadowRootUi(ctx, {
-      name: 'lets-sub-it-youtube-ui',
-      position: 'inline',
-      anchor: 'body',
-      onMount: (container) => {
-        const app = createApp(YoutubeOverlay)
-        app.mount(container)
-        return app
-      },
-      onRemove: (app) => {
-        app?.unmount()
-      },
-    })
+  matches: ['https://www.youtube.com/*'],
+  cssInjectionMode: 'manifest',
+  main(ctx) {
+    let mountedHost: PlayerOverlayHost | null = null
+    let observer: MutationObserver | null = null
+    let subtitlesEnabled = true
 
-    ui.mount()
+    const dispatchToggle = () => {
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    }
+
+    const mount = () => {
+      if (!getCurrentVideoId()) {
+        cleanupPlayerOverlayHost(mountedHost)
+        mountedHost = null
+        removeSubtitleToggleButton()
+        return
+      }
+
+      const host = ensurePlayerOverlayHost(findYouTubePlayer())
+      if (!host) {
+        cleanupPlayerOverlayHost(mountedHost)
+        mountedHost = null
+        removeSubtitleToggleButton()
+        return
+      }
+
+      if (host && host !== mountedHost) {
+        cleanupPlayerOverlayHost(mountedHost)
+        mountedHost = host
+        const app = createApp(YoutubeOverlay)
+        app.mount(host)
+        host.__letsSubItCleanup = () => app.unmount()
+      }
+      mountSubtitleToggleButton(subtitlesEnabled, dispatchToggle)
+    }
+
+    mount()
+
+    observer = new MutationObserver(() => mount())
+    observer.observe(document.documentElement, { childList: true, subtree: true })
+
+    const handleEnabledChanged = (event: Event) => {
+      subtitlesEnabled = (event as CustomEvent<{ enabled: boolean }>).detail.enabled
+      mountSubtitleToggleButton(subtitlesEnabled, dispatchToggle)
+    }
+    window.addEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+
+    ctx.onInvalidated(() => {
+      window.removeEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+      observer?.disconnect()
+      observer = null
+      removeSubtitleToggleButton()
+      cleanupPlayerOverlayHost(mountedHost)
+      mountedHost = null
+    })
   },
 })

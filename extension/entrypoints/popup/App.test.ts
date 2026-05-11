@@ -2,16 +2,17 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.vue'
 
-const { sendExtensionMessage, queryTabs } = vi.hoisted(() => ({
+const { sendExtensionMessage, queryTabs, sendTabMessage } = vi.hoisted(() => ({
   sendExtensionMessage: vi.fn(),
   queryTabs: vi.fn(),
+  sendTabMessage: vi.fn(),
 }))
 
 vi.mock('wxt/browser', () => ({
   browser: {
     tabs: {
       query: queryTabs,
-      sendMessage: vi.fn(),
+      sendMessage: sendTabMessage,
     },
   },
 }))
@@ -72,7 +73,9 @@ vi.mock('@/components/ui/card', () => ({
 vi.mock('@/components/ui/input', () => ({
   Input: {
     name: 'Input',
-    template: '<input v-bind="$attrs" />',
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
 }))
 
@@ -103,6 +106,8 @@ const settings = {
   backendBaseUrl: 'http://127.0.0.1:8080',
   sourceLanguage: 'en',
   targetLanguage: 'zh',
+  subtitleFontSizePx: 20,
+  subtitleMode: 'translated' as const,
 }
 
 const activeJob = {
@@ -124,8 +129,9 @@ describe('popup App', () => {
     vi.useFakeTimers()
     sendExtensionMessage.mockReset()
     queryTabs.mockReset()
+    sendTabMessage.mockReset()
     queryTabs.mockResolvedValue([
-      { url: 'https://www.youtube.com/watch?v=video_123' },
+      { id: 7, url: 'https://www.youtube.com/watch?v=video_123' },
     ])
     sendExtensionMessage.mockImplementation(async (message) => {
       if (message.type === 'settings:get') {
@@ -136,6 +142,9 @@ describe('popup App', () => {
       }
       if (message.type === 'job:get') {
         return { ok: true, data: { job: activeJob } }
+      }
+      if (message.type === 'settings:update') {
+        return { ok: true, data: { ...settings, ...message.payload } }
       }
       return { ok: true, data: null }
     })
@@ -160,5 +169,100 @@ describe('popup App', () => {
     expect(wrapper.text()).toContain('转写中')
     expect(wrapper.text()).toContain('任务状态')
     expect(wrapper.text()).not.toContain('转写已用')
+  })
+
+  it('shows generation and subtitle settings tabs', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('生成字幕')
+    expect(wrapper.text()).toContain('字幕设置')
+    expect(wrapper.text()).toContain('backend URL')
+
+    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+
+    expect(wrapper.text()).toContain('字体大小')
+    expect(wrapper.text()).toContain('显示模式')
+    expect(wrapper.text()).toContain('翻译 only')
+    expect(wrapper.text()).toContain('双语')
+  })
+
+  it('exposes the pressed state for popup view buttons', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+
+    const viewGroup = wrapper.get('[aria-label="功能切换"]')
+    const generateTab = wrapper.get('button[data-testid="generate-tab"]')
+    const settingsTab = wrapper.get('button[data-testid="subtitle-settings-tab"]')
+
+    expect(viewGroup.attributes('role')).toBe('group')
+    expect(generateTab.attributes('aria-pressed')).toBe('true')
+    expect(settingsTab.attributes('aria-pressed')).toBe('false')
+
+    await settingsTab.trigger('click')
+
+    expect(generateTab.attributes('aria-pressed')).toBe('false')
+    expect(settingsTab.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('exposes the pressed state for subtitle display mode buttons', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+
+    const modeGroup = wrapper.get('[aria-label="字幕显示模式"]')
+    const translatedMode = wrapper.get('button[data-testid="subtitle-mode-translated"]')
+    const bilingualMode = wrapper.get('button[data-testid="subtitle-mode-bilingual"]')
+
+    expect(modeGroup.attributes('role')).toBe('group')
+    expect(translatedMode.attributes('aria-pressed')).toBe('true')
+    expect(bilingualMode.attributes('aria-pressed')).toBe('false')
+
+    await bilingualMode.trigger('click')
+
+    expect(translatedMode.attributes('aria-pressed')).toBe('false')
+    expect(bilingualMode.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('saves subtitle settings and notifies the current YouTube tab', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await wrapper.get('input[data-testid="subtitle-font-size-input"]').setValue('32')
+    await wrapper.get('button[data-testid="subtitle-mode-bilingual"]').trigger('click')
+    await wrapper.get('button[data-testid="save-subtitle-settings"]').trigger('click')
+    await flushPromises()
+
+    expect(sendExtensionMessage).toHaveBeenCalledWith({
+      type: 'settings:update',
+      payload: { subtitleFontSizePx: 32, subtitleMode: 'bilingual' },
+    })
+    expect(sendTabMessage).toHaveBeenCalledWith(7, {
+      type: 'lets-sub-it:settings-updated',
+      settings: {
+        ...settings,
+        subtitleFontSizePx: 32,
+        subtitleMode: 'bilingual',
+      },
+    })
+  })
+
+  it('rejects invalid subtitle font size input before saving', async () => {
+    const wrapper = mount(App)
+
+    await flushPromises()
+    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await wrapper.get('input[data-testid="subtitle-font-size-input"]').setValue('0')
+    await wrapper.get('button[data-testid="save-subtitle-settings"]').trigger('click')
+
+    expect(wrapper.text()).toContain('字幕字体大小必须是正数')
+    expect(sendExtensionMessage).not.toHaveBeenCalledWith({
+      type: 'settings:update',
+      payload: expect.objectContaining({ subtitleFontSizePx: 0 }),
+    })
   })
 })

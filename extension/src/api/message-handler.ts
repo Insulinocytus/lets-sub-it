@@ -1,9 +1,11 @@
 import { BackendClientError, createBackendClient } from './backend-client'
 import {
   assertDifferentLanguages,
+  isSubtitleMode,
   type ExtensionMessage,
   type MessageError,
   type MessageResult,
+  type SubtitleMode,
 } from './messages'
 import { getSettings, updateSettings } from '@/storage/settings'
 import {
@@ -80,6 +82,16 @@ export async function handleExtensionMessage(
           targetLanguage,
         )
         if (cached) {
+          if (cached.selectedMode !== settings.subtitleMode) {
+            return ok(
+              await updateCachedSubtitleMode(
+                settings.backendBaseUrl,
+                cached.videoId,
+                cached.targetLanguage,
+                settings.subtitleMode,
+              ),
+            )
+          }
           return ok(cached)
         }
 
@@ -94,17 +106,16 @@ export async function handleExtensionMessage(
 
         const entry = await setCachedSubtitleAsset(
           response.asset,
-          preference?.selectedMode ?? 'translated',
+          settings.subtitleMode,
           now(),
           settings.backendBaseUrl,
         )
         return ok(entry)
       }
       case 'subtitle:fetch-file': {
+        const mode = parseSubtitleMode(message.payload.mode)
         const client = await clientFromSettings(fetchImpl)
-        return ok(
-          await client.fetchSubtitleFile(message.payload.jobId, message.payload.mode),
-        )
+        return ok(await client.fetchSubtitleFile(message.payload.jobId, mode))
       }
       case 'subtitle:update-mode':
         return ok(await updateSubtitleMode(message, deps))
@@ -124,12 +135,20 @@ async function updateSubtitleMode(
   _deps: MessageHandlerDeps,
 ) {
   const settings = await getSettings()
+  const mode = parseSubtitleMode(message.payload.mode)
   return updateCachedSubtitleMode(
     settings.backendBaseUrl,
     message.payload.videoId,
     message.payload.targetLanguage,
-    message.payload.mode,
+    mode,
   )
+}
+
+function parseSubtitleMode(value: unknown): SubtitleMode {
+  if (!isSubtitleMode(value)) {
+    throw new Error('subtitleMode must be translated or bilingual')
+  }
+  return value
 }
 
 function ok<T>(data: T): MessageResult<T> {
@@ -147,6 +166,15 @@ function errorToMessage(error: unknown): MessageError {
     return {
       code: 'invalid_language_pair',
       message: 'sourceLanguage and targetLanguage must be different',
+    }
+  }
+  if (
+    error instanceof Error &&
+    error.message === 'subtitleMode must be translated or bilingual'
+  ) {
+    return {
+      code: 'invalid_subtitle_mode',
+      message: 'subtitleMode must be translated or bilingual',
     }
   }
   if (error instanceof Error) {

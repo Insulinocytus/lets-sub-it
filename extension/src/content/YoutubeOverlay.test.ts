@@ -1,6 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Settings } from '@/api/messages'
+import type { SubtitleAssetCacheEntry } from '@/storage/subtitle-cache'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import YoutubeOverlay from './YoutubeOverlay.vue'
 
 const {
@@ -29,6 +31,7 @@ vi.mock('wxt/browser', () => ({
 }))
 
 vi.mock('@/api/messages', () => ({
+  SUBTITLE_MODES: ['translated', 'bilingual'],
   sendExtensionMessage,
 }))
 
@@ -37,21 +40,15 @@ vi.mock('@/youtube/page-watch', () => ({
   watchVideoIdChanges,
 }))
 
-vi.mock('@/components/ui/button', () => ({
-  Button: {
-    name: 'Button',
-    template: '<button v-bind="$attrs" @click="$emit(\'click\')"><slot /></button>',
-  },
-}))
+const settings: Settings = {
+  backendBaseUrl: 'http://127.0.0.1:8080',
+  sourceLanguage: 'en' as const,
+  targetLanguage: 'zh' as const,
+  subtitleFontSizePx: 20,
+  subtitleMode: 'translated' as const,
+}
 
-vi.mock('@/components/ui/badge', () => ({
-  Badge: {
-    name: 'Badge',
-    template: '<div v-bind="$attrs"><slot /></div>',
-  },
-}))
-
-const asset = {
+const asset: SubtitleAssetCacheEntry = {
   jobId: 'job_123',
   videoId: 'video_123',
   sourceLanguage: 'en',
@@ -72,16 +69,17 @@ const validVtt = `WEBVTT
 hello
 `
 
-function getButtonByText(wrapper: VueWrapper, label: string) {
-  const button = wrapper
-    .findAll('button')
-    .find((candidate) => candidate.text() === label)
+let wrapper: VueWrapper | null = null
 
-  if (!button) {
-    throw new Error(`button not found: ${label}`)
-  }
-
-  return button
+function mockInitialLoad(options: {
+  settingsOverride?: Partial<Settings>
+  assetOverride?: Partial<SubtitleAssetCacheEntry>
+  vtt?: string
+} = {}) {
+  sendExtensionMessage
+    .mockResolvedValueOnce({ ok: true, data: { ...settings, ...options.settingsOverride } })
+    .mockResolvedValueOnce({ ok: true, data: { ...asset, ...options.assetOverride } })
+    .mockResolvedValueOnce({ ok: true, data: options.vtt ?? validVtt })
 }
 
 function getSentMessages() {
@@ -90,6 +88,41 @@ function getSentMessages() {
 
 function getMessagesByType(type: string) {
   return getSentMessages().filter((message) => message?.type === type)
+}
+
+function sendSettingsUpdated(nextSettings: unknown) {
+  const listener = addRuntimeListener.mock.calls[0]?.[0]
+  if (!listener) {
+    throw new Error('runtime listener not registered')
+  }
+  listener({ type: 'lets-sub-it:settings-updated', settings: nextSettings })
+}
+
+async function mountLoadedOverlay() {
+  mockInitialLoad()
+  wrapper = mount(YoutubeOverlay)
+  await flushPromises()
+  return wrapper
+}
+
+function mountOverlay() {
+  wrapper = mount(YoutubeOverlay)
+  return wrapper
+}
+
+function sendVideoIdChange(nextVideoId: string | null) {
+  const listener = watchVideoIdChanges.mock.calls[0]?.[0]
+  if (!listener) {
+    throw new Error('video id listener not registered')
+  }
+  listener(nextVideoId)
+}
+
+function expectOldControlsHidden(wrapper: VueWrapper) {
+  expect(wrapper.text()).not.toContain('字幕开')
+  expect(wrapper.text()).not.toContain('翻译')
+  expect(wrapper.text()).not.toContain('双语')
+  expect(wrapper.text()).not.toContain('字幕已加载')
 }
 
 describe('YoutubeOverlay', () => {
@@ -107,10 +140,307 @@ describe('YoutubeOverlay', () => {
     document.body.appendChild(document.createElement('video'))
   })
 
-  it('writes previous mode back to storage and reloads previous subtitles when rollback succeeds', async () => {
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+  })
+
+  it('renders only subtitle text without the old floating controls or status', async () => {
+    const wrapper = await mountLoadedOverlay()
+
+    expect(wrapper.text()).toContain('hello')
+    expectOldControlsHidden(wrapper)
+  })
+
+  it('applies updated settings and reloads subtitles in the updated mode', async () => {
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'bilingual' as const },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleFontSizePx: 32, subtitleMode: 'bilingual' })
+    await flushPromises()
+
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).toContain(
+      'font-size: 32px',
+    )
+    expect(getMessagesByType('subtitle:update-mode')).toEqual([
+      {
+        type: 'subtitle:update-mode',
+        payload: {
+          videoId: 'video_123',
+          targetLanguage: 'zh',
+          mode: 'bilingual',
+        },
+      },
+    ])
+    expect(getMessagesByType('subtitle:fetch-file').at(-1)).toEqual({
+      type: 'subtitle:fetch-file',
+      payload: { jobId: 'job_123', mode: 'bilingual' },
+    })
+    expectOldControlsHidden(wrapper)
+  })
+
+  it('uses the resolved selected mode for the first VTT request', async () => {
+    mockInitialLoad({ assetOverride: { selectedMode: 'bilingual' } })
+
+    mountOverlay()
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:fetch-file')[0]).toEqual({
+      type: 'subtitle:fetch-file',
+      payload: { jobId: 'job_123', mode: 'bilingual' },
+    })
+  })
+
+  it('toggles subtitle visibility from the YouTube player window event', async () => {
+    const wrapper = await mountLoadedOverlay()
+
+    window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('hello')
+
+    window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('hello')
+  })
+
+  it('handles subtitle toggle events while settings are still loading', async () => {
+    let resolveSettings: (value: unknown) => void = () => {}
+    sendExtensionMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSettings = resolve
+      }),
+    )
     sendExtensionMessage
       .mockResolvedValueOnce({ ok: true, data: asset })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mountOverlay()
+    window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+    resolveSettings({ ok: true, data: settings })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('hello')
+  })
+
+  it('binds cue updates to the video inside the current player', async () => {
+    document.body.innerHTML = `
+      <video id="outside-video"></video>
+      <div id="movie_player" class="html5-video-player">
+        <video id="player-video"></video>
+        <div id="lets-sub-it-player-overlay-host"></div>
+      </div>
+    `
+    const outsideVideo = document.getElementById('outside-video') as HTMLVideoElement
+    const playerVideo = document.getElementById('player-video') as HTMLVideoElement
+    const host = document.getElementById('lets-sub-it-player-overlay-host') as HTMLElement
+    outsideVideo.currentTime = 0.5
+    playerVideo.currentTime = 2
+    mockInitialLoad()
+
+    wrapper = mount(YoutubeOverlay, { attachTo: host })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('hello')
+    playerVideo.currentTime = 0.5
+    playerVideo.dispatchEvent(new Event('timeupdate'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('hello')
+  })
+
+  it('publishes subtitle enabled state changes for the player button', async () => {
+    const events: boolean[] = []
+    const handleEnabledChanged = (event: Event) => {
+      events.push((event as CustomEvent<{ enabled: boolean }>).detail.enabled)
+    }
+    window.addEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+
+    try {
+      mockInitialLoad()
+
+      mountOverlay()
+      await flushPromises()
+
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+      await flushPromises()
+      window.dispatchEvent(new CustomEvent('lets-sub-it:toggle-subtitles'))
+      await flushPromises()
+
+      expect(events).toEqual([true, false, true])
+    } finally {
+      window.removeEventListener('lets-sub-it:subtitle-enabled-changed', handleEnabledChanged)
+    }
+  })
+
+  it('ignores settings update messages with non-object settings payloads', async () => {
+    const wrapper = await mountLoadedOverlay()
+
+    sendSettingsUpdated('bilingual')
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:update-mode')).toHaveLength(0)
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).toContain(
+      'font-size: 20px',
+    )
+  })
+
+  it('ignores settings update messages with non-finite subtitle font sizes', async () => {
+    const wrapper = await mountLoadedOverlay()
+
+    sendSettingsUpdated({
+      ...settings,
+      subtitleFontSizePx: Infinity,
+      subtitleMode: 'bilingual',
+    })
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:update-mode')).toHaveLength(0)
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).toContain(
+      'font-size: 20px',
+    )
+    expect(wrapper.find('.lets-sub-it-subtitle-text').attributes('style')).not.toContain(
+      'Infinitypx',
+    )
+  })
+
+  it('retries a saved settings mode after a failed mode change', async () => {
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'bilingual' as const },
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: {
+          code: 'subtitle_file_missing',
+          message: '字幕文件不存在',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'translated' as const },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...asset, selectedMode: 'bilingual' as const },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('hello')
+    expect(
+      getMessagesByType('subtitle:update-mode').filter(
+        (message) => message?.payload?.mode === 'bilingual',
+      ),
+    ).toHaveLength(2)
+  })
+
+  it('keeps the latest settings mode when an in-flight mode change is aborted by video navigation', async () => {
+    const initialWrapper = await mountLoadedOverlay()
+    let resolveModeUpdate: (value: unknown) => void = () => {}
+    sendExtensionMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveModeUpdate = resolve
+      }),
+    )
+    sendExtensionMessage
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          ...asset,
+          jobId: 'job_456',
+          videoId: 'video_456',
+          selectedMode: 'bilingual' as const,
+        },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          ...asset,
+          jobId: 'job_789',
+          videoId: 'video_789',
+          selectedMode: 'bilingual' as const,
+        },
+      })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    sendVideoIdChange('video_456')
+    await flushPromises()
+    resolveModeUpdate({
+      ok: true,
+      data: { ...asset, selectedMode: 'bilingual' as const },
+    })
+    await flushPromises()
+    sendVideoIdChange('video_789')
+    await flushPromises()
+    const modeUpdatesAfterNavigation = getMessagesByType('subtitle:update-mode').length
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+
+    expect(initialWrapper.text()).toContain('hello')
+    expect(getMessagesByType('subtitle:fetch-file')).toEqual(
+      expect.arrayContaining([
+        {
+          type: 'subtitle:fetch-file',
+          payload: { jobId: 'job_456', mode: 'bilingual' },
+        },
+        {
+          type: 'subtitle:fetch-file',
+          payload: { jobId: 'job_789', mode: 'bilingual' },
+        },
+      ]),
+    )
+    expect(getMessagesByType('subtitle:update-mode')).toHaveLength(modeUpdatesAfterNavigation)
+  })
+
+  it('removes the window subtitle toggle listener on unmount', async () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const mounted = await mountLoadedOverlay()
+
+    mounted.unmount()
+    wrapper = null
+
+    expect(removeSpy).toHaveBeenCalledWith(
+      'lets-sub-it:toggle-subtitles',
+      expect.any(Function),
+    )
+    removeSpy.mockRestore()
+  })
+
+  it('does not register listeners after unmounting during settings load', async () => {
+    let resolveSettings: (value: unknown) => void = () => {}
+    sendExtensionMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSettings = resolve
+      }),
+    )
+
+    const mounted = mountOverlay()
+    mounted.unmount()
+    wrapper = null
+    resolveSettings({ ok: true, data: settings })
+    await flushPromises()
+
+    expect(getCurrentVideoId).not.toHaveBeenCalled()
+    expect(watchVideoIdChanges).not.toHaveBeenCalled()
+    expect(addRuntimeListener).not.toHaveBeenCalled()
+  })
+
+  it('writes previous mode back to storage and reloads previous subtitles when rollback succeeds', async () => {
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage
       .mockResolvedValueOnce({
         ok: true,
         data: { ...asset, selectedMode: 'bilingual' as const },
@@ -128,10 +458,7 @@ describe('YoutubeOverlay', () => {
       })
       .mockResolvedValueOnce({ ok: true, data: validVtt })
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -159,14 +486,13 @@ describe('YoutubeOverlay', () => {
         (message) => message?.payload?.mode === 'translated',
       ),
     ).toHaveLength(2)
-    expect(wrapper.text()).toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).toContain('hello')
+    expectOldControlsHidden(wrapper)
   })
 
-  it('stops and surfaces rollback persistence failures instead of pretending rollback succeeded', async () => {
+  it('stops rollback reload when persistence fails', async () => {
+    const wrapper = await mountLoadedOverlay()
     sendExtensionMessage
-      .mockResolvedValueOnce({ ok: true, data: asset })
-      .mockResolvedValueOnce({ ok: true, data: validVtt })
       .mockResolvedValueOnce({
         ok: true,
         data: { ...asset, selectedMode: 'bilingual' as const },
@@ -186,10 +512,7 @@ describe('YoutubeOverlay', () => {
         },
       })
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -210,15 +533,13 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('回滚模式失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).not.toContain('回滚模式失败')
+    expectOldControlsHidden(wrapper)
   })
 
   it('treats rollback success without data as a failure and stops reloading subtitles', async () => {
+    const wrapper = await mountLoadedOverlay()
     sendExtensionMessage
-      .mockResolvedValueOnce({ ok: true, data: asset })
-      .mockResolvedValueOnce({ ok: true, data: validVtt })
       .mockResolvedValueOnce({
         ok: true,
         data: { ...asset, selectedMode: 'bilingual' as const },
@@ -235,10 +556,7 @@ describe('YoutubeOverlay', () => {
         data: null,
       })
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -258,27 +576,21 @@ describe('YoutubeOverlay', () => {
         (message) => message?.payload?.mode === 'translated',
       ),
     ).toHaveLength(1)
-    expect(wrapper.text()).toContain('字幕模式回滚失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).toContain('hello')
+    expectOldControlsHidden(wrapper)
   })
 
   it('restores previous subtitles when the first mode update returns an error', async () => {
-    sendExtensionMessage
-      .mockResolvedValueOnce({ ok: true, data: asset })
-      .mockResolvedValueOnce({ ok: true, data: validVtt })
-      .mockResolvedValueOnce({
-        ok: false,
-        error: {
-          code: 'update_mode_failed',
-          message: '切换模式失败',
-        },
-      })
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage.mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: 'update_mode_failed',
+        message: '切换模式失败',
+      },
+    })
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -299,21 +611,15 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('切换模式失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).not.toContain('切换模式失败')
+    expectOldControlsHidden(wrapper)
   })
 
   it('restores previous subtitles when the first mode update throws', async () => {
-    sendExtensionMessage
-      .mockResolvedValueOnce({ ok: true, data: asset })
-      .mockResolvedValueOnce({ ok: true, data: validVtt })
-      .mockRejectedValueOnce(new Error('切换模式异常'))
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage.mockRejectedValueOnce(new Error('切换模式异常'))
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -334,24 +640,18 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('切换模式异常')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).not.toContain('切换模式异常')
+    expectOldControlsHidden(wrapper)
   })
 
   it('treats the first mode update success without data as a failure', async () => {
-    sendExtensionMessage
-      .mockResolvedValueOnce({ ok: true, data: asset })
-      .mockResolvedValueOnce({ ok: true, data: validVtt })
-      .mockResolvedValueOnce({
-        ok: true,
-        data: null,
-      })
+    const wrapper = await mountLoadedOverlay()
+    sendExtensionMessage.mockResolvedValueOnce({
+      ok: true,
+      data: null,
+    })
 
-    const wrapper = mount(YoutubeOverlay)
-    await flushPromises()
-
-    await getButtonByText(wrapper, '双语').trigger('click')
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
     await flushPromises()
 
     expect(getMessagesByType('subtitle:update-mode')).toEqual(
@@ -377,8 +677,7 @@ describe('YoutubeOverlay', () => {
       ),
     ).toHaveLength(0)
     expect(wrapper.text()).toContain('hello')
-    expect(wrapper.text()).toContain('字幕模式切换失败')
-    expect(wrapper.text()).not.toContain('字幕已加载')
-    expect(getButtonByText(wrapper, '翻译').attributes('variant')).toBe('secondary')
+    expect(wrapper.text()).not.toContain('字幕模式切换失败')
+    expectOldControlsHidden(wrapper)
   })
 })

@@ -130,11 +130,11 @@ async function cacheAndNotify(
   }
 
   const cache = deps.setCachedSubtitleAsset ?? setCachedSubtitleAssetInStorage
-  const backendBaseUrl =
-    deps.backendBaseUrl ?? (await getSettings()).backendBaseUrl
+  const settings = await getSettings()
+  const backendBaseUrl = deps.backendBaseUrl ?? settings.backendBaseUrl
   await cache(
     response.asset,
-    'translated',
+    settings.subtitleMode,
     (deps.now ?? defaultNow)(),
     backendBaseUrl,
   )
