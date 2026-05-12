@@ -33,6 +33,8 @@ cd extension
 mise exec -- npm run build
 ```
 
+CI 会在 extension 相关代码更新后构建 Chrome MV3 extension，并上传 GitHub Actions artifact。进入对应 workflow run，下载 `lets-sub-it-extension-chrome-<run-number>`，解压后在 `chrome://extensions` 中开启开发者模式，选择包含 `manifest.json` 的解压目录加载。
+
 ## Backend
 
 popup 默认连接 `http://127.0.0.1:8080`。第一版 MVP 只支持 `localhost` 和 `127.0.0.1` backend URLs。
