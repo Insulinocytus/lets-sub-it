@@ -308,7 +308,7 @@ Exit codes: `0` success, `2` input validation failure, `3` transcription failure
 - PR label/title prefix should indicate scope: `[backend]`, `[whisper]`, `[extension]`, or `[docs]`.
 - Follow `.github/pull_request_template.md`: reference, summary, close issue, per-file explanation, verification commands, and review focus.
 - No PR test pipeline exists. Run relevant checks manually and list commands/results in the PR description.
-- Merge PRs with a regular merge commit. Do not use squash merge or rebase merge unless explicitly requested.
+- Merge PRs with squash merge, and delete the remote branch after merging. Do not use regular merge commits or rebase merge unless explicitly requested.
 
 Pre-merge verification by scope:
 
