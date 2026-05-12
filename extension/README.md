@@ -33,7 +33,7 @@ cd extension
 mise exec -- npm run build
 ```
 
-CI 会在 extension 相关代码更新后构建 Chrome MV3 extension，并上传 GitHub Actions artifact。进入对应 workflow run，下载 `lets-sub-it-extension-chrome-<run-number>`，解压后在 `chrome://extensions` 中开启开发者模式，选择解压出的 `chrome-mv3` 目录加载。
+CI 会在 extension 相关代码更新后构建 Chrome MV3 extension，并上传 GitHub Actions artifact。进入对应 workflow run，下载 `lets-sub-it-extension-chrome-<run-number>`，解压后在 `chrome://extensions` 中开启开发者模式，选择包含 `manifest.json` 的解压目录加载。
 
 ## Backend
 
