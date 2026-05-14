@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
+import {
   sendExtensionMessage,
   type Job,
   type LanguageCode,
@@ -376,176 +382,166 @@ async function notifySettingsUpdated(settings: Settings) {
       </CardHeader>
 
       <CardContent class="space-y-4 px-4">
-        <div class="grid grid-cols-2 gap-2 rounded-md bg-muted p-1" role="group" aria-label="功能切换">
-          <Button
-            data-testid="generate-tab"
-            type="button"
-            :aria-pressed="activeTab === 'generate'"
-            :variant="activeTab === 'generate' ? 'secondary' : 'ghost'"
-            class="h-8 text-xs"
-            @click="activeTab = 'generate'"
-          >
-            生成字幕
-          </Button>
-          <Button
-            data-testid="subtitle-settings-tab"
-            type="button"
-            :aria-pressed="activeTab === 'settings'"
-            :variant="activeTab === 'settings' ? 'secondary' : 'ghost'"
-            class="h-8 text-xs"
-            @click="activeTab = 'settings'"
-          >
-            字幕设置
-          </Button>
-        </div>
+        <Tabs v-model="activeTab" data-testid="popup-tabs" class="space-y-4">
+          <TabsList class="grid h-auto w-full grid-cols-2 gap-2 rounded-md p-1" aria-label="功能切换">
+            <TabsTrigger data-testid="generate-tab" value="generate" class="h-8 text-xs">
+              生成字幕
+            </TabsTrigger>
+            <TabsTrigger data-testid="subtitle-settings-tab" value="settings" class="h-8 text-xs">
+              字幕设置
+            </TabsTrigger>
+          </TabsList>
 
-        <template v-if="activeTab === 'generate'">
-          <form class="space-y-3" @submit.prevent="submitJob">
-            <label class="grid gap-1.5 text-xs font-medium">
-              backend URL
-              <Input
-                v-model="backendBaseUrl"
-                class="h-8 text-xs"
-                placeholder="http://127.0.0.1:8080"
-              />
-            </label>
-
-            <label class="grid gap-1.5 text-xs font-medium">
-              YouTube URL
-              <Input
-                v-model="youtubeUrl"
-                class="h-8 text-xs"
-                placeholder="https://www.youtube.com/watch?v=..."
-              />
-            </label>
-
-            <div class="grid grid-cols-2 gap-3">
-              <label class="grid min-w-0 gap-1.5 text-xs font-medium">
-                源语言
-                <Select v-model="sourceLanguage">
-                  <SelectTrigger class="h-8 w-full text-xs">
-                    <SelectValue placeholder="源语言" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="language in languages"
-                      :key="language"
-                      :value="language"
-                    >
-                      {{ languageLabels[language] }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+          <TabsContent value="generate" class="mt-0">
+            <form class="space-y-3" @submit.prevent="submitJob">
+              <label class="grid gap-1.5 text-xs font-medium">
+                backend URL
+                <Input
+                  v-model="backendBaseUrl"
+                  class="h-8 text-xs"
+                  placeholder="http://127.0.0.1:8080"
+                />
               </label>
 
-              <label class="grid min-w-0 gap-1.5 text-xs font-medium">
-                目标语言
-                <Select v-model="targetLanguage">
-                  <SelectTrigger class="h-8 w-full text-xs">
-                    <SelectValue placeholder="目标语言" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="language in languages"
-                      :key="language"
-                      :value="language"
-                    >
-                      {{ languageLabels[language] }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <label class="grid gap-1.5 text-xs font-medium">
+                YouTube URL
+                <Input
+                  v-model="youtubeUrl"
+                  class="h-8 text-xs"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
               </label>
-            </div>
 
-            <Alert v-if="alertMessage" variant="destructive" class="py-2">
-              <AlertDescription class="text-xs">
-                {{ alertMessage }}
-              </AlertDescription>
-            </Alert>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="grid min-w-0 gap-1.5 text-xs font-medium">
+                  源语言
+                  <Select v-model="sourceLanguage">
+                    <SelectTrigger class="h-8 w-full text-xs">
+                      <SelectValue placeholder="源语言" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="language in languages"
+                        :key="language"
+                        :value="language"
+                      >
+                        {{ languageLabels[language] }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
 
-            <Button
-              class="h-8 w-full text-xs"
-              type="submit"
-              :disabled="isSubmitDisabled"
-            >
-              {{ isSubmitting ? '处理中...' : '生成字幕' }}
-            </Button>
-          </form>
+                <label class="grid min-w-0 gap-1.5 text-xs font-medium">
+                  目标语言
+                  <Select v-model="targetLanguage">
+                    <SelectTrigger class="h-8 w-full text-xs">
+                      <SelectValue placeholder="目标语言" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="language in languages"
+                        :key="language"
+                        :value="language"
+                      >
+                        {{ languageLabels[language] }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
 
-          <section
-            v-if="currentJob"
-            class="space-y-2 rounded-md border bg-muted/40 p-3 text-xs"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-medium">任务状态</span>
-              <Badge :variant="statusBadgeVariant">
-                {{ statusLabel }}
-              </Badge>
-            </div>
-            <p class="break-words text-muted-foreground">
-              {{ currentJob.progressText }}
-            </p>
-            <p
-              v-if="currentJob.status === 'completed' && subtitleReady"
-              class="text-muted-foreground"
-            >
-              字幕已生成并写入本地缓存。
-            </p>
-          </section>
-        </template>
+              <Alert v-if="alertMessage" variant="destructive" class="py-2">
+                <AlertDescription class="text-xs">
+                  {{ alertMessage }}
+                </AlertDescription>
+              </Alert>
 
-        <form v-else class="space-y-3" @submit.prevent="saveSubtitleSettings">
-          <label class="grid gap-1.5 text-xs font-medium">
-            字体大小
-            <Input
-              v-model="subtitleFontSizeInput"
-              data-testid="subtitle-font-size-input"
-              class="h-8 text-xs"
-              inputmode="numeric"
-            />
-          </label>
-
-          <section class="space-y-2 text-xs">
-            <p class="font-medium">显示模式</p>
-            <div class="grid grid-cols-2 gap-2" role="group" aria-label="字幕显示模式">
               <Button
-                data-testid="subtitle-mode-translated"
-                type="button"
-                :aria-pressed="subtitleMode === 'translated'"
-                :variant="subtitleMode === 'translated' ? 'secondary' : 'outline'"
-                class="h-8 text-xs"
-                @click="subtitleMode = 'translated'"
+                class="h-8 w-full text-xs"
+                type="submit"
+                :disabled="isSubmitDisabled"
               >
-                翻译 only
+                {{ isSubmitting ? '处理中...' : '生成字幕' }}
               </Button>
+            </form>
+
+            <section
+              v-if="currentJob"
+              class="space-y-2 rounded-md border bg-muted/40 p-3 text-xs"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-medium">任务状态</span>
+                <Badge :variant="statusBadgeVariant">
+                  {{ statusLabel }}
+                </Badge>
+              </div>
+              <p class="break-words text-muted-foreground">
+                {{ currentJob.progressText }}
+              </p>
+              <p
+                v-if="currentJob.status === 'completed' && subtitleReady"
+                class="text-muted-foreground"
+              >
+                字幕已生成并写入本地缓存。
+              </p>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="settings" class="mt-0">
+            <form class="space-y-3" @submit.prevent="saveSubtitleSettings">
+              <label class="grid gap-1.5 text-xs font-medium">
+                字体大小
+                <Input
+                  v-model="subtitleFontSizeInput"
+                  data-testid="subtitle-font-size-input"
+                  class="h-8 text-xs"
+                  inputmode="numeric"
+                />
+              </label>
+
+              <section class="space-y-2 text-xs">
+                <p class="font-medium">显示模式</p>
+                <div class="grid grid-cols-2 gap-2" role="group" aria-label="字幕显示模式">
+                  <Button
+                    data-testid="subtitle-mode-translated"
+                    type="button"
+                    :aria-pressed="subtitleMode === 'translated'"
+                    :variant="subtitleMode === 'translated' ? 'secondary' : 'outline'"
+                    class="h-8 text-xs"
+                    @click="subtitleMode = 'translated'"
+                  >
+                    翻译 only
+                  </Button>
+                  <Button
+                    data-testid="subtitle-mode-bilingual"
+                    type="button"
+                    :aria-pressed="subtitleMode === 'bilingual'"
+                    :variant="subtitleMode === 'bilingual' ? 'secondary' : 'outline'"
+                    class="h-8 text-xs"
+                    @click="subtitleMode = 'bilingual'"
+                  >
+                    双语
+                  </Button>
+                </div>
+              </section>
+
+              <Alert v-if="settingsMessage" class="py-2">
+                <AlertDescription class="text-xs">
+                  {{ settingsMessage }}
+                </AlertDescription>
+              </Alert>
+
               <Button
-                data-testid="subtitle-mode-bilingual"
+                data-testid="save-subtitle-settings"
+                class="h-8 w-full text-xs"
                 type="button"
-                :aria-pressed="subtitleMode === 'bilingual'"
-                :variant="subtitleMode === 'bilingual' ? 'secondary' : 'outline'"
-                class="h-8 text-xs"
-                @click="subtitleMode = 'bilingual'"
+                @click="saveSubtitleSettings"
               >
-                双语
+                保存字幕设置
               </Button>
-            </div>
-          </section>
-
-          <Alert v-if="settingsMessage" class="py-2">
-            <AlertDescription class="text-xs">
-              {{ settingsMessage }}
-            </AlertDescription>
-          </Alert>
-
-          <Button
-            data-testid="save-subtitle-settings"
-            class="h-8 w-full text-xs"
-            type="button"
-            @click="saveSubtitleSettings"
-          >
-            保存字幕设置
-          </Button>
-        </form>
+            </form>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   </main>
