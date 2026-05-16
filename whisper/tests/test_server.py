@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import threading
 from pathlib import Path
 
@@ -315,6 +316,14 @@ def test_worker_can_restart_after_stop(tmp_path):
     assert service.worker is None
 
 
+def test_run_next_public_signature_matches_task_contract():
+    signature = inspect.signature(TranscriptionService.run_next)
+
+    assert list(signature.parameters) == ["self", "timeout"]
+    assert signature.parameters["timeout"].default is None
+    assert signature.return_annotation in (bool, "bool")
+
+
 def test_worker_run_next_does_not_consume_queued_task_when_stopping(tmp_path):
     calls = 0
 
@@ -335,7 +344,7 @@ def test_worker_run_next_does_not_consume_queued_task_when_stopping(tmp_path):
     )
     service.stopping = True
 
-    assert service.run_next(timeout=0, stop_when_stopping=True) is False
+    assert service._run_next(timeout=0, stop_when_stopping=True) is False
     assert calls == 0
     assert service.get(task.id).status == "queued"
 

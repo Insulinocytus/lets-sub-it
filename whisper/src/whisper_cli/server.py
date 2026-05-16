@@ -135,9 +135,10 @@ class TranscriptionService:
             with self.condition:
                 self.worker = None
 
-    def run_next(
-        self, timeout: float | None = None, *, stop_when_stopping: bool = False
-    ) -> bool:
+    def run_next(self, timeout: float | None = None) -> bool:
+        return self._run_next(timeout, stop_when_stopping=False)
+
+    def _run_next(self, timeout: float | None, *, stop_when_stopping: bool) -> bool:
         with self.condition:
             if stop_when_stopping and self.stopping:
                 return False
@@ -182,7 +183,7 @@ class TranscriptionService:
 
     def _worker_loop(self) -> None:
         while True:
-            processed = self.run_next(timeout=0.2, stop_when_stopping=True)
+            processed = self._run_next(0.2, stop_when_stopping=True)
             if not processed:
                 with self.condition:
                     if self.stopping:
