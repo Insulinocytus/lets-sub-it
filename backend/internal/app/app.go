@@ -34,7 +34,8 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 		return nil, err
 	}
 	translator := runner.NewChatTranslator(config.LLMBaseURL, config.LLMAPIKey, config.LLMModel, config.LLMTimeout, http.DefaultClient)
-	jobRunner := runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, config.WhisperComputeType, translator)
+	transcriber := runner.NewHTTPTranscriber(config.WhisperBaseURL, config.WhisperTimeout, config.WhisperPollInterval, http.DefaultClient)
+	jobRunner := runner.NewRealRunner(database, config.DownloadTimeout, config.WhisperModel, config.WhisperComputeType, transcriber, translator)
 
 	handler := api.NewHandler(database, jobRunner, config.WorkDir)
 	return api.Routes(handler), nil

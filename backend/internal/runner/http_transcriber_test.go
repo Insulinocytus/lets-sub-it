@@ -23,6 +23,7 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 
 	var upload multipart.Form
 	var uploadAudio string
+	var uploadContentLength int64
 	statusCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -30,6 +31,7 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Fatalf("method = %q, want POST", r.Method)
 			}
+			uploadContentLength = r.ContentLength
 			if err := r.ParseMultipartForm(32 << 20); err != nil {
 				t.Fatalf("ParseMultipartForm() error = %v", err)
 			}
@@ -90,6 +92,9 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 	assertMultipartField(t, upload.Value, "jobId", "job_1")
 	if uploadAudio != "fake-audio" {
 		t.Fatalf("uploaded audio = %q, want fake-audio", uploadAudio)
+	}
+	if uploadContentLength != -1 {
+		t.Fatalf("upload ContentLength = %d, want -1 for streaming upload", uploadContentLength)
 	}
 	if statusCalls != 2 {
 		t.Fatalf("statusCalls = %d, want 2", statusCalls)

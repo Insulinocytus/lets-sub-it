@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -75,8 +74,31 @@ func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionR
 }
 
 func (t *HTTPTranscriber) upload(ctx context.Context, request TranscriptionRequest) (transcriptionStatus, error) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
+	pipeReader, pipeWriter := io.Pipe()
+	writer := multipart.NewWriter(pipeWriter)
+	go func() {
+		err := writeTranscriptionForm(writer, request)
+		if closeErr := writer.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			_ = pipeWriter.CloseWithError(err)
+			return
+		}
+		_ = pipeWriter.Close()
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/transcriptions", pipeReader)
+	if err != nil {
+		_ = pipeReader.Close()
+		return transcriptionStatus{}, fmt.Errorf("create transcription request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	return t.doStatusRequest(req)
+}
+
+func writeTranscriptionForm(writer *multipart.Writer, request TranscriptionRequest) error {
 	for _, field := range []struct {
 		name  string
 		value string
@@ -87,34 +109,24 @@ func (t *HTTPTranscriber) upload(ctx context.Context, request TranscriptionReque
 		{name: "jobId", value: request.JobID},
 	} {
 		if err := writer.WriteField(field.name, field.value); err != nil {
-			return transcriptionStatus{}, fmt.Errorf("write transcription form field %s: %w", field.name, err)
+			return fmt.Errorf("write transcription form field %s: %w", field.name, err)
 		}
 	}
 
 	file, err := os.Open(request.AudioPath)
 	if err != nil {
-		return transcriptionStatus{}, fmt.Errorf("open audio file: %w", err)
+		return fmt.Errorf("open audio file: %w", err)
 	}
 	defer file.Close()
 
 	part, err := writer.CreateFormFile("audio", filepath.Base(request.AudioPath))
 	if err != nil {
-		return transcriptionStatus{}, fmt.Errorf("create audio form file: %w", err)
+		return fmt.Errorf("create audio form file: %w", err)
 	}
 	if _, err := io.Copy(part, file); err != nil {
-		return transcriptionStatus{}, fmt.Errorf("write audio form file: %w", err)
+		return fmt.Errorf("write audio form file: %w", err)
 	}
-	if err := writer.Close(); err != nil {
-		return transcriptionStatus{}, fmt.Errorf("close transcription form: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/transcriptions", &body)
-	if err != nil {
-		return transcriptionStatus{}, fmt.Errorf("create transcription request: %w", err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	return t.doStatusRequest(req)
+	return nil
 }
 
 func (t *HTTPTranscriber) poll(ctx context.Context, id string) (transcriptionStatus, error) {

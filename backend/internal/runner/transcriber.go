@@ -3,9 +3,9 @@ package runner
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type Transcriber interface {
@@ -38,16 +38,20 @@ func ensureValidSourceVTT(sourcePath string) error {
 		return fmt.Errorf("empty source.vtt")
 	}
 
-	data, err := os.ReadFile(sourcePath)
+	file, err := os.Open(sourcePath)
 	if err != nil {
 		return fmt.Errorf("read source.vtt: %w", err)
 	}
-	if !strings.HasPrefix(string(data), "WEBVTT") {
+	defer file.Close()
+
+	const prefix = "WEBVTT"
+	data := make([]byte, len(prefix))
+	n, err := io.ReadFull(file, data)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return fmt.Errorf("read source.vtt: %w", err)
+	}
+	if string(data[:n]) != prefix {
 		return fmt.Errorf("source.vtt must start with WEBVTT")
 	}
 	return nil
-}
-
-func transcribeAudio(ctx context.Context, jobID string, audioPath string, sourcePath string, model string, computeType string, language string) error {
-	return fmt.Errorf("transcriber is not wired for job %s", jobID)
 }
