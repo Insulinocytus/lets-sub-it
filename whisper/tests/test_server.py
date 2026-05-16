@@ -267,3 +267,100 @@ def test_run_next_marks_task_failed_when_transcriber_fails(tmp_path):
     assert body["progress"] == 100
     assert body["progressText"] == "转写失败"
     assert body["errorMessage"] == "transcriber failed"
+
+
+def test_stop_keeps_active_worker_handle_when_join_times_out(tmp_path):
+    service = TranscriptionService(work_dir=tmp_path)
+
+    class ActiveWorker:
+        def __init__(self) -> None:
+            self.join_called = False
+
+        def join(self, timeout: float | None = None) -> None:
+            self.join_called = True
+
+        def is_alive(self) -> bool:
+            return True
+
+    worker = ActiveWorker()
+    service.worker = worker
+
+    service.stop()
+    service.start()
+
+    assert worker.join_called is True
+    assert service.worker is worker
+
+
+def test_worker_run_next_does_not_consume_queued_task_when_stopping(tmp_path):
+    calls = 0
+
+    def counted_transcribe(**kwargs) -> TranscriptionResult:
+        nonlocal calls
+        calls += 1
+        return fake_transcribe(**kwargs)
+
+    service = TranscriptionService(work_dir=tmp_path, transcribe=counted_transcribe)
+    task = asyncio.run(
+        service.create(
+            audio=ChunkedUpload(b"audio"),
+            model="small",
+            language="en",
+            compute_type=None,
+            job_id=None,
+        )
+    )
+    service.stopping = True
+
+    assert service.run_next(timeout=0, stop_when_stopping=True) is False
+    assert calls == 0
+    assert service.get(task.id).status == "queued"
+
+
+def test_service_snapshot_returns_consistent_task_response(tmp_path):
+    service = TranscriptionService(work_dir=tmp_path)
+    task = asyncio.run(
+        service.create(
+            audio=ChunkedUpload(b"audio"),
+            model="small",
+            language="en",
+            compute_type=None,
+            job_id=None,
+        )
+    )
+
+    snapshot = service.snapshot(task.id)
+    task.status = "completed"
+    task.progress = 100
+
+    assert snapshot["status"] == "queued"
+    assert snapshot["progress"] == 0
+
+
+def test_get_transcription_route_uses_service_snapshot(tmp_path):
+    client, service = new_client(tmp_path)
+
+    def fail_get(task_id: str):
+        raise AssertionError("route must not serialize mutable task outside lock")
+
+    def snapshot(task_id: str) -> dict[str, object]:
+        return {
+            "id": task_id,
+            "status": "queued",
+            "progress": 0,
+            "progressText": "等待转写",
+            "language": None,
+            "durationSeconds": None,
+            "segments": None,
+            "errorMessage": None,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z",
+        }
+
+    service.get = fail_get
+    service.snapshot = snapshot
+
+    response = client.get("/transcriptions/tr_snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["transcription"]["id"] == "tr_snapshot"

@@ -114,8 +114,9 @@ class TranscriptionService:
             return task
 
     def start(self) -> None:
-        if self.worker is not None:
+        if self.worker is not None and self.worker.is_alive():
             return
+        self.worker = None
         self.stopping = False
         self.worker = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker.start()
@@ -126,12 +127,19 @@ class TranscriptionService:
             self.condition.notify_all()
         if self.worker is not None:
             self.worker.join(timeout=5)
-            self.worker = None
+            if not self.worker.is_alive():
+                self.worker = None
 
-    def run_next(self, timeout: float | None = None) -> bool:
+    def run_next(
+        self, timeout: float | None = None, *, stop_when_stopping: bool = False
+    ) -> bool:
         with self.condition:
+            if stop_when_stopping and self.stopping:
+                return False
             if not self.queue:
                 self.condition.wait(timeout=timeout)
+            if stop_when_stopping and self.stopping:
+                return False
             if not self.queue:
                 return False
             task = self.tasks[self.queue.pop(0)]
@@ -169,10 +177,22 @@ class TranscriptionService:
 
     def _worker_loop(self) -> None:
         while True:
-            with self.condition:
-                if self.stopping:
-                    return
-            self.run_next(timeout=0.2)
+            processed = self.run_next(timeout=0.2, stop_when_stopping=True)
+            if not processed:
+                with self.condition:
+                    if self.stopping:
+                        return
+
+    def snapshot(self, task_id: str) -> dict[str, object]:
+        with self.condition:
+            return serialize_task(self.get(task_id))
+
+    def completed_vtt_path(self, task_id: str) -> Path:
+        with self.condition:
+            task = self.get(task_id)
+            if task.status != "completed":
+                raise APIError(409, "not_ready", "transcription is not completed")
+            return task.vtt_path
 
 
 def create_app(
@@ -223,20 +243,17 @@ def create_app(
             compute_type=compute_type,
             job_id=job_id,
         )
-        return {"transcription": serialize_task(task)}
+        return {"transcription": app.state.transcription_service.snapshot(task.id)}
 
     @app.get("/transcriptions/{task_id}")
     def get_transcription(task_id: str) -> dict[str, object]:
-        task = app.state.transcription_service.get(task_id)
-        return {"transcription": serialize_task(task)}
+        return {"transcription": app.state.transcription_service.snapshot(task_id)}
 
     @app.get("/transcriptions/{task_id}/vtt")
     def get_transcription_vtt(task_id: str) -> Response:
-        task = app.state.transcription_service.get(task_id)
-        if task.status != "completed":
-            raise APIError(409, "not_ready", "transcription is not completed")
+        vtt_path = app.state.transcription_service.completed_vtt_path(task_id)
         return Response(
-            content=task.vtt_path.read_text(encoding="utf-8"),
+            content=vtt_path.read_text(encoding="utf-8"),
             media_type="text/vtt; charset=utf-8",
         )
 
