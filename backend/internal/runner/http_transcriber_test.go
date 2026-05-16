@@ -44,17 +44,17 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 				t.Fatalf("ReadAll(audio) error = %v", err)
 			}
 			uploadAudio = string(data)
-			writeJSON(t, w, map[string]string{"id": "tx_123", "status": "queued"})
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "queued"})
 		case "/transcriptions/tx_123":
 			if r.Method != http.MethodGet {
 				t.Fatalf("method = %q, want GET", r.Method)
 			}
 			statusCalls++
 			if statusCalls == 1 {
-				writeJSON(t, w, map[string]string{"id": "tx_123", "status": "running"})
+				writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "running", "progressText": "正在转写音频"})
 				return
 			}
-			writeJSON(t, w, map[string]string{"id": "tx_123", "status": "completed"})
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "completed", "progressText": "转写完成"})
 		case "/transcriptions/tx_123/vtt":
 			if r.Method != http.MethodGet {
 				t.Fatalf("method = %q, want GET", r.Method)
@@ -101,8 +101,14 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 	if !strings.Contains(string(data), "hello") {
 		t.Fatalf("source VTT = %q, want downloaded content", string(data))
 	}
-	if len(progress) == 0 || progress[len(progress)-1] != "completed" {
-		t.Fatalf("progress = %#v, want completed callback", progress)
+	if len(progress) == 0 || progress[len(progress)-1] != "转写完成" {
+		t.Fatalf("progress = %#v, want 转写完成 callback", progress)
+	}
+	if containsString(progress, "completed") {
+		t.Fatalf("progress = %#v, must use progressText instead of status", progress)
+	}
+	if !containsString(progress, "正在转写音频") {
+		t.Fatalf("progress = %#v, want running progressText", progress)
 	}
 }
 
@@ -111,9 +117,9 @@ func TestHTTPTranscriberReturnsFailedStatusErrorMessage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/transcriptions":
-			writeJSON(t, w, map[string]string{"id": "tx_failed", "status": "queued"})
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_failed", "status": "queued"})
 		case "/transcriptions/tx_failed":
-			writeJSON(t, w, map[string]string{"id": "tx_failed", "status": "failed", "errorMessage": "model download error"})
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_failed", "status": "failed", "errorMessage": "model download error"})
 		default:
 			http.NotFound(w, r)
 		}
@@ -139,7 +145,7 @@ func TestHTTPTranscriberFailsOnEmptyVTT(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/transcriptions":
-			writeJSON(t, w, map[string]string{"id": "tx_empty", "status": "completed"})
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_empty", "status": "completed", "progressText": "转写完成"})
 		case "/transcriptions/tx_empty/vtt":
 			_, _ = w.Write([]byte(""))
 		default:
@@ -185,4 +191,18 @@ func writeJSON(t *testing.T, w http.ResponseWriter, value any) {
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		t.Fatalf("Encode(%#v) error = %v", value, err)
 	}
+}
+
+func writeTranscriptionJSON(t *testing.T, w http.ResponseWriter, transcription map[string]string) {
+	t.Helper()
+	writeJSON(t, w, map[string]any{"transcription": transcription})
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

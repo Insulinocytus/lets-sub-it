@@ -48,7 +48,7 @@ func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionR
 	}
 
 	for {
-		if err := reportTranscriptionProgress(request, status.Status); err != nil {
+		if err := reportTranscriptionProgress(request, status.ProgressText); err != nil {
 			return err
 		}
 
@@ -171,15 +171,16 @@ func (t *HTTPTranscriber) doStatusRequest(req *http.Request) (transcriptionStatu
 		return transcriptionStatus{}, fmt.Errorf("transcription request failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
 	}
 
-	var status transcriptionStatus
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+	var transcriptionResp transcriptionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&transcriptionResp); err != nil {
 		return transcriptionStatus{}, fmt.Errorf("decode transcription response: %w", err)
 	}
+	status := transcriptionResp.Transcription
 	if status.ID == "" {
-		return transcriptionStatus{}, fmt.Errorf("transcription response id is required")
+		return transcriptionStatus{}, fmt.Errorf("transcription response transcription.id is required")
 	}
 	if status.Status == "" {
-		return transcriptionStatus{}, fmt.Errorf("transcription response status is required")
+		return transcriptionStatus{}, fmt.Errorf("transcription response transcription.status is required")
 	}
 	return status, nil
 }
@@ -189,7 +190,7 @@ func (t *HTTPTranscriber) transcriptionURL(id string) string {
 }
 
 func reportTranscriptionProgress(request TranscriptionRequest, status string) error {
-	if request.OnProgress == nil {
+	if request.OnProgress == nil || status == "" {
 		return nil
 	}
 	if err := request.OnProgress(status); err != nil {
@@ -214,8 +215,13 @@ func readErrorMessage(body io.Reader) string {
 	return strings.TrimSpace(string(data))
 }
 
+type transcriptionResponse struct {
+	Transcription transcriptionStatus `json:"transcription"`
+}
+
 type transcriptionStatus struct {
 	ID           string `json:"id"`
 	Status       string `json:"status"`
+	ProgressText string `json:"progressText"`
 	ErrorMessage string `json:"errorMessage"`
 }
