@@ -13,6 +13,8 @@ graphify-out/
 whisper/.venv/
 whisper/__pycache__/
 whisper/dist/
+whisper/.data/
+whisper/.cache/
 
 # Data and env
 data/
