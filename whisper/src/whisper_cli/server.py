@@ -55,7 +55,9 @@ class TranscriptionService:
         task_dir.mkdir(parents=True, exist_ok=False)
 
         audio_path = task_dir / "audio.mp3"
-        audio_path.write_bytes(await audio.read())
+        with audio_path.open("wb") as audio_file:
+            while chunk := await audio.read(1024 * 1024):
+                audio_file.write(chunk)
 
         now = datetime.now(UTC)
         task = TranscriptionTask(
