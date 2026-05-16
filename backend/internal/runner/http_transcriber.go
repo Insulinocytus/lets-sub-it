@@ -25,6 +25,9 @@ func NewHTTPTranscriber(baseURL string, timeout time.Duration, pollInterval time
 	if client == nil {
 		client = http.DefaultClient
 	}
+	if pollInterval <= 0 {
+		pollInterval = 2 * time.Second
+	}
 	return &HTTPTranscriber{
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		timeout:      timeout,
@@ -156,20 +159,28 @@ func (t *HTTPTranscriber) downloadVTT(ctx context.Context, id string, sourcePath
 		return fmt.Errorf("download transcription VTT failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
 	}
 
-	out, err := os.Create(sourcePath)
+	tmp, err := os.CreateTemp(filepath.Dir(sourcePath), filepath.Base(sourcePath)+"-*.tmp")
 	if err != nil {
-		return fmt.Errorf("create source.vtt: %w", err)
+		return fmt.Errorf("create temporary source.vtt: %w", err)
 	}
-	_, copyErr := io.Copy(out, resp.Body)
-	closeErr := out.Close()
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	_, copyErr := io.Copy(tmp, resp.Body)
+	closeErr := tmp.Close()
 	if copyErr != nil {
 		return fmt.Errorf("write source.vtt: %w", copyErr)
 	}
 	if closeErr != nil {
 		return fmt.Errorf("close source.vtt: %w", closeErr)
 	}
-
-	return ensureValidSourceVTT(sourcePath)
+	if err := ensureValidSourceVTT(tmpPath); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, sourcePath); err != nil {
+		return fmt.Errorf("replace source.vtt: %w", err)
+	}
+	return nil
 }
 
 func (t *HTTPTranscriber) doStatusRequest(req *http.Request) (transcriptionStatus, error) {
