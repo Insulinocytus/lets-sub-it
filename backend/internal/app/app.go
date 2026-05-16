@@ -41,7 +41,7 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 }
 
 func checkTools() error {
-	for _, tool := range []string{"yt-dlp", "ffmpeg", "whisper-cli"} {
+	for _, tool := range []string{"yt-dlp", "ffmpeg"} {
 		if _, err := lookPath(tool); err != nil {
 			return fmt.Errorf("backend requires %s to be installed and on PATH", tool)
 		}
