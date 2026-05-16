@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import shutil
+import threading
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 from uuid import uuid4
 
 import anyio
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+
+from whisper_cli.transcribe import TranscriptionResult, transcribe_audio
+from whisper_cli.vtt import Segment, render_vtt
 
 
 class APIError(Exception):
@@ -39,9 +45,19 @@ class TranscriptionTask:
 
 
 class TranscriptionService:
-    def __init__(self, *, work_dir: Path) -> None:
+    def __init__(
+        self,
+        *,
+        work_dir: Path,
+        transcribe: Callable[..., TranscriptionResult] = transcribe_audio,
+    ) -> None:
         self.work_dir = work_dir
         self.tasks: dict[str, TranscriptionTask] = {}
+        self.transcribe = transcribe
+        self.queue: list[str] = []
+        self.condition = threading.Condition()
+        self.worker: threading.Thread | None = None
+        self.stopping = False
 
     async def create(
         self,
@@ -84,20 +100,93 @@ class TranscriptionService:
             created_at=now,
             updated_at=now,
         )
-        self.tasks[task_id] = task
+        with self.condition:
+            self.tasks[task_id] = task
+            self.queue.append(task_id)
+            self.condition.notify()
         return task
 
     def get(self, task_id: str) -> TranscriptionTask:
-        task = self.tasks.get(task_id)
-        if task is None:
-            raise APIError(404, "not_found", "transcription not found")
-        return task
+        with self.condition:
+            task = self.tasks.get(task_id)
+            if task is None:
+                raise APIError(404, "not_found", "transcription not found")
+            return task
+
+    def start(self) -> None:
+        if self.worker is not None:
+            return
+        self.stopping = False
+        self.worker = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker.start()
+
+    def stop(self) -> None:
+        with self.condition:
+            self.stopping = True
+            self.condition.notify_all()
+        if self.worker is not None:
+            self.worker.join(timeout=5)
+            self.worker = None
+
+    def run_next(self, timeout: float | None = None) -> bool:
+        with self.condition:
+            if not self.queue:
+                self.condition.wait(timeout=timeout)
+            if not self.queue:
+                return False
+            task = self.tasks[self.queue.pop(0)]
+            now = datetime.now(UTC)
+            task.status = "running"
+            task.progress = 10
+            task.progress_text = "正在转写音频"
+            task.updated_at = now
+
+        try:
+            result = self.transcribe(
+                input_path=task.audio_path,
+                model_name=task.model,
+                language=task.requested_language,
+                compute_type=task.compute_type or "default",
+            )
+            task.vtt_path.write_text(render_vtt(result.segments), encoding="utf-8")
+            with self.condition:
+                task.status = "completed"
+                task.progress = 100
+                task.progress_text = "转写完成"
+                task.language = result.language
+                task.duration_seconds = result.duration_seconds
+                task.segments = [serialize_segment(segment) for segment in result.segments]
+                task.error_message = None
+                task.updated_at = datetime.now(UTC)
+        except Exception as exc:
+            with self.condition:
+                task.status = "failed"
+                task.progress = 100
+                task.progress_text = "转写失败"
+                task.error_message = str(exc)
+                task.updated_at = datetime.now(UTC)
+        return True
+
+    def _worker_loop(self) -> None:
+        while True:
+            with self.condition:
+                if self.stopping:
+                    return
+            self.run_next(timeout=0.2)
 
 
 def create_app(
     *, service: TranscriptionService | None = None, start_worker: bool = True
 ) -> FastAPI:
-    app = FastAPI(title="Lets Sub It Whisper Service")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if app.state.start_worker:
+            app.state.transcription_service.start()
+        yield
+        if app.state.start_worker:
+            app.state.transcription_service.stop()
+
+    app = FastAPI(title="Lets Sub It Whisper Service", lifespan=lifespan)
     app.state.transcription_service = service or TranscriptionService(work_dir=Path("work"))
     app.state.start_worker = start_worker
 
@@ -136,6 +225,21 @@ def create_app(
         )
         return {"transcription": serialize_task(task)}
 
+    @app.get("/transcriptions/{task_id}")
+    def get_transcription(task_id: str) -> dict[str, object]:
+        task = app.state.transcription_service.get(task_id)
+        return {"transcription": serialize_task(task)}
+
+    @app.get("/transcriptions/{task_id}/vtt")
+    def get_transcription_vtt(task_id: str) -> Response:
+        task = app.state.transcription_service.get(task_id)
+        if task.status != "completed":
+            raise APIError(409, "not_ready", "transcription is not completed")
+        return Response(
+            content=task.vtt_path.read_text(encoding="utf-8"),
+            media_type="text/vtt; charset=utf-8",
+        )
+
     return app
 
 
@@ -156,6 +260,10 @@ def serialize_task(task: TranscriptionTask) -> dict[str, object]:
 
 def format_datetime(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
+
+
+def serialize_segment(segment: Segment) -> dict[str, object]:
+    return {"start": segment.start, "end": segment.end, "text": segment.text}
 
 
 app = create_app()

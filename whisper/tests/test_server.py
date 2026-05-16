@@ -5,6 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from whisper_cli.server import TranscriptionService, create_app
+from whisper_cli.transcribe import TranscriptionResult
+from whisper_cli.vtt import Segment
 
 
 class ChunkedUpload:
@@ -33,8 +35,22 @@ class FailingUpload:
         raise OSError("read failed")
 
 
-def new_client(tmp_path: Path) -> tuple[TestClient, TranscriptionService]:
-    service = TranscriptionService(work_dir=tmp_path)
+def fake_transcribe(**kwargs) -> TranscriptionResult:
+    return TranscriptionResult(
+        language="en",
+        duration_seconds=1.25,
+        segments=[Segment(start=0.0, end=1.25, text="Hello world")],
+    )
+
+
+def failing_transcribe(**kwargs) -> TranscriptionResult:
+    raise RuntimeError("transcriber failed")
+
+
+def new_client(
+    tmp_path: Path, *, transcribe=fake_transcribe
+) -> tuple[TestClient, TranscriptionService]:
+    service = TranscriptionService(work_dir=tmp_path, transcribe=transcribe)
     return TestClient(create_app(service=service, start_worker=False)), service
 
 
@@ -153,3 +169,101 @@ def test_transcription_service_removes_task_dir_when_upload_fails(tmp_path):
         )
 
     assert list(tmp_path.glob("tr_*")) == []
+
+
+def test_get_transcription_returns_queued_status(tmp_path):
+    client, _ = new_client(tmp_path)
+    create_response = client.post(
+        "/transcriptions",
+        data={"model": "small", "language": "en"},
+        files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+    )
+    task_id = create_response.json()["transcription"]["id"]
+
+    response = client.get(f"/transcriptions/{task_id}")
+
+    assert response.status_code == 200
+    body = response.json()["transcription"]
+    assert body["id"] == task_id
+    assert body["status"] == "queued"
+    assert body["progress"] == 0
+    assert body["progressText"] == "等待转写"
+
+
+def test_get_transcription_not_found(tmp_path):
+    client, _ = new_client(tmp_path)
+
+    response = client.get("/transcriptions/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": {"code": "not_found", "message": "transcription not found"}
+    }
+
+
+def test_vtt_before_completion_returns_conflict(tmp_path):
+    client, _ = new_client(tmp_path)
+    create_response = client.post(
+        "/transcriptions",
+        data={"model": "small", "language": "en"},
+        files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+    )
+    task_id = create_response.json()["transcription"]["id"]
+
+    response = client.get(f"/transcriptions/{task_id}/vtt")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": {
+            "code": "not_ready",
+            "message": "transcription is not completed",
+        }
+    }
+
+
+def test_run_next_completes_task_and_vtt_endpoint_returns_webvtt(tmp_path):
+    client, service = new_client(tmp_path)
+    create_response = client.post(
+        "/transcriptions",
+        data={"model": "small", "language": "en"},
+        files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+    )
+    task_id = create_response.json()["transcription"]["id"]
+
+    assert service.run_next() is True
+
+    status_response = client.get(f"/transcriptions/{task_id}")
+    assert status_response.status_code == 200
+    body = status_response.json()["transcription"]
+    assert body["status"] == "completed"
+    assert body["progress"] == 100
+    assert body["progressText"] == "转写完成"
+    assert body["language"] == "en"
+    assert body["durationSeconds"] == 1.25
+    assert body["segments"] == [{"start": 0.0, "end": 1.25, "text": "Hello world"}]
+    assert body["errorMessage"] is None
+
+    vtt_response = client.get(f"/transcriptions/{task_id}/vtt")
+    assert vtt_response.status_code == 200
+    assert vtt_response.headers["content-type"] == "text/vtt; charset=utf-8"
+    assert vtt_response.text == "WEBVTT\n\n00:00:00.000 --> 00:00:01.250\nHello world\n"
+
+
+def test_run_next_marks_task_failed_when_transcriber_fails(tmp_path):
+    client, service = new_client(tmp_path, transcribe=failing_transcribe)
+    create_response = client.post(
+        "/transcriptions",
+        data={"model": "small", "language": "en"},
+        files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+    )
+    task_id = create_response.json()["transcription"]["id"]
+
+    assert service.run_next() is True
+
+    response = client.get(f"/transcriptions/{task_id}")
+    assert response.status_code == 200
+    body = response.json()["transcription"]
+    assert body["status"] == "failed"
+    assert body["progress"] == 100
+    assert body["progressText"] == "转写失败"
+    assert body["errorMessage"] == "transcriber failed"
