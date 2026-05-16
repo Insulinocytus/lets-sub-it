@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from whisper_cli.server import TranscriptionService, create_app
@@ -17,6 +18,19 @@ class ChunkedUpload:
         chunk = self.data[self.offset : self.offset + size]
         self.offset += len(chunk)
         return chunk
+
+
+class FailingUpload:
+    def __init__(self) -> None:
+        self.read_count = 0
+
+    async def read(self, size: int = -1) -> bytes:
+        if size == -1:
+            raise AssertionError("upload must be read in bounded chunks")
+        self.read_count += 1
+        if self.read_count == 1:
+            return b"partial"
+        raise OSError("read failed")
 
 
 def new_client(tmp_path: Path) -> tuple[TestClient, TranscriptionService]:
@@ -122,3 +136,20 @@ def test_transcription_service_streams_upload_to_disk(tmp_path):
     )
 
     assert task.audio_path.read_bytes() == b"audio-data"
+
+
+def test_transcription_service_removes_task_dir_when_upload_fails(tmp_path):
+    service = TranscriptionService(work_dir=tmp_path)
+
+    with pytest.raises(OSError, match="read failed"):
+        asyncio.run(
+            service.create(
+                audio=FailingUpload(),
+                model="small",
+                language="en",
+                compute_type=None,
+                job_id=None,
+            )
+        )
+
+    assert list(tmp_path.glob("tr_*")) == []

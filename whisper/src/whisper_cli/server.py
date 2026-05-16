@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+import anyio
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -55,9 +57,13 @@ class TranscriptionService:
         task_dir.mkdir(parents=True, exist_ok=False)
 
         audio_path = task_dir / "audio.mp3"
-        with audio_path.open("wb") as audio_file:
-            while chunk := await audio.read(1024 * 1024):
-                audio_file.write(chunk)
+        try:
+            with audio_path.open("wb") as audio_file:
+                while chunk := await audio.read(1024 * 1024):
+                    await anyio.to_thread.run_sync(audio_file.write, chunk)
+        except Exception:
+            shutil.rmtree(task_dir, ignore_errors=True)
+            raise
 
         now = datetime.now(UTC)
         task = TranscriptionTask(
