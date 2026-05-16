@@ -74,6 +74,14 @@ def test_create_app_uses_work_dir_from_env(tmp_path, monkeypatch):
     assert app.state.transcription_service.work_dir == work_dir
 
 
+def test_create_app_defaults_work_dir_to_data_transcriptions(monkeypatch):
+    monkeypatch.delenv("LSI_WHISPER_WORK_DIR", raising=False)
+
+    app = create_app(start_worker=False)
+
+    assert app.state.transcription_service.work_dir == Path("/data/transcriptions")
+
+
 def test_create_transcription_requires_audio(tmp_path):
     client, _ = new_client(tmp_path)
 

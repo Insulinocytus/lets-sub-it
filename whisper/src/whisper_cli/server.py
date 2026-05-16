@@ -215,7 +215,7 @@ def create_app(
 
     app = FastAPI(title="Lets Sub It Whisper Service", lifespan=lifespan)
     app.state.transcription_service = service or TranscriptionService(
-        work_dir=Path(os.getenv("LSI_WHISPER_WORK_DIR", "work"))
+        work_dir=Path(os.getenv("LSI_WHISPER_WORK_DIR", "/data/transcriptions"))
     )
     app.state.start_worker = start_worker
 
