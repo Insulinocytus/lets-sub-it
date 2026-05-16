@@ -5,13 +5,35 @@ services:
       dockerfile: backend/Dockerfile
     env_file:
       - .env
+    environment:
+      LSI_WHISPER_BASE_URL: http://whisper:8081
     ports:
       - "${LSI_DOCKER_BIND_HOST:?set LSI_DOCKER_BIND_HOST in .env}:8080:8080"
     volumes:
       - lsi-data:/data
+    depends_on:
+      whisper:
+        condition: service_healthy
+    restart: unless-stopped
+
+  whisper:
+    build:
+      context: .
+      dockerfile: whisper/Dockerfile
+    env_file:
+      - .env
+    volumes:
       - lsi-hf-cache:/huggingface
+      - lsi-whisper-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
 
 volumes:
   lsi-data:
   lsi-hf-cache:
+  lsi-whisper-data:

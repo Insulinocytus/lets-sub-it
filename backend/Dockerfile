@@ -9,35 +9,20 @@ RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=1 go build -o /build/server ./cmd/server
 
-# ---- Stage 2: Python whisper-cli ----
-FROM python:3.12-slim-bookworm AS py-builder
-
-WORKDIR /build
-
-RUN pip install uv
-
-COPY whisper/ ./
-RUN uv venv /opt/whisper-venv && \
-    UV_PROJECT_ENVIRONMENT=/opt/whisper-venv uv sync --no-dev --no-editable
-
-# ---- Stage 3: Runtime ----
-FROM python:3.12-slim-bookworm
+# ---- Stage 2: Runtime ----
+FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir yt-dlp
+    apt-get install -y --no-install-recommends ca-certificates ffmpeg yt-dlp && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=go-builder /build/server /usr/local/bin/server
-COPY --from=py-builder /opt/whisper-venv /opt/whisper-venv
 
-ENV PATH="/opt/whisper-venv/bin:$PATH" \
-    HF_HOME=/huggingface \
-    LSI_ADDR=0.0.0.0:8080 \
+ENV LSI_ADDR=0.0.0.0:8080 \
     LSI_DB_PATH=/data/backend.sqlite3 \
     LSI_WORK_DIR=/data/jobs
 
-RUN mkdir -p /data/jobs /huggingface
+RUN mkdir -p /data/jobs
 
 EXPOSE 8080
 

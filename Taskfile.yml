@@ -41,15 +41,25 @@ tasks:
     desc: Run backend API with the local real toolchain
     dir: backend
     cmds:
-      - task deps:whisper
       - >-
-        PATH="$PWD/../whisper/.venv/bin:$PATH"
         LSI_DOWNLOAD_TIMEOUT=${LSI_DOWNLOAD_TIMEOUT:-10m}
-        LSI_WHISPER_MODEL=${LSI_WHISPER_MODEL:-small}
+        LSI_WHISPER_BASE_URL=${LSI_WHISPER_BASE_URL:-http://127.0.0.1:8081}
+        LSI_WHISPER_TIMEOUT=${LSI_WHISPER_TIMEOUT:-30m}
+        LSI_WHISPER_POLL_INTERVAL=${LSI_WHISPER_POLL_INTERVAL:-2s}
         LSI_LLM_BASE_URL=${LSI_LLM_BASE_URL:-https://api.openai.com}
         LSI_LLM_TIMEOUT=${LSI_LLM_TIMEOUT:-2m}
         LSI_ADDR=${LSI_ADDR:-127.0.0.1:8080}
         mise exec -- go run ./cmd/server
+
+  dev:whisper:
+    desc: Run the local Whisper HTTP service
+    dir: whisper
+    cmds:
+      - mise exec -- uv sync --dev
+      - >-
+        LSI_WHISPER_WORK_DIR=${LSI_WHISPER_WORK_DIR:-$PWD/.data/transcriptions}
+        HF_HOME=${HF_HOME:-$PWD/.cache/huggingface}
+        mise exec -- uv run uvicorn whisper_cli.server:app --host 127.0.0.1 --port 8081
 
   dev:extension:
     desc: Run the extension dev server
