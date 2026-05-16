@@ -20,9 +20,6 @@ dev = [
     "pytest>=8.3.5",
 ]
 
-[project.scripts]
-whisper-cli = "whisper_cli.cli:main_entry"
-
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 addopts = "-q"
