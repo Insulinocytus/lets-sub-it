@@ -145,6 +145,32 @@ func TestHTTPTranscriberReturnsFailedStatusErrorMessage(t *testing.T) {
 	}
 }
 
+func TestHTTPTranscriberReturnsInvalidStatusError(t *testing.T) {
+	audioPath := writeTestAudio(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/transcriptions":
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tr_1", "status": "not-real", "progressText": "???"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
+	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
+		JobID:      "job_1",
+		AudioPath:  audioPath,
+		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
+	})
+	if err == nil {
+		t.Fatal("Transcribe() error = nil, want invalid status error")
+	}
+	if !strings.Contains(err.Error(), `invalid transcription status "not-real"`) {
+		t.Fatalf("Transcribe() error = %v, want invalid status error", err)
+	}
+}
+
 func TestHTTPTranscriberFailsOnEmptyVTT(t *testing.T) {
 	audioPath := writeTestAudio(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
