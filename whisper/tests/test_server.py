@@ -65,6 +65,15 @@ def test_healthz_returns_ok(tmp_path):
     assert response.json() == {"status": "ok"}
 
 
+def test_create_app_uses_work_dir_from_env(tmp_path, monkeypatch):
+    work_dir = tmp_path / "env-work"
+    monkeypatch.setenv("LSI_WHISPER_WORK_DIR", str(work_dir))
+
+    app = create_app(start_worker=False)
+
+    assert app.state.transcription_service.work_dir == work_dir
+
+
 def test_create_transcription_requires_audio(tmp_path):
     client, _ = new_client(tmp_path)
 

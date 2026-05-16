@@ -13,8 +13,9 @@ RUN CGO_ENABLED=1 go build -o /build/server ./cmd/server
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates ffmpeg yt-dlp && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends ca-certificates ffmpeg python3-pip && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --no-cache-dir --break-system-packages yt-dlp
 
 COPY --from=go-builder /build/server /usr/local/bin/server
 

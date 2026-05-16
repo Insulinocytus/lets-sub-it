@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import threading
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -213,7 +214,9 @@ def create_app(
             app.state.transcription_service.stop()
 
     app = FastAPI(title="Lets Sub It Whisper Service", lifespan=lifespan)
-    app.state.transcription_service = service or TranscriptionService(work_dir=Path("work"))
+    app.state.transcription_service = service or TranscriptionService(
+        work_dir=Path(os.getenv("LSI_WHISPER_WORK_DIR", "work"))
+    )
     app.state.start_worker = start_worker
 
     @app.exception_handler(APIError)
