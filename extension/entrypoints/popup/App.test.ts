@@ -124,6 +124,12 @@ const activeJob = {
   updatedAt: '2026-04-25T00:01:00Z',
 }
 
+async function selectSettingsTab(wrapper: ReturnType<typeof mount<typeof App>>) {
+  const settingsTab = wrapper.get('button[data-testid="subtitle-settings-tab"]')
+  await settingsTab.trigger('mousedown', { button: 0, ctrlKey: false })
+  await settingsTab.trigger('click')
+}
+
 describe('popup App', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -180,7 +186,7 @@ describe('popup App', () => {
     expect(wrapper.text()).toContain('字幕设置')
     expect(wrapper.text()).toContain('backend URL')
 
-    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await selectSettingsTab(wrapper)
 
     expect(wrapper.text()).toContain('字体大小')
     expect(wrapper.text()).toContain('显示模式')
@@ -188,30 +194,32 @@ describe('popup App', () => {
     expect(wrapper.text()).toContain('双语')
   })
 
-  it('exposes the pressed state for popup view buttons', async () => {
+  it('uses tabs semantics for popup views', async () => {
     const wrapper = mount(App)
 
     await flushPromises()
+
+    expect(wrapper.find('[data-testid="popup-tabs"]').exists()).toBe(true)
 
     const viewGroup = wrapper.get('[aria-label="功能切换"]')
     const generateTab = wrapper.get('button[data-testid="generate-tab"]')
     const settingsTab = wrapper.get('button[data-testid="subtitle-settings-tab"]')
 
-    expect(viewGroup.attributes('role')).toBe('group')
-    expect(generateTab.attributes('aria-pressed')).toBe('true')
-    expect(settingsTab.attributes('aria-pressed')).toBe('false')
+    expect(viewGroup.attributes('role')).toBe('tablist')
+    expect(generateTab.attributes('role')).toBe('tab')
+    expect(settingsTab.attributes('role')).toBe('tab')
 
+    await settingsTab.trigger('mousedown', { button: 0, ctrlKey: false })
     await settingsTab.trigger('click')
 
-    expect(generateTab.attributes('aria-pressed')).toBe('false')
-    expect(settingsTab.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('字体大小')
   })
 
   it('exposes the pressed state for subtitle display mode buttons', async () => {
     const wrapper = mount(App)
 
     await flushPromises()
-    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await selectSettingsTab(wrapper)
 
     const modeGroup = wrapper.get('[aria-label="字幕显示模式"]')
     const translatedMode = wrapper.get('button[data-testid="subtitle-mode-translated"]')
@@ -231,7 +239,7 @@ describe('popup App', () => {
     const wrapper = mount(App)
 
     await flushPromises()
-    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await selectSettingsTab(wrapper)
     await wrapper.get('input[data-testid="subtitle-font-size-input"]').setValue('32')
     await wrapper.get('button[data-testid="subtitle-mode-bilingual"]').trigger('click')
     await wrapper.get('button[data-testid="save-subtitle-settings"]').trigger('click')
@@ -255,7 +263,7 @@ describe('popup App', () => {
     const wrapper = mount(App)
 
     await flushPromises()
-    await wrapper.get('button[data-testid="subtitle-settings-tab"]').trigger('click')
+    await selectSettingsTab(wrapper)
     await wrapper.get('input[data-testid="subtitle-font-size-input"]').setValue('0')
     await wrapper.get('button[data-testid="save-subtitle-settings"]').trigger('click')
 
