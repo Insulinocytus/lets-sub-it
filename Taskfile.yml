@@ -26,7 +26,7 @@ tasks:
       - mise exec -- go mod download
 
   deps:whisper:
-    desc: Sync Python dependencies for whisper-cli
+    desc: Sync Python dependencies for the Whisper service
     dir: whisper
     cmds:
       - mise exec -- uv sync --dev
@@ -81,7 +81,7 @@ tasks:
       - mise exec -- go test ./...
 
   test:whisper:
-    desc: Run whisper-cli pytest suite
+    desc: Run Whisper service pytest suite
     dir: whisper
     cmds:
       - mise exec -- uv run pytest
@@ -118,7 +118,7 @@ tasks:
       - mise exec -- go build ./...
 
   build:whisper:
-    desc: Build whisper-cli Python package
+    desc: Build Whisper service Python package
     dir: whisper
     cmds:
       - mise exec -- uv build
