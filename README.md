@@ -57,10 +57,12 @@ Chrome extension  ->  backend HTTP API  ->  yt-dlp
 ### 1. Install tools and dependencies
 
 ```bash
+mise trust
+mise install
 task setup
 ```
 
-这会安装固定版本工具链，并安装 backend、whisper 和 extension 的依赖。
+这会先信任项目的 `mise.toml`，再安装固定版本工具链，包括 `task`，然后安装 backend、whisper 和 extension 的依赖。
 
 ### 2. Configure the backend
 
