@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from pathlib import Path
 
 import pytest
@@ -269,27 +270,49 @@ def test_run_next_marks_task_failed_when_transcriber_fails(tmp_path):
     assert body["errorMessage"] == "transcriber failed"
 
 
-def test_stop_keeps_active_worker_handle_when_join_times_out(tmp_path):
+def test_stop_waits_for_running_worker_and_clears_worker(tmp_path):
     service = TranscriptionService(work_dir=tmp_path)
 
-    class ActiveWorker:
+    class JoinedWorker:
         def __init__(self) -> None:
-            self.join_called = False
+            self.join_timeout = "unset"
+            self.alive = True
 
         def join(self, timeout: float | None = None) -> None:
-            self.join_called = True
+            self.join_timeout = timeout
+            self.alive = False
 
         def is_alive(self) -> bool:
-            return True
+            return self.alive
 
-    worker = ActiveWorker()
+    worker = JoinedWorker()
     service.worker = worker
 
     service.stop()
-    service.start()
 
-    assert worker.join_called is True
-    assert service.worker is worker
+    assert worker.join_timeout is None
+    assert service.worker is None
+
+
+def test_worker_can_restart_after_stop(tmp_path):
+    service = TranscriptionService(work_dir=tmp_path)
+
+    service.start()
+    first_worker = service.worker
+    assert first_worker is not None
+    assert first_worker.is_alive()
+
+    service.stop()
+    assert service.worker is None
+
+    service.start()
+    second_worker = service.worker
+    assert second_worker is not None
+    assert second_worker is not first_worker
+    assert second_worker.is_alive()
+
+    service.stop()
+    assert service.worker is None
 
 
 def test_worker_run_next_does_not_consume_queued_task_when_stopping(tmp_path):

@@ -114,20 +114,25 @@ class TranscriptionService:
             return task
 
     def start(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            return
-        self.worker = None
-        self.stopping = False
-        self.worker = threading.Thread(target=self._worker_loop, daemon=True)
-        self.worker.start()
+        with self.condition:
+            if self.worker is not None and self.worker.is_alive():
+                return
+            self.stopping = False
+            self.worker = threading.Thread(target=self._worker_loop, daemon=True)
+            self.worker.start()
 
     def stop(self) -> None:
         with self.condition:
             self.stopping = True
             self.condition.notify_all()
-        if self.worker is not None:
-            self.worker.join(timeout=5)
-            if not self.worker.is_alive():
+            worker = self.worker
+        if worker is not None:
+            worker.join()
+            with self.condition:
+                if self.worker is worker:
+                    self.worker = None
+        else:
+            with self.condition:
                 self.worker = None
 
     def run_next(
