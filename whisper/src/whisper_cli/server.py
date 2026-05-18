@@ -206,7 +206,11 @@ class TranscriptionService:
 
     def delete(self, task_id: str) -> None:
         with self.condition:
-            task = self.tasks.pop(task_id, None)
+            task = self.tasks.get(task_id)
+            if task is not None and task.status == "running":
+                raise APIError(409, "not_cancellable", "running transcription cannot be deleted")
+            if task is not None:
+                del self.tasks[task_id]
             self.queue = [queued_id for queued_id in self.queue if queued_id != task_id]
         if task is not None:
             shutil.rmtree(task.audio_path.parent, ignore_errors=True)
