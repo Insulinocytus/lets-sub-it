@@ -166,7 +166,7 @@ func TestHTTPTranscriberDeletesRemoteTaskWhenContextCanceled(t *testing.T) {
 	}
 }
 
-func TestHTTPTranscriberReturnsCleanupErrorAfterSuccessfulDownload(t *testing.T) {
+func TestHTTPTranscriberIgnoresCleanupErrorAfterSuccessfulDownload(t *testing.T) {
 	audioPath := writeTestAudio(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -192,11 +192,8 @@ func TestHTTPTranscriberReturnsCleanupErrorAfterSuccessfulDownload(t *testing.T)
 		AudioPath:  audioPath,
 		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
 	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want cleanup error")
-	}
-	if !strings.Contains(err.Error(), "cleanup unavailable") {
-		t.Fatalf("Transcribe() error = %v, want cleanup error", err)
+	if err != nil {
+		t.Fatalf("Transcribe() error = %v, want nil after successful download", err)
 	}
 }
 

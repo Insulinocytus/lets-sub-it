@@ -17,6 +17,8 @@ from fastapi.responses import JSONResponse, Response
 from whisper_cli.transcribe import TranscriptionResult, transcribe_audio
 from whisper_cli.vtt import Segment, render_vtt
 
+WORKER_STOP_TIMEOUT_SECONDS = 5
+
 
 class APIError(Exception):
     def __init__(self, status_code: int, code: str, message: str) -> None:
@@ -128,10 +130,11 @@ class TranscriptionService:
             self.condition.notify_all()
             worker = self.worker
         if worker is not None:
-            worker.join()
-            with self.condition:
-                if self.worker is worker:
-                    self.worker = None
+            worker.join(timeout=WORKER_STOP_TIMEOUT_SECONDS)
+            if not worker.is_alive():
+                with self.condition:
+                    if self.worker is worker:
+                        self.worker = None
         else:
             with self.condition:
                 self.worker = None

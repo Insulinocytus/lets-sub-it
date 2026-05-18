@@ -50,9 +50,7 @@ func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionR
 		}
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(requestCtx), 10*time.Second)
 		defer cleanupCancel()
-		if cleanupErr := t.delete(cleanupCtx, remoteID); cleanupErr != nil && resultErr == nil {
-			resultErr = cleanupErr
-		}
+		_ = t.delete(cleanupCtx, remoteID)
 	}()
 
 	status, err := t.upload(requestCtx, request)

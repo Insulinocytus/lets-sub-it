@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -363,8 +364,33 @@ def test_stop_waits_for_running_worker_and_clears_worker(tmp_path):
 
     service.stop()
 
-    assert worker.join_timeout is None
+    assert worker.join_timeout is not None
     assert service.worker is None
+
+
+def test_stop_uses_bounded_wait_for_blocked_worker(tmp_path):
+    service = TranscriptionService(work_dir=tmp_path)
+
+    class BlockedWorker:
+        def __init__(self) -> None:
+            self.join_timeout = "unset"
+
+        def join(self, timeout: float | None = None) -> None:
+            self.join_timeout = timeout
+            time.sleep(0.02)
+
+        def is_alive(self) -> bool:
+            return True
+
+    worker = BlockedWorker()
+    service.worker = worker
+
+    started = time.monotonic()
+    service.stop()
+
+    assert time.monotonic() - started < 1
+    assert worker.join_timeout is not None
+    assert service.worker is worker
 
 
 def test_worker_can_restart_after_stop(tmp_path):
