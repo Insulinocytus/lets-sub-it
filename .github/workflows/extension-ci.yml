@@ -1,0 +1,64 @@
+name: Extension CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect extension changes
+    runs-on: ubuntu-latest
+    outputs:
+      extension: ${{ steps.filter.outputs.extension }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            extension:
+              - ".github/workflows/extension-ci.yml"
+              - "Taskfile.yml"
+              - "mise.toml"
+              - "extension/**"
+
+  test:
+    name: Vitest and typecheck
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.extension == 'true' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Run extension tests
+        working-directory: extension
+        run: npm run test
+
+      - name: Run extension typecheck
+        working-directory: extension
+        run: npm run typecheck

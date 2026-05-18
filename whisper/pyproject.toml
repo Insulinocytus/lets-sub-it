@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "whisper-cli"
 version = "0.1.0"
 description = "Local faster-whisper CLI that writes validated VTT output"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["faster-whisper>=1.1.1"]
 
