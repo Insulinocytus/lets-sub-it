@@ -32,21 +32,19 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 	}
 
 	translator := fakeTranslator{translations: []string{"translated one"}}
+	transcriber := &fakeTranscriber{progressText: "正在转写音频"}
 	var calls []execCall
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		calls = append(calls, execCall{name: name, args: slices.Clone(args)})
 		switch name {
 		case "yt-dlp":
 			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		case "whisper-cli":
-			outputPath := argValue(t, args, "--output")
-			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
 		default:
 			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
 		}
 	}
 
-	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", "int8", translator).Start(context.Background(), job); err != nil {
+	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", "int8", transcriber, translator).Start(context.Background(), job); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 
@@ -67,16 +65,20 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 		t.Fatal("audio.mp3 is empty")
 	}
 
-	whisperCall := findExecCall(calls, "whisper-cli")
-	if whisperCall == nil {
-		t.Fatalf("exec calls = %#v, want whisper-cli call", calls)
+	if findExecCall(calls, "whisper-cli") != nil {
+		t.Fatalf("exec calls = %#v, must not call whisper-cli", calls)
 	}
 	sourcePath := filepath.Join(jobDir, "source.vtt")
-	assertArg(t, whisperCall.args, "--input", audioPath)
-	assertArg(t, whisperCall.args, "--output", sourcePath)
-	assertArg(t, whisperCall.args, "--model", "tiny")
-	assertArg(t, whisperCall.args, "--compute-type", "int8")
-	assertArg(t, whisperCall.args, "--language", "zh")
+	if len(transcriber.requests) != 1 {
+		t.Fatalf("transcriber requests = %d, want 1", len(transcriber.requests))
+	}
+	request := transcriber.requests[0]
+	if request.AudioPath != audioPath || request.SourcePath != sourcePath || request.Model != "tiny" || request.ComputeType != "int8" || request.Language != "zh" {
+		t.Fatalf("transcription request = %#v, want audio/source/model/computeType/language", request)
+	}
+	if !containsString(transcriber.progress, "正在转写音频") {
+		t.Fatalf("transcriber progress = %#v, want progress callback", transcriber.progress)
+	}
 
 	asset, assetErr := testStore.FindSubtitleAsset("abc123", "en")
 	if assetErr != nil {
@@ -136,15 +138,12 @@ func TestRealRunnerLogsJobLifecycle(t *testing.T) {
 		switch name {
 		case "yt-dlp":
 			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		case "whisper-cli":
-			outputPath := argValue(t, args, "--output")
-			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
 		default:
 			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{translations: []string{"translated"}}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{}, fakeTranslator{translations: []string{"translated"}}).Start(context.Background(), job)
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -181,7 +180,7 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{}, fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
 	}
@@ -223,9 +222,6 @@ func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
 		switch name {
 		case "yt-dlp":
 			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		case "whisper-cli":
-			outputPath := argValue(t, args, "--output")
-			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
 		default:
 			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
 		}
@@ -237,7 +233,7 @@ func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
 	t.Cleanup(server.Close)
 	translator := NewChatTranslator(server.URL, "secret-key", "test-model", time.Second, server.Client())
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", translator).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{}, translator).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want translation error")
 	}
@@ -284,7 +280,7 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(ctx, job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{}, fakeTranslator{}).Start(ctx, job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want context canceled")
 	}
@@ -318,14 +314,12 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 		switch name {
 		case "yt-dlp":
 			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		case "whisper-cli":
-			return exec.CommandContext(ctx, "sh", "-c", "echo 'transcription failed: model download error' >&2 && exit 3")
 		default:
 			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{err: errors.New("model download error")}, fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want transcription error")
 	}
@@ -362,15 +356,12 @@ func TestRealRunnerTranslationFailed(t *testing.T) {
 		switch name {
 		case "yt-dlp":
 			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		case "whisper-cli":
-			outputPath := argValue(t, args, "--output")
-			return exec.CommandContext(ctx, "sh", "-c", "printf 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n' > \"$1\"", "sh", outputPath)
 		default:
 			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
 		}
 	}
 
-	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
+	err := NewRealRunner(testStore, 10*time.Minute, "small", "default", &fakeTranscriber{}, fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
 	if err == nil {
 		t.Fatal("Start() error = nil, want translation error")
 	}
@@ -420,6 +411,30 @@ func argValue(t *testing.T, args []string, flag string) string {
 	}
 	t.Fatalf("missing %s arg in %#v", flag, args)
 	return ""
+}
+
+type fakeTranscriber struct {
+	requests     []TranscriptionRequest
+	progress     []string
+	progressText string
+	err          error
+}
+
+func (t *fakeTranscriber) Transcribe(ctx context.Context, request TranscriptionRequest) error {
+	t.requests = append(t.requests, request)
+	if t.progressText != "" && request.OnProgress != nil {
+		t.progress = append(t.progress, t.progressText)
+		if err := request.OnProgress(t.progressText); err != nil {
+			return err
+		}
+	}
+	if t.err != nil {
+		return t.err
+	}
+	if err := os.MkdirAll(filepath.Dir(request.SourcePath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(request.SourcePath, []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nreal transcript\n"), 0o644)
 }
 
 type fakeTranslator struct {

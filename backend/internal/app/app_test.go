@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCheckToolsRequiresWhisperCLI(t *testing.T) {
+func TestCheckToolsDoesNotRequireWhisperCLI(t *testing.T) {
 	origLookPath := lookPath
 	t.Cleanup(func() { lookPath = origLookPath })
 
@@ -18,11 +18,8 @@ func TestCheckToolsRequiresWhisperCLI(t *testing.T) {
 	}
 
 	err := checkTools()
-	if err == nil {
-		t.Fatal("checkTools() error = nil, want missing whisper-cli error")
-	}
-	if !strings.Contains(err.Error(), "whisper-cli") {
-		t.Fatalf("checkTools() error = %q, want containing whisper-cli", err.Error())
+	if err != nil {
+		t.Fatalf("checkTools() error = %v, want nil", err)
 	}
 }
 
@@ -43,6 +40,7 @@ func TestNewHTTPHandlerRequiresToolsByDefault(t *testing.T) {
 		DownloadTimeout:    0,
 		WhisperModel:       "small",
 		WhisperComputeType: "default",
+		WhisperBaseURL:     "http://127.0.0.1:8081",
 		LLMBaseURL:         "https://api.openai.com",
 	})
 	if err == nil {

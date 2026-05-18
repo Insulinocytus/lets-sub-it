@@ -97,6 +97,42 @@ func TestLoadConfigWhisperComputeTypeCustom(t *testing.T) {
 	}
 }
 
+func TestLoadConfigWhisperServiceDefaults(t *testing.T) {
+	t.Setenv("LSI_WHISPER_BASE_URL", "")
+	t.Setenv("LSI_WHISPER_TIMEOUT", "")
+	t.Setenv("LSI_WHISPER_POLL_INTERVAL", "")
+
+	config := LoadConfig()
+
+	if config.WhisperBaseURL != "http://127.0.0.1:8081" {
+		t.Fatalf("WhisperBaseURL = %q, want default", config.WhisperBaseURL)
+	}
+	if config.WhisperTimeout != 30*time.Minute {
+		t.Fatalf("WhisperTimeout = %v, want %v", config.WhisperTimeout, 30*time.Minute)
+	}
+	if config.WhisperPollInterval != 2*time.Second {
+		t.Fatalf("WhisperPollInterval = %v, want %v", config.WhisperPollInterval, 2*time.Second)
+	}
+}
+
+func TestLoadConfigWhisperServiceCustomValues(t *testing.T) {
+	t.Setenv("LSI_WHISPER_BASE_URL", "http://whisper:8081")
+	t.Setenv("LSI_WHISPER_TIMEOUT", "45m")
+	t.Setenv("LSI_WHISPER_POLL_INTERVAL", "500ms")
+
+	config := LoadConfig()
+
+	if config.WhisperBaseURL != "http://whisper:8081" {
+		t.Fatalf("WhisperBaseURL = %q", config.WhisperBaseURL)
+	}
+	if config.WhisperTimeout != 45*time.Minute {
+		t.Fatalf("WhisperTimeout = %v", config.WhisperTimeout)
+	}
+	if config.WhisperPollInterval != 500*time.Millisecond {
+		t.Fatalf("WhisperPollInterval = %v", config.WhisperPollInterval)
+	}
+}
+
 func TestLoadConfigLLMDefaults(t *testing.T) {
 	t.Setenv("LSI_LLM_BASE_URL", "")
 	t.Setenv("LSI_LLM_API_KEY", "")

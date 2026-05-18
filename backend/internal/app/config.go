@@ -6,32 +6,38 @@ import (
 )
 
 type Config struct {
-	Addr               string
-	DBPath             string
-	WorkDir            string
-	DownloadTimeout    time.Duration
-	WhisperModel       string
-	WhisperComputeType string
-	LLMBaseURL         string
-	LLMAPIKey          string
-	LLMModel           string
-	LLMTimeout         time.Duration
-	LogLevel           string
+	Addr                string
+	DBPath              string
+	WorkDir             string
+	DownloadTimeout     time.Duration
+	WhisperModel        string
+	WhisperComputeType  string
+	WhisperBaseURL      string
+	WhisperTimeout      time.Duration
+	WhisperPollInterval time.Duration
+	LLMBaseURL          string
+	LLMAPIKey           string
+	LLMModel            string
+	LLMTimeout          time.Duration
+	LogLevel            string
 }
 
 func LoadConfig() Config {
 	return Config{
-		Addr:               envOrDefault("LSI_ADDR", "127.0.0.1:8080"),
-		DBPath:             envOrDefault("LSI_DB_PATH", "./data/backend.sqlite3"),
-		WorkDir:            envOrDefault("LSI_WORK_DIR", "./data/jobs"),
-		DownloadTimeout:    envDurationOrDefault("LSI_DOWNLOAD_TIMEOUT", 10*time.Minute),
-		WhisperModel:       envOrDefault("LSI_WHISPER_MODEL", "small"),
-		WhisperComputeType: envOrDefault("LSI_WHISPER_COMPUTE_TYPE", "default"),
-		LLMBaseURL:         envOrDefault("LSI_LLM_BASE_URL", "https://api.openai.com"),
-		LLMAPIKey:          os.Getenv("LSI_LLM_API_KEY"),
-		LLMModel:           os.Getenv("LSI_LLM_MODEL"),
-		LLMTimeout:         envDurationOrDefault("LSI_LLM_TIMEOUT", 2*time.Minute),
-		LogLevel:           envOrDefault("LSI_LOG_LEVEL", "info"),
+		Addr:                envOrDefault("LSI_ADDR", "127.0.0.1:8080"),
+		DBPath:              envOrDefault("LSI_DB_PATH", "./data/backend.sqlite3"),
+		WorkDir:             envOrDefault("LSI_WORK_DIR", "./data/jobs"),
+		DownloadTimeout:     envDurationOrDefault("LSI_DOWNLOAD_TIMEOUT", 10*time.Minute),
+		WhisperModel:        envOrDefault("LSI_WHISPER_MODEL", "small"),
+		WhisperComputeType:  envOrDefault("LSI_WHISPER_COMPUTE_TYPE", "default"),
+		WhisperBaseURL:      envOrDefault("LSI_WHISPER_BASE_URL", "http://127.0.0.1:8081"),
+		WhisperTimeout:      envDurationOrDefault("LSI_WHISPER_TIMEOUT", 30*time.Minute),
+		WhisperPollInterval: envDurationOrDefault("LSI_WHISPER_POLL_INTERVAL", 2*time.Second),
+		LLMBaseURL:          envOrDefault("LSI_LLM_BASE_URL", "https://api.openai.com"),
+		LLMAPIKey:           os.Getenv("LSI_LLM_API_KEY"),
+		LLMModel:            os.Getenv("LSI_LLM_MODEL"),
+		LLMTimeout:          envDurationOrDefault("LSI_LLM_TIMEOUT", 2*time.Minute),
+		LogLevel:            envOrDefault("LSI_LOG_LEVEL", "info"),
 	}
 }
 

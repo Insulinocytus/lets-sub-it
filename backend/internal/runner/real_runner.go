@@ -15,11 +15,12 @@ type RealRunner struct {
 	downloadTimeout    time.Duration
 	whisperModel       string
 	whisperComputeType string
+	transcriber        Transcriber
 	translator         Translator
 }
 
-func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, whisperComputeType string, translator Translator) *RealRunner {
-	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, whisperComputeType: whisperComputeType, translator: translator}
+func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, whisperComputeType string, transcriber Transcriber, translator Translator) *RealRunner {
+	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, whisperComputeType: whisperComputeType, transcriber: transcriber, translator: translator}
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
@@ -43,7 +44,7 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	logJobStageCompleted(job, store.StatusDownloading, stageStartedAt)
 
 	stageStartedAt = logJobStageStarted(job, store.StatusTranscribing)
-	if err := r.set(job.ID, store.StatusTranscribing, "调用 whisper-cli 生成 source.vtt", ""); err != nil {
+	if err := r.set(job.ID, store.StatusTranscribing, "正在提交音频到 Whisper 服务", ""); err != nil {
 		return r.fail(job, store.StatusTranscribing, err, jobStartedAt)
 	}
 	if err := os.MkdirAll(job.WorkingDir, 0o755); err != nil {
@@ -54,7 +55,17 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	translatedPath := filepath.Join(job.WorkingDir, "translated.vtt")
 	bilingualPath := filepath.Join(job.WorkingDir, "bilingual.vtt")
 
-	if err := transcribeAudio(ctx, job.ID, audioPath, sourcePath, r.whisperModel, r.whisperComputeType, job.SourceLanguage); err != nil {
+	if err := r.transcriber.Transcribe(ctx, TranscriptionRequest{
+		JobID:       job.ID,
+		AudioPath:   audioPath,
+		SourcePath:  sourcePath,
+		Model:       r.whisperModel,
+		ComputeType: r.whisperComputeType,
+		Language:    job.SourceLanguage,
+		OnProgress: func(text string) error {
+			return r.set(job.ID, store.StatusTranscribing, text, "")
+		},
+	}); err != nil {
 		return r.fail(job, store.StatusTranscribing, err, jobStartedAt)
 	}
 	logJobStageCompleted(job, store.StatusTranscribing, stageStartedAt)

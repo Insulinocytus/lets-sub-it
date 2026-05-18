@@ -3,40 +3,55 @@ package runner
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"io"
 	"os"
 	"path/filepath"
-	"time"
 )
 
-func transcribeAudio(ctx context.Context, jobID string, audioPath string, sourcePath string, model string, computeType string, language string) error {
+type Transcriber interface {
+	Transcribe(ctx context.Context, request TranscriptionRequest) error
+}
+
+type TranscriptionRequest struct {
+	JobID       string
+	AudioPath   string
+	SourcePath  string
+	Model       string
+	ComputeType string
+	Language    string
+	OnProgress  func(text string) error
+}
+
+func ensureSourceDir(sourcePath string) error {
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		return fmt.Errorf("create transcript directory: %w", err)
 	}
+	return nil
+}
 
-	args := []string{
-		"--input", audioPath,
-		"--output", sourcePath,
-		"--model", model,
-		"--compute-type", computeType,
-		"--language", language,
-	}
-	cmd := execCommand(ctx, "whisper-cli", args...)
-	startedAt := time.Now()
-	slog.Debug("external command started", "job_id", jobID, "command", "whisper-cli", "model", model, "compute_type", computeType, "language", language)
-	output, err := cmd.CombinedOutput()
+func ensureValidSourceVTT(sourcePath string) error {
+	info, err := os.Stat(sourcePath)
 	if err != nil {
-		slog.Debug("external command failed", "job_id", jobID, "command", "whisper-cli", "duration_ms", time.Since(startedAt).Milliseconds())
-		return fmt.Errorf("whisper-cli failed: %w\n%s", err, string(output))
-	}
-	slog.Debug("external command completed", "job_id", jobID, "command", "whisper-cli", "duration_ms", time.Since(startedAt).Milliseconds())
-
-	info, statErr := os.Stat(sourcePath)
-	if statErr != nil {
-		return fmt.Errorf("whisper-cli did not create source.vtt: %w", statErr)
+		return fmt.Errorf("source.vtt was not created: %w", err)
 	}
 	if info.Size() == 0 {
-		return fmt.Errorf("whisper-cli created empty source.vtt")
+		return fmt.Errorf("empty source.vtt")
+	}
+
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read source.vtt: %w", err)
+	}
+	defer file.Close()
+
+	const prefix = "WEBVTT"
+	data := make([]byte, len(prefix))
+	n, err := io.ReadFull(file, data)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return fmt.Errorf("read source.vtt: %w", err)
+	}
+	if string(data[:n]) != prefix {
+		return fmt.Errorf("source.vtt must start with WEBVTT")
 	}
 	return nil
 }
