@@ -43,6 +43,7 @@ class TranscriptionTask:
     duration_seconds: float | None
     segments: list[dict[str, object]] | None
     error_message: str | None
+    delete_requested: bool
     created_at: datetime
     updated_at: datetime
 
@@ -100,6 +101,7 @@ class TranscriptionService:
             duration_seconds=None,
             segments=None,
             error_message=None,
+            delete_requested=False,
             created_at=now,
             updated_at=now,
         )
@@ -167,6 +169,7 @@ class TranscriptionService:
                 compute_type=task.compute_type or "default",
             )
             task.vtt_path.write_text(render_vtt(result.segments), encoding="utf-8")
+            task_dir_to_remove = None
             with self.condition:
                 task.status = "completed"
                 task.progress = 100
@@ -176,13 +179,22 @@ class TranscriptionService:
                 task.segments = [serialize_segment(segment) for segment in result.segments]
                 task.error_message = None
                 task.updated_at = datetime.now(UTC)
+                if task.delete_requested:
+                    task_dir_to_remove = task.audio_path.parent
+                    self.tasks.pop(task.id, None)
         except Exception as exc:
+            task_dir_to_remove = None
             with self.condition:
                 task.status = "failed"
                 task.progress = 100
                 task.progress_text = "转写失败"
                 task.error_message = str(exc)
                 task.updated_at = datetime.now(UTC)
+                if task.delete_requested:
+                    task_dir_to_remove = task.audio_path.parent
+                    self.tasks.pop(task.id, None)
+        if task_dir_to_remove is not None:
+            shutil.rmtree(task_dir_to_remove, ignore_errors=True)
         return True
 
     def _worker_loop(self) -> None:
@@ -208,7 +220,9 @@ class TranscriptionService:
         with self.condition:
             task = self.tasks.get(task_id)
             if task is not None and task.status == "running":
-                raise APIError(409, "not_cancellable", "running transcription cannot be deleted")
+                task.delete_requested = True
+                task.updated_at = datetime.now(UTC)
+                return
             if task is not None:
                 del self.tasks[task_id]
             self.queue = [queued_id for queued_id in self.queue if queued_id != task_id]

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from whisper_cli.server import TranscriptionService, create_app
+from whisper_cli.server import APIError, TranscriptionService, create_app
 from whisper_cli.transcribe import TranscriptionResult
 from whisper_cli.vtt import Segment
 
@@ -267,7 +267,7 @@ def test_delete_transcription_is_idempotent(tmp_path):
     assert response.status_code == 204
 
 
-def test_delete_running_transcription_is_rejected_without_removing_files(tmp_path):
+def test_delete_running_transcription_is_deferred_until_completion(tmp_path):
     release = threading.Event()
 
     def blocking_transcribe(**kwargs) -> TranscriptionResult:
@@ -290,16 +290,11 @@ def test_delete_running_transcription_is_rejected_without_removing_files(tmp_pat
         response = running_client.delete(f"/transcriptions/{task_id}")
         release.set()
 
-        assert response.status_code == 409
-        assert response.json() == {
-            "error": {
-                "code": "not_cancellable",
-                "message": "running transcription cannot be deleted",
-            }
-        }
+        assert response.status_code == 204
 
-    assert service.get(task_id).status == "completed"
-    assert task_dir.exists()
+    with pytest.raises(APIError):
+        service.get(task_id)
+    assert not task_dir.exists()
 
 
 def test_run_next_completes_task_and_vtt_endpoint_returns_webvtt(tmp_path):
