@@ -201,6 +201,13 @@ class TranscriptionService:
                 raise APIError(409, "not_ready", "transcription is not completed")
             return task.vtt_path
 
+    def delete(self, task_id: str) -> None:
+        with self.condition:
+            task = self.tasks.pop(task_id, None)
+            self.queue = [queued_id for queued_id in self.queue if queued_id != task_id]
+        if task is not None:
+            shutil.rmtree(task.audio_path.parent, ignore_errors=True)
+
 
 def create_app(
     *, service: TranscriptionService | None = None, start_worker: bool = True
@@ -265,6 +272,11 @@ def create_app(
             content=vtt_path.read_text(encoding="utf-8"),
             media_type="text/vtt; charset=utf-8",
         )
+
+    @app.delete("/transcriptions/{task_id}", status_code=204)
+    def delete_transcription(task_id: str) -> Response:
+        app.state.transcription_service.delete(task_id)
+        return Response(status_code=204)
 
     return app
 

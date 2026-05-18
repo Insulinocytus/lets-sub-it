@@ -25,6 +25,7 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 	var upload multipart.Form
 	var uploadAudio string
 	var uploadContentLength int64
+	deleteCalls := 0
 	statusCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -49,8 +50,13 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 			uploadAudio = string(data)
 			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "queued"})
 		case "/transcriptions/tx_123":
+			if r.Method == http.MethodDelete {
+				deleteCalls++
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want GET", r.Method)
+				t.Fatalf("method = %q, want GET or DELETE", r.Method)
 			}
 			statusCalls++
 			if statusCalls == 1 {
@@ -100,6 +106,9 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 	if statusCalls != 2 {
 		t.Fatalf("statusCalls = %d, want 2", statusCalls)
 	}
+	if deleteCalls != 1 {
+		t.Fatalf("deleteCalls = %d, want 1", deleteCalls)
+	}
 	data, err := os.ReadFile(sourcePath)
 	if err != nil {
 		t.Fatalf("os.ReadFile(source) error = %v", err)
@@ -115,6 +124,79 @@ func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
 	}
 	if !containsString(progress, "正在转写音频") {
 		t.Fatalf("progress = %#v, want running progressText", progress)
+	}
+}
+
+func TestHTTPTranscriberDeletesRemoteTaskWhenContextCanceled(t *testing.T) {
+	audioPath := writeTestAudio(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	deleteCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/transcriptions":
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_cancel", "status": "queued", "progressText": "等待转写"})
+		case "/transcriptions/tx_cancel":
+			if r.Method == http.MethodDelete {
+				deleteCalls++
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	transcriber := NewHTTPTranscriber(server.URL, time.Second, 50*time.Millisecond, server.Client())
+	err := transcriber.Transcribe(ctx, TranscriptionRequest{
+		JobID:      "job_1",
+		AudioPath:  audioPath,
+		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
+		OnProgress: func(text string) error {
+			cancel()
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("Transcribe() error = nil, want cancellation error")
+	}
+	if deleteCalls != 1 {
+		t.Fatalf("deleteCalls = %d, want 1", deleteCalls)
+	}
+}
+
+func TestHTTPTranscriberReturnsCleanupErrorAfterSuccessfulDownload(t *testing.T) {
+	audioPath := writeTestAudio(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/transcriptions":
+			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_cleanup", "status": "completed"})
+		case "/transcriptions/tx_cleanup/vtt":
+			_, _ = w.Write([]byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nhello\n"))
+		case "/transcriptions/tx_cleanup":
+			if r.Method == http.MethodDelete {
+				http.Error(w, `{"error":{"message":"cleanup unavailable"}}`, http.StatusServiceUnavailable)
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
+	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
+		JobID:      "job_1",
+		AudioPath:  audioPath,
+		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
+	})
+	if err == nil {
+		t.Fatal("Transcribe() error = nil, want cleanup error")
+	}
+	if !strings.Contains(err.Error(), "cleanup unavailable") {
+		t.Fatalf("Transcribe() error = %v, want cleanup error", err)
 	}
 }
 

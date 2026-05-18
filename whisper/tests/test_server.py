@@ -240,6 +240,61 @@ def test_vtt_before_completion_returns_conflict(tmp_path):
     }
 
 
+def test_delete_transcription_removes_queued_task_and_files(tmp_path):
+    client, service = new_client(tmp_path)
+    create_response = client.post(
+        "/transcriptions",
+        data={"model": "small", "language": "en"},
+        files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+    )
+    task_id = create_response.json()["transcription"]["id"]
+    task_dir = service.get(task_id).audio_path.parent
+
+    response = client.delete(f"/transcriptions/{task_id}")
+
+    assert response.status_code == 204
+    assert not task_dir.exists()
+    assert task_id not in service.tasks
+    assert task_id not in service.queue
+
+
+def test_delete_transcription_is_idempotent(tmp_path):
+    client, _ = new_client(tmp_path)
+
+    response = client.delete("/transcriptions/missing")
+
+    assert response.status_code == 204
+
+
+def test_delete_running_transcription_does_not_retain_completed_result(tmp_path):
+    release = threading.Event()
+
+    def blocking_transcribe(**kwargs) -> TranscriptionResult:
+        release.wait(timeout=5)
+        return fake_transcribe(**kwargs)
+
+    _, service = new_client(tmp_path, transcribe=blocking_transcribe)
+    with TestClient(create_app(service=service, start_worker=True)) as running_client:
+        create_response = running_client.post(
+            "/transcriptions",
+            data={"model": "small", "language": "en"},
+            files={"audio": ("audio.mp3", b"audio", "audio/mpeg")},
+        )
+        task_id = create_response.json()["transcription"]["id"]
+        task_dir = service.get(task_id).audio_path.parent
+
+        while service.get(task_id).status != "running":
+            pass
+
+        response = running_client.delete(f"/transcriptions/{task_id}")
+        release.set()
+
+        assert response.status_code == 204
+
+    assert task_id not in service.tasks
+    assert not task_dir.exists()
+
+
 def test_run_next_completes_task_and_vtt_endpoint_returns_webvtt(tmp_path):
     client, service = new_client(tmp_path)
     create_response = client.post(

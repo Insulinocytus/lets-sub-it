@@ -36,18 +36,30 @@ func NewHTTPTranscriber(baseURL string, timeout time.Duration, pollInterval time
 	}
 }
 
-func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionRequest) error {
+func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionRequest) (resultErr error) {
 	requestCtx := ctx
 	var cancel context.CancelFunc
 	if t.timeout > 0 {
 		requestCtx, cancel = context.WithTimeout(ctx, t.timeout)
 		defer cancel()
 	}
+	remoteID := ""
+	defer func() {
+		if remoteID == "" {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(requestCtx), 10*time.Second)
+		defer cleanupCancel()
+		if cleanupErr := t.delete(cleanupCtx, remoteID); cleanupErr != nil && resultErr == nil {
+			resultErr = cleanupErr
+		}
+	}()
 
 	status, err := t.upload(requestCtx, request)
 	if err != nil {
 		return err
 	}
+	remoteID = status.ID
 
 	for {
 		if err := reportTranscriptionProgress(request, status.ProgressText); err != nil {
@@ -74,6 +86,22 @@ func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionR
 			return fmt.Errorf("invalid transcription status %q", status.Status)
 		}
 	}
+}
+
+func (t *HTTPTranscriber) delete(ctx context.Context, id string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, t.transcriptionURL(id), nil)
+	if err != nil {
+		return fmt.Errorf("create transcription delete request: %w", err)
+	}
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete transcription: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("delete transcription failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
+	}
+	return nil
 }
 
 func (t *HTTPTranscriber) upload(ctx context.Context, request TranscriptionRequest) (transcriptionStatus, error) {
