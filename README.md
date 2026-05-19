@@ -1,61 +1,97 @@
+<div align="center">
+
 # Lets Sub It
 
-Self-hosted YouTube subtitle generation and translation helper.
+自托管 YouTube 字幕生成与翻译
 
-Lets Sub It 是一个面向本地自托管的 YouTube 字幕工具：后端下载视频音频、调用独立 Whisper HTTP service 转写字幕、通过 OpenAI-compatible LLM 翻译字幕，Chrome 扩展负责提交任务并在 YouTube 播放页显示字幕。
+</div>
 
-## Features
-
-- 提交 YouTube 字幕生成任务，并跟踪任务状态。
-- 使用 `yt-dlp` 下载音频，使用本地 `faster-whisper` 生成 WebVTT 字幕。
-- 使用 OpenAI-compatible Chat Completions API 翻译字幕。
-- 生成 `source`、`translated`、`bilingual` 三种 WebVTT 字幕资产。
-- Chrome Manifest V3 扩展可在 YouTube watch 页面渲染已完成字幕。
-- SQLite 持久化任务、字幕资产和可复用结果。
-- 支持本地开发和 Docker 自托管运行。
-
-> [!NOTE]
-> 当前扩展默认只连接 `http://127.0.0.1:8080`，并且 manifest 只授予 `localhost` 和 `127.0.0.1` 后端访问权限。
-
-## Architecture
+Lets Sub It 下载 YouTube 视频音频，通过本地 Whisper 服务转写字幕，再经由 OpenAI 兼容 LLM 翻译，最终在 Chrome 扩展中渲染到 YouTube 播放页。
 
 ```text
-Chrome extension  ->  backend HTTP API  ->  yt-dlp
-                              |              Whisper HTTP service
-                              |              OpenAI-compatible LLM
-                              v
-                      SQLite + WebVTT subtitle files
+Chrome MV3 扩展  →  后端 HTTP API  →  yt-dlp + ffmpeg
+                        │             →  Whisper HTTP 服务
+                        │             →  OpenAI 兼容 LLM
+                        ▼
+                 SQLite + WebVTT 文件
 ```
 
-项目由三个主要模块组成：
+## 功能特性
 
-| Path | Purpose | Stack |
+- 提交 YouTube 字幕任务并实时跟踪进度
+- 使用 `faster-whisper` 本地转写，无需云端语音 API
+- 通过任意 OpenAI 兼容 Chat Completions API 翻译字幕
+- 生成 `source`（源语言）、`translated`（翻译）、`bilingual`（双语）三种 WebVTT 输出
+- Chrome MV3 扩展直接在 YouTube 播放页渲染字幕
+- SQLite 持久化，已完成的任务结果可复用
+- Docker Compose 一键自托管部署
+
+> [!NOTE]
+> 当前 Chrome 扩展仅连接 `http://127.0.0.1:8080`，manifest 仅授予 `localhost` 和 `127.0.0.1` 的主机权限。
+
+## 模块组成
+
+| 路径 | 用途 | 技术栈 |
 | --- | --- | --- |
-| `backend/` | HTTP API、任务生命周期、SQLite 持久化、下载、转写和翻译编排 | Go 1.22 |
-| `whisper/` | Whisper HTTP transcription service，把音频转写成经过校验的 WebVTT | Python 3.12, FastAPI, faster-whisper |
-| `extension/` | Chrome MV3 扩展，提交任务并在 YouTube 播放页显示字幕 | WXT, Vue 3, TypeScript, Tailwind CSS |
+| `backend/` | HTTP API、任务生命周期、SQLite 持久化、下载与编排 | Go 1.22, GORM, SQLite |
+| `whisper/` | 本地转写 HTTP 服务，返回校验后的 WebVTT | Python 3.12, FastAPI, faster-whisper |
+| `extension/` | Chrome MV3 扩展，提交任务并渲染字幕 | WXT, Vue 3, TypeScript, Tailwind CSS, shadcn-vue |
 
-根目录 `Taskfile.yml` 是跨模块命令入口。工具版本由 `mise.toml` 固定。
+根目录 `Taskfile.yml` 是跨模块命令入口，工具版本由 `mise.toml` 固定。
 
-## Prerequisites
+## 前置依赖
 
-- [mise](https://mise.jdx.dev/) 用于安装固定版本工具链。
-- Docker 和 Docker Compose，用于最简单的完整自托管运行方式。
-- Chrome 或 Chromium，用于加载本地扩展。
+- [mise](https://mise.jdx.dev/) — 管理固定版本工具链
+- Docker 和 Docker Compose — 最简自托管方式
+- Chrome 或 Chromium — 加载本地扩展
 
-本地直接运行后端时，还需要系统中可用的：
-
-- `yt-dlp`
-- `ffmpeg`
-
-转写服务通过 `task dev:whisper` 单独启动。
+本地运行后端（不走 Docker）时，还需确保 `yt-dlp` 和 `ffmpeg` 在 `PATH` 中。
 
 > [!TIP]
-> 如果只是想先跑通完整服务，优先使用 Docker。Docker Compose 会启动 backend 和 whisper 两个 service，并包含所需运行时依赖。
+> 想最快跑通完整服务，优先使用 Docker。Docker Compose 会启动 backend 和 whisper 两个服务，并包含所需运行时依赖。
 
-## Quick Start
+## 快速开始
 
-### 1. Install tools and dependencies
+### Docker 方式（推荐）
+
+1. **配置环境**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   编辑 `.env`，至少设置：
+
+   ```env
+   LSI_LLM_API_KEY=sk-your-key-here
+   LSI_LLM_MODEL=gpt-4.1-mini
+   ```
+
+2. **构建并启动服务**
+
+   ```bash
+   mise trust
+   mise install
+   task docker:build
+   ```
+
+   后端监听 `http://127.0.0.1:8080`。
+
+3. **提交测试任务**
+
+   ```bash
+   task api:smoke
+   ```
+
+4. **加载 Chrome 扩展**
+
+   ```bash
+   task build:extension
+   ```
+
+   打开 `chrome://extensions`，开启开发者模式，加载 `extension/.output/chrome-mv3` 作为未打包扩展。打开 YouTube 视频页面，通过扩展弹窗提交字幕任务。
+
+### 本地开发方式
 
 ```bash
 mise trust
@@ -63,188 +99,29 @@ mise install
 task setup
 ```
 
-这会先信任项目的 `mise.toml`，再安装固定版本工具链，包括 `task`，然后安装 backend、whisper 和 extension 的依赖。
-
-### 2. Configure the backend
+在独立终端分别启动服务：
 
 ```bash
-cp .env.example .env
+task dev:whisper    # Whisper 服务 :8081
+task dev:backend     # 后端 API :8080
+task dev:extension   # 扩展开发服务器
 ```
 
-编辑 `.env`，至少设置真实的 LLM 配置：
+## 常用命令
 
-```env
-LSI_LLM_API_KEY=sk-your-key-here
-LSI_LLM_MODEL=gpt-4.1-mini
-```
-
-### 3. Start backend and whisper services with Docker
-
-```bash
-task docker:build
-```
-
-Docker 会启动 backend 和 whisper services。后端默认监听：
-
-```text
-http://127.0.0.1:8080
-```
-
-### 4. Submit a smoke-test job
-
-```bash
-task api:smoke
-```
-
-或者手动调用：
-
-```bash
-curl -X POST "http://127.0.0.1:8080/jobs" \
-  -H "Content-Type: application/json" \
-  -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
-```
-
-### 5. Build and load the Chrome extension
-
-```bash
-task build:extension
-```
-
-然后在 Chrome 中打开 `chrome://extensions`：
-
-1. 开启 Developer mode。
-2. 选择 Load unpacked。
-3. 加载 `extension/.output/chrome-mv3`。
-4. 打开 YouTube watch 页面，通过扩展 popup 提交字幕任务。
-
-## Development
-
-### Backend
-
-```bash
-task dev:backend
-```
-
-默认值：
-
-| Variable | Default |
+| 命令 | 说明 |
 | --- | --- |
-| `LSI_ADDR` | `127.0.0.1:8080` |
-| `LSI_DOWNLOAD_TIMEOUT` | `10m` |
-| `LSI_WHISPER_BASE_URL` | `http://127.0.0.1:8081` |
-| `LSI_WHISPER_MODEL` | `small` |
-| `LSI_WHISPER_TIMEOUT` | `30m` |
-| `LSI_WHISPER_POLL_INTERVAL` | `2s` |
-| `LSI_LLM_BASE_URL` | `https://api.openai.com` |
-| `LSI_LLM_TIMEOUT` | `2m` |
-
-本地开发需要同时启动 Whisper service 和后端：
-
-```bash
-task dev:whisper
-task dev:backend
-```
-
-`task dev:backend` 负责启动 Go 后端；转写请求会发送到 `LSI_WHISPER_BASE_URL`。
-
-### Whisper service
-
-```bash
-task dev:whisper
-```
-
-本地开发时该服务使用项目内开发目录保存转写任务。容器和服务代码默认工作目录为 `/data/transcriptions`。
-
-### Extension
-
-```bash
-task dev:extension
-```
-
-WXT 会生成开发用扩展输出。扩展 popup 默认连接 `http://127.0.0.1:8080`。
-
-### Docker
-
-```bash
-task docker:up       # start backend and whisper services
-task docker:logs     # follow logs
-task docker:down     # stop backend and whisper services
-task docker:build    # rebuild and start backend and whisper services
-```
-
-Docker Compose 使用三个持久卷：
-
-| Volume | Purpose |
-| --- | --- |
-| `lsi-data` | SQLite 数据库和任务文件 |
-| `lsi-hf-cache` | Hugging Face 模型缓存 |
-| `lsi-whisper-data` | Whisper service 转写工作目录 |
-
-## Configuration
-
-后端配置来自环境变量。Docker 运行时从 `.env` 读取。
-
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `LSI_DOCKER_BIND_HOST` | Docker only | `127.0.0.1` in `.env.example` | Docker 端口绑定主机 |
-| `LSI_ADDR` | No | `127.0.0.1:8080` | 后端监听地址 |
-| `LSI_DB_PATH` | No | `./data/backend.sqlite3` | SQLite 数据库路径 |
-| `LSI_WORK_DIR` | No | `./data/jobs` | 任务工作目录 |
-| `LSI_LOG_LEVEL` | No | `info` | 日志级别 |
-| `LSI_DOWNLOAD_TIMEOUT` | No | `10m` | 音频下载超时 |
-| `LSI_WHISPER_BASE_URL` | No | `http://127.0.0.1:8081` | Whisper HTTP service base URL |
-| `LSI_WHISPER_MODEL` | No | `small` | faster-whisper 模型名 |
-| `LSI_WHISPER_COMPUTE_TYPE` | No | `default` | faster-whisper compute type |
-| `LSI_WHISPER_TIMEOUT` | No | `30m` | Whisper 转写请求超时 |
-| `LSI_WHISPER_POLL_INTERVAL` | No | `2s` | Whisper 任务轮询间隔 |
-| `LSI_LLM_BASE_URL` | No | `https://api.openai.com` | OpenAI-compatible API base URL |
-| `LSI_LLM_API_KEY` | Yes for translation | empty | LLM API key |
-| `LSI_LLM_MODEL` | Yes for translation | empty | LLM model name |
-| `LSI_LLM_TIMEOUT` | No | `2m` | LLM 请求超时 |
-| `HF_TOKEN` | No | empty | 可选，用于提高 Hugging Face Hub 下载限额 |
-
-> [!WARNING]
-> `.env` 是本地密钥文件，已被 `.gitignore` 忽略。不要提交真实 API key。
-
-## API Overview
-
-主要后端接口：
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/jobs` | 创建或复用字幕任务 |
-| `GET` | `/jobs/{jobId}` | 查询任务状态 |
-| `GET` | `/jobs/active?videoId=...&targetLanguage=...` | 查询某个视频和目标语言的最新任务 |
-| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 查询已生成字幕资产 |
-| `GET` | `/subtitle-files/{jobId}/{mode}` | 下载 VTT 文件，`mode` 为 `source`、`translated` 或 `bilingual` |
-
-创建任务请求示例：
-
-```json
-{
-  "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "sourceLanguage": "en",
-  "targetLanguage": "zh"
-}
-```
-
-任务状态包括：`queued`、`downloading`、`transcribing`、`translating`、`packaging`、`completed`、`failed`。
-
-## Commands
-
-| Command | Description |
-| --- | --- |
-| `task setup` | 安装工具链和全部模块依赖 |
-| `task dev:backend` | 本地启动 Go 后端 |
-| `task dev:whisper` | 本地启动 Whisper HTTP service |
+| `task setup` | 安装工具链及全部模块依赖 |
+| `task dev:backend` | 本地运行 Go 后端 |
+| `task dev:whisper` | 本地运行 Whisper HTTP 服务 |
 | `task dev:extension` | 启动扩展开发服务器 |
-| `task api:smoke` | 向本地后端提交一个测试任务 |
-| `task test` | 运行 backend、whisper、extension 测试 |
-| `task typecheck` | 运行扩展 TypeScript 类型检查 |
-| `task check` | 运行全部测试和类型检查 |
+| `task api:smoke` | 向本地后端提交测试任务 |
+| `task test` | 运行全部模块测试 |
+| `task check` | 运行全部测试 + 扩展类型检查 |
 | `task build` | 构建全部模块 |
-| `task docker:build` | 构建并启动 Docker backend 和 whisper services |
-| `task docker:logs` | 查看 Docker service 日志 |
+| `task docker:build` | 重新构建并启动 Docker 服务 |
+| `task docker:logs` | 查看 Docker 服务日志 |
+| `task docker:down` | 停止 Docker 服务 |
 
 查看完整命令列表：
 
@@ -252,87 +129,129 @@ Docker Compose 使用三个持久卷：
 task --list
 ```
 
-## Testing and Build
+## API 接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/jobs` | 创建或复用字幕任务 |
+| `GET` | `/jobs/{jobId}` | 查询任务状态 |
+| `GET` | `/jobs/active?videoId=...&targetLanguage=...` | 查询指定视频和语言的最新任务 |
+| `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 列出已生成的字幕资产 |
+| `GET` | `/subtitle-files/{jobId}/{mode}` | 下载 VTT 文件（`source`、`translated` 或 `bilingual`） |
+
+创建任务示例：
 
 ```bash
-task test          # all tests
-task typecheck     # extension typecheck
-task check         # tests + typecheck
-task build         # backend + whisper + extension build
+curl -X POST "http://127.0.0.1:8080/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
 ```
 
-按模块运行：
+任务状态流转：`queued` → `downloading` → `transcribing` → `translating` → `packaging` → `completed`（或 `failed`）。
+
+## 配置
+
+全部通过环境变量配置，Docker 从 `.env` 读取。
+
+### 后端
+
+| 变量 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `LSI_ADDR` | 否 | `127.0.0.1:8080` | 后端监听地址 |
+| `LSI_DB_PATH` | 否 | `./data/backend.sqlite3` | SQLite 数据库路径 |
+| `LSI_WORK_DIR` | 否 | `./data/jobs` | 任务工作目录 |
+| `LSI_LOG_LEVEL` | 否 | `info` | 日志级别 |
+| `LSI_DOWNLOAD_TIMEOUT` | 否 | `10m` | 音频下载超时 |
+| `LSI_WHISPER_BASE_URL` | 否 | `http://127.0.0.1:8081` | Whisper 服务地址（Docker 内为 `http://whisper:8081`） |
+| `LSI_WHISPER_MODEL` | 否 | `small` | faster-whisper 模型名 |
+| `LSI_WHISPER_COMPUTE_TYPE` | 否 | `default` | faster-whisper 计算类型 |
+| `LSI_WHISPER_TIMEOUT` | 否 | `30m` | Whisper 请求超时 |
+| `LSI_WHISPER_POLL_INTERVAL` | 否 | `2s` | Whisper 任务轮询间隔 |
+| `LSI_LLM_BASE_URL` | 否 | `https://api.openai.com` | OpenAI 兼容 API 地址 |
+| `LSI_LLM_API_KEY` | 翻译必填 | 空 | LLM API 密钥 |
+| `LSI_LLM_MODEL` | 翻译必填 | 空 | LLM 模型名称 |
+| `LSI_LLM_TIMEOUT` | 否 | `2m` | LLM 请求超时 |
+
+### Whisper 服务
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `LSI_WHISPER_WORK_DIR` | `/data/transcriptions` | 转写任务数据目录 |
+| `HF_HOME` | 工具默认值 | Hugging Face 缓存目录（Docker 内为 `/huggingface`） |
+| `HF_TOKEN` | 空 | 可选，用于提高 Hugging Face Hub 下载限额 |
+
+### Docker
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `LSI_DOCKER_BIND_HOST` | — | **`.env` 中必填。** Docker 端口绑定主机地址（本地使用填 `127.0.0.1`） |
+
+Docker Compose 使用三个持久卷：
+
+| 卷名 | 用途 |
+| --- | --- |
+| `lsi-data` | SQLite 数据库和任务文件 |
+| `lsi-hf-cache` | Hugging Face 模型缓存（重启后保留） |
+| `lsi-whisper-data` | Whisper 服务转写工作目录 |
+
+> [!WARNING]
+> 请勿提交 `.env` 或真实密钥。本地配置请从 `.env.example` 开始。
+
+## 测试与构建
 
 ```bash
-task test:backend
-task test:whisper
-task test:extension
-task build:backend
-task build:whisper
-task build:extension
+task test             # 全部模块测试
+task typecheck        # 扩展 TypeScript 类型检查
+task check            # 测试 + 类型检查
+task build            # 构建全部模块
+```
+
+按模块：
+
+```bash
+task test:backend     # Go 测试
+task test:whisper     # Python pytest
+task test:extension   # Vitest 测试
+task build:extension  # Chrome MV3 输出
 ```
 
 构建产物：
 
-| Module | Output |
+| 模块 | 输出 |
 | --- | --- |
 | Extension | `extension/.output/chrome-mv3` |
-| Whisper package | `whisper/dist` |
-| Backend Docker image | 由 `backend/Dockerfile` 构建 |
+| Whisper 包 | `whisper/dist/` |
+| Backend | 由 `backend/Dockerfile` 构建的 Docker 镜像 |
 
-## Project Structure
+## 项目结构
 
 ```text
 .
-├── backend/             # Go HTTP API and job runner
-├── whisper/             # Python Whisper HTTP service
-├── extension/           # Chrome MV3 extension
-├── docs/superpowers/    # Design specs and implementation plans
-├── docker-compose.yml   # Docker backend + whisper runtime
-├── Taskfile.yml         # Cross-module command interface
-├── mise.toml            # Pinned tool versions
-└── .env.example         # Local Docker/backend environment template
+├── backend/             # Go HTTP API 与任务运行器
+│   ├── cmd/               # 入口程序
+│   └── internal/          # API、store、runner 包
+├── whisper/              # Python Whisper HTTP 服务
+│   └── src/whisper_cli/
+│       ├── server.py      # FastAPI 端点
+│       ├── transcribe.py  # 转写逻辑
+│       └── vtt.py          # WebVTT 渲染辅助
+├── extension/            # Chrome MV3 扩展
+│   ├── entrypoints/       # WXT 入口（popup、background、content）
+│   └── src/                # Vue 3 组件和工具函数
+├── docker-compose.yml    # 后端 + Whisper 服务栈
+├── Taskfile.yml          # 跨模块命令入口
+├── mise.toml             # 固定工具版本
+└── .env.example          # 本地配置模板
 ```
 
-## Troubleshooting
+## 常见问题
 
-### Backend fails with missing tool errors
+**后端报错找不到工具** — 本地运行需确保 `yt-dlp` 和 `ffmpeg` 在 `PATH` 中。也可直接使用 Docker，镜像内已包含运行时依赖。
 
-本地运行后端时需要 `yt-dlp` 和 `ffmpeg` 都在 `PATH` 中。可以改用 Docker，或安装系统依赖后再运行：
+**后端无法连接 Whisper 服务** — 确认 Whisper 服务已启动，且 `LSI_WHISPER_BASE_URL` 指向正确地址。或使用 Docker Compose 同时启动两个服务。
 
-```bash
-task dev:backend
-```
+**翻译环节失败** — 检查 `.env` 或当前 shell 中是否设置了 `LSI_LLM_API_KEY` 和 `LSI_LLM_MODEL`。
 
-### Backend cannot connect to Whisper service
+**扩展无法连接后端** — 扩展仅支持 `http://127.0.0.1` 或 `http://localhost` 来源。远程后端地址需同时修改 manifest 主机权限和 URL 校验。
 
-本地开发时确认 Whisper service 已启动，并且 `LSI_WHISPER_BASE_URL` 指向它：
-
-```bash
-task dev:whisper
-```
-
-也可以改用 Docker 同时启动 backend 和 whisper services。
-
-### Translation fails during a job
-
-确认 `.env` 或当前 shell 中设置了：
-
-```env
-LSI_LLM_API_KEY=...
-LSI_LLM_MODEL=...
-```
-
-### Extension cannot connect to backend
-
-确认 backend URL 是带端口的本机 HTTP origin，例如：
-
-```text
-http://127.0.0.1:8080
-```
-
-当前扩展不支持任意远程主机 URL。
-
-### First transcription is slow
-
-首次处理视频时，`faster-whisper` 需要下载模型。Docker 模式会把 Hugging Face 缓存保存在 `lsi-hf-cache` 卷中，后续任务会复用缓存。
+**首次转写较慢** — `faster-whisper` 首次使用时会下载模型。Docker 模式下模型缓存在 `lsi-hf-cache` 卷中，后续任务可复用。
