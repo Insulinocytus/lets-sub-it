@@ -164,6 +164,21 @@ func (s *Store) UpdateJobStatus(id string, status string, stage string, progress
 	return nil
 }
 
+func (s *Store) FailInterruptedJobs(reason string) (int64, error) {
+	updates := map[string]any{
+		"status":        StatusFailed,
+		"progress_text": "处理失败",
+		"error_message": reason,
+	}
+	result := s.db.Model(&Job{}).
+		Where("status NOT IN ?", []string{StatusCompleted, StatusFailed}).
+		Updates(updates)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
 func (s *Store) CreateSubtitleAsset(asset SubtitleAsset) error {
 	return s.db.Create(&asset).Error
 }

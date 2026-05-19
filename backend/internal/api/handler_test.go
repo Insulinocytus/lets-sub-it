@@ -189,6 +189,7 @@ func TestActiveJobReturnsLatestJobForVideoAndLanguage(t *testing.T) {
 	if payload.Job.VideoID != "abc123" || payload.Job.TargetLanguage != "zh" {
 		t.Fatalf("payload = %+v", payload)
 	}
+	waitForJobCompleted(t, server, payload.Job.ID)
 }
 
 func TestActiveJobReturnsNullWhenNoJobExists(t *testing.T) {
