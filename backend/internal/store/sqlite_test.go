@@ -61,6 +61,42 @@ func TestStoreFindsReusableJob(t *testing.T) {
 	}
 }
 
+func TestStoreMarksInterruptedJobsFailed(t *testing.T) {
+	store := openTestStore(t)
+	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")
+	if err := store.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+	if err := store.UpdateJobStatus(job.ID, StatusTranslating, StatusTranslating, "翻译字幕...", ""); err != nil {
+		t.Fatalf("UpdateJobStatus() error = %v", err)
+	}
+
+	count, err := store.FailInterruptedJobs("job interrupted by backend restart")
+	if err != nil {
+		t.Fatalf("FailInterruptedJobs() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	updated, err := store.FindJob(job.ID)
+	if err != nil {
+		t.Fatalf("FindJob() error = %v", err)
+	}
+	if updated.Status != StatusFailed {
+		t.Fatalf("Status = %q, want %q", updated.Status, StatusFailed)
+	}
+	if updated.Stage != StatusTranslating {
+		t.Fatalf("Stage = %q, want %q", updated.Stage, StatusTranslating)
+	}
+	if updated.ProgressText != "处理失败" {
+		t.Fatalf("ProgressText = %q", updated.ProgressText)
+	}
+	if updated.ErrorMessage == nil || *updated.ErrorMessage != "job interrupted by backend restart" {
+		t.Fatalf("ErrorMessage = %v", updated.ErrorMessage)
+	}
+}
+
 func TestStoreFindsLatestJobForVideoAndLanguageIncludingFailed(t *testing.T) {
 	store := openTestStore(t)
 	oldJob := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")

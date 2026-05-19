@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,6 +29,13 @@ func NewHTTPHandler(config Config) (http.Handler, error) {
 	}
 	if err := database.Migrate(); err != nil {
 		return nil, err
+	}
+	interruptedCount, err := database.FailInterruptedJobs("任务因后端重启中断，请重新提交")
+	if err != nil {
+		return nil, err
+	}
+	if interruptedCount > 0 {
+		slog.Warn("interrupted jobs marked failed", "count", interruptedCount)
 	}
 
 	if err := checkTools(); err != nil {
