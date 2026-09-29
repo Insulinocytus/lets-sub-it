@@ -56,3 +56,17 @@ Run root tasks from the repository root (`Taskfile.yml` is authoritative):
 - Python: `whisper/tests/test_*.py` with pytest, FastAPI `TestClient`, `tmp_path` and a fake transcriber/model; cover queue lifecycle and VTT validation without downloading models.
 - Extension: colocated `*.test.ts` using Vitest, jsdom, WXT fake browser and Vue Test Utils; cover messaging, storage/alarm recovery, navigation and rendered subtitles.
 - Run the narrowest relevant suite first, then `task check` for cross-module changes. Examples: from `backend/`, `mise exec -- go test ./internal/api`; from `whisper/`, `mise exec -- uv run pytest tests/test_server.py`; from `extension/`, `mise exec -- npm run test -- src/api/job-monitor.test.ts`. There is no configured coverage threshold or dedicated e2e runner. For changes to real behavior, smoke the affected path in addition to tests; do not use real LLM/Whisper/YouTube in automated tests.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in this repo's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use same-named labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
