@@ -22,6 +22,7 @@ type Store interface {
 	FindReusableJob(videoID string, targetLanguage string) (store.Job, error)
 	FindSubtitleAsset(videoID string, targetLanguage string) (store.SubtitleAsset, error)
 	FindSubtitleAssetByJobID(jobID string) (store.SubtitleAsset, error)
+	DeleteSubtitleResult(videoID string, targetLanguage string) ([]string, error)
 }
 
 type Runner interface {
@@ -221,6 +222,36 @@ func (h *Handler) handleSubtitleAssets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"asset": toAssetResponse(asset),
 	})
+}
+
+func (h *Handler) handleSubtitleResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusNotFound, "not_found", "route not found")
+		return
+	}
+
+	videoID := r.URL.Query().Get("videoId")
+	targetLanguage := r.URL.Query().Get("targetLanguage")
+	if videoID == "" || targetLanguage == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "videoId and targetLanguage are required")
+		return
+	}
+
+	workingDirs, err := h.store.DeleteSubtitleResult(videoID, targetLanguage)
+	if err != nil {
+		slog.Error("subtitle result delete failed", "video_id", videoID, "target_language", targetLanguage, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete subtitle result")
+		return
+	}
+	// The records are kept (docs/adr/0001); the files are not, and a leftover directory
+	// is unreferenced, so a removal failure does not fail the request.
+	for _, dir := range workingDirs {
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("subtitle result files not removed", "video_id", videoID, "target_language", targetLanguage, "working_dir", dir, "error", err)
+		}
+	}
+	slog.Info("subtitle result deleted", "video_id", videoID, "target_language", targetLanguage, "job_count", len(workingDirs))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {

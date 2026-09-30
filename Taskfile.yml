@@ -118,9 +118,7 @@ tasks:
       - docker compose down
 
   api:smoke:
-    desc: Submit a POST /jobs request to the local backend
+    desc: Delete, rerun and verify one real job end to end against the running backend
+    dir: backend
     cmds:
-      - >-
-        curl -X POST "${LSI_BACKEND_URL:-http://127.0.0.1:8080}/jobs"
-        -H "Content-Type: application/json"
-        -d '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","sourceLanguage":"en","targetLanguage":"zh"}'
+      - mise exec -- go run ./cmd/smoke

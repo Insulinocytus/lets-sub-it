@@ -1,6 +1,7 @@
 import { browser, type Browser } from 'wxt/browser'
 import { storage } from 'wxt/utils/storage'
 import {
+  BackendClientError,
   createBackendClient,
   normalizeBackendBaseUrl,
   type BackendClient,
@@ -114,7 +115,12 @@ async function pollJob(key: string, deps: JobMonitorDeps) {
     }
 
     await ensureJobMonitorAlarm(monitor, deps)
-  } catch {
+  } catch (error) {
+    // The job's Subtitle Result was deleted: nothing left to monitor.
+    if (error instanceof BackendClientError && error.code === 'not_found') {
+      await stopJobMonitor(monitor)
+      return
+    }
     await ensureJobMonitorAlarm(monitor, deps)
   }
 }

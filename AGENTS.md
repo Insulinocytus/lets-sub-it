@@ -8,6 +8,8 @@ Lets Sub It is a self-hosted YouTube subtitle generator and translator. A Chrome
 
 `extension/entrypoints/popup/` → background messages → `backend/internal/api/` → `backend/internal/runner/` (`yt-dlp`/`ffmpeg` → synchronous Whisper `verbose_json` request → LLM) → SQLite and `source`, `translated`, `bilingual` VTT → extension cache/content-script overlay. `backend/internal/store/` owns persistent jobs and assets; the backend renders `source.vtt` itself from the returned segments, and transcription has no queue, chunking or fallback. The backend runs jobs independently of the originating HTTP request and marks interrupted jobs failed on restart. The popup polls while open; `extension/src/api/job-monitor.ts` uses browser alarms to continue monitoring after it closes. The YouTube content script loads VTT and selects cues from player time.
 
+`DELETE /subtitle-results` logically deletes a Subtitle Result (see `CONTEXT.md`, `docs/adr/0001-logical-deletion-of-subtitle-results.md`): only jobs carry `deleted_at` (GORM soft delete, so every job query skips them); assets are hidden through their job, and working directories are removed. A runner whose job was deleted mid-run gets `ErrNotFound` from its next status update and discards its output in `fail`. The extension re-resolves once, bypassing its cache, when a cached asset's file returns `not_found`, and stops monitoring jobs that return `not_found`.
+
 ## Key Directories
 
 - `backend/cmd/server/`: executable; `backend/internal/app/`: configuration and assembly; `api/`: routes and responses; `store/`: GORM/SQLite; `runner/`: download, transcription, translation, VTT packaging.
@@ -27,7 +29,7 @@ Run root tasks from the repository root (`Taskfile.yml` is authoritative):
 | Typecheck extension / build all modules | `task typecheck` / `task build` |
 | Run Compose stack | Copy `.env.example` to `.env`, set `LSI_DOCKER_BIND_HOST` and `LSI_LOCAL_STT_API_KEY`, then `task docker:build`; stop with `task docker:down` |
 
-`task api:smoke` only submits a real YouTube job to a running backend; it does not wait for or verify VTT output. There is no `task lint`; CI enforces `gofmt -l` and `go vet` (`backend-ci.yml`), extension tests and typecheck (`extension-ci.yml`), and `actionlint` plus `docker compose config` against `.env.example` (`config-ci.yml`). Run the matching command locally before pushing.
+`task api:smoke` (`backend/cmd/smoke`) deletes the test video's Subtitle Result, runs one real job end to end against a running backend and prints the VTT output; it uses real YouTube/STT/LLM, so run it manually, never in CI. There is no `task lint`; CI enforces `gofmt -l` and `go vet` (`backend-ci.yml`), extension tests and typecheck (`extension-ci.yml`), and `actionlint` plus `docker compose config` against `.env.example` (`config-ci.yml`). Run the matching command locally before pushing.
 
 ## Code Conventions & Common Patterns
 

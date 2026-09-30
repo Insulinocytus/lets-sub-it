@@ -38,6 +38,14 @@ export async function getCachedSubtitleAsset(
   return item.getValue()
 }
 
+export async function removeCachedSubtitleAsset(
+  backendBaseUrl: string,
+  videoId: string,
+  targetLanguage: LanguageCode,
+): Promise<void> {
+  await storage.removeItem(subtitleAssetKey(backendBaseUrl, videoId, targetLanguage))
+}
+
 export async function setCachedSubtitleAsset(
   asset: SubtitleAsset,
   selectedMode: SubtitleMode,

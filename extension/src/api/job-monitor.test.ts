@@ -3,7 +3,7 @@ import { browser, type Browser } from 'wxt/browser'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { storage } from 'wxt/utils/storage'
 import { updateSettings } from '@/storage/settings'
-import type { BackendClient } from './backend-client'
+import { BackendClientError, type BackendClient } from './backend-client'
 import type { Job, SubtitleAsset } from './messages'
 import {
   ensurePersistedJobMonitors,
@@ -143,6 +143,19 @@ describe('job monitor', () => {
     expect(firstStarted).toBe(true)
     expect(secondStarted).toBe(false)
     expect(client.getJob).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops monitoring a job that no longer exists on the backend', async () => {
+    const client = fakeClient({
+      getJob: vi.fn(async () => {
+        throw new BackendClientError('not_found', 'job not found')
+      }),
+    })
+
+    await startJobMonitor(queuedJob, { client, pollIntervalMs: 1000 })
+
+    await expect(browser.alarms.getAll()).resolves.toEqual([])
+    await expect(storage.getItem('local:jobMonitors')).resolves.toEqual([])
   })
 
   it('allows monitors with the same jobId on different backend origins to coexist', async () => {

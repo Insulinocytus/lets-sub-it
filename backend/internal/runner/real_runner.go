@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -128,9 +129,19 @@ func (r *RealRunner) set(jobID string, status string, progressText string, error
 	return r.store.UpdateJobStatus(jobID, status, status, progressText, errorMessage)
 }
 
+// fail records the failure, unless the job's Subtitle Result was deleted while it ran: every
+// status update then reports ErrNotFound, and the files written so far are discarded instead.
 func (r *RealRunner) fail(job store.Job, stage string, cause error, jobStartedAt time.Time) error {
+	updateErr := r.store.UpdateJobStatus(job.ID, store.StatusFailed, stage, "处理失败", cause.Error())
+	if errors.Is(updateErr, store.ErrNotFound) {
+		if err := os.RemoveAll(job.WorkingDir); err != nil {
+			slog.Warn("deleted job files not removed", "job_id", job.ID, "working_dir", job.WorkingDir, "error", err)
+		}
+		slog.Info("deleted job output discarded", "job_id", job.ID, "video_id", job.VideoID, "stage", stage, "duration_ms", time.Since(jobStartedAt).Milliseconds())
+		return nil
+	}
 	logJobFailed(job, stage, cause, jobStartedAt)
-	if updateErr := r.store.UpdateJobStatus(job.ID, store.StatusFailed, stage, "处理失败", cause.Error()); updateErr != nil {
+	if updateErr != nil {
 		return updateErr
 	}
 	return cause

@@ -11,6 +11,7 @@ import { getSettings, updateSettings } from '@/storage/settings'
 import {
   getCachedSubtitleAsset,
   getVideoPreference,
+  removeCachedSubtitleAsset,
   setCachedSubtitleAsset,
   updateCachedSubtitleMode,
 } from '@/storage/subtitle-cache'
@@ -76,11 +77,22 @@ export async function handleExtensionMessage(
           message.payload.videoId,
         )
         const targetLanguage = preference?.targetLanguage ?? settings.targetLanguage
-        const cached = await getCachedSubtitleAsset(
-          settings.backendBaseUrl,
-          message.payload.videoId,
-          targetLanguage,
-        )
+        // refresh: the cached asset is known stale, so drop it before asking the backend;
+        // a failed backend call then leaves no stale entry behind.
+        if (message.payload.refresh) {
+          await removeCachedSubtitleAsset(
+            settings.backendBaseUrl,
+            message.payload.videoId,
+            targetLanguage,
+          )
+        }
+        const cached = message.payload.refresh
+          ? null
+          : await getCachedSubtitleAsset(
+              settings.backendBaseUrl,
+              message.payload.videoId,
+              targetLanguage,
+            )
         if (cached) {
           if (cached.selectedMode !== settings.subtitleMode) {
             return ok(

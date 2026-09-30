@@ -57,6 +57,11 @@ func (r completingRunner) Start(ctx context.Context, job store.Job) error {
 
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
+	return newTestServerWithWorkDir(t, t.TempDir())
+}
+
+func newTestServerWithWorkDir(t *testing.T, workDir string) http.Handler {
+	t.Helper()
 	testStore, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite3"))
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
@@ -65,7 +70,7 @@ func newTestServer(t *testing.T) http.Handler {
 	if err := testStore.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
 	}
-	handler := NewHandler(testStore, completingRunner{store: testStore}, t.TempDir())
+	handler := NewHandler(testStore, completingRunner{store: testStore}, workDir)
 	return Routes(handler)
 }
 
@@ -161,6 +166,66 @@ func TestSubtitleAssetReturnsAssetAfterCompletion(t *testing.T) {
 	assetResponse := waitForAsset(t, server, createPayload.Job.ID)
 	if !bytes.Contains(assetResponse.Body.Bytes(), []byte("/subtitle-files/"+createPayload.Job.ID+"/translated")) {
 		t.Fatalf("asset body = %s", assetResponse.Body.String())
+	}
+}
+
+func TestDeleteSubtitleResultHidesResultAndAllowsFreshJob(t *testing.T) {
+	workDir := t.TempDir()
+	server := newTestServerWithWorkDir(t, workDir)
+	const jobBody = `{"youtubeUrl":"https://youtu.be/abc123","sourceLanguage":"ja","targetLanguage":"zh"}`
+	postJob := func() (jobResponse, bool) {
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(jobBody)))
+		var payload struct {
+			Job    jobResponse `json:"job"`
+			Reused bool        `json:"reused"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("Unmarshal() error = %v body = %s", err, response.Body.String())
+		}
+		return payload.Job, payload.Reused
+	}
+	serve := func(method string, target string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, httptest.NewRequest(method, target, nil))
+		return response
+	}
+
+	first, _ := postJob()
+	waitForJobCompleted(t, server, first.ID)
+
+	for range 2 {
+		if response := serve(http.MethodDelete, "/subtitle-results?videoId=abc123&targetLanguage=zh"); response.Code != http.StatusNoContent || response.Body.Len() != 0 {
+			t.Fatalf("DELETE status = %d body = %q, want empty 204", response.Code, response.Body.String())
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(workDir, first.ID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("working dir stat error = %v, want removed", err)
+	}
+	if response := serve(http.MethodGet, "/jobs/"+first.ID); response.Code != http.StatusNotFound {
+		t.Fatalf("GET job status = %d, want 404", response.Code)
+	}
+	if response := serve(http.MethodGet, "/subtitle-files/"+first.ID+"/translated"); response.Code != http.StatusNotFound {
+		t.Fatalf("GET subtitle file status = %d, want 404", response.Code)
+	}
+	if response := serve(http.MethodGet, "/subtitle-assets?videoId=abc123&targetLanguage=zh"); !bytes.Contains(response.Body.Bytes(), []byte(`"asset":null`)) {
+		t.Fatalf("asset body = %s, want null asset", response.Body.String())
+	}
+
+	second, reused := postJob()
+	if reused || second.ID == first.ID {
+		t.Fatalf("resubmit: reused = %v job = %q, want a fresh job", reused, second.ID)
+	}
+	waitForJobCompleted(t, server, second.ID)
+}
+
+func TestDeleteSubtitleResultRequiresVideoAndLanguage(t *testing.T) {
+	server := newTestServer(t)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/subtitle-results?videoId=abc123", nil))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s, want 400", response.Code, response.Body.String())
 	}
 }
 
@@ -487,6 +552,10 @@ func (h handlerWithAssetPath) FindSubtitleAssetByJobID(jobID string) (store.Subt
 		return h.asset, nil
 	}
 	return store.SubtitleAsset{}, store.ErrNotFound
+}
+
+func (h handlerWithAssetPath) DeleteSubtitleResult(videoID string, targetLanguage string) ([]string, error) {
+	return nil, nil
 }
 
 type noopRunner struct{}

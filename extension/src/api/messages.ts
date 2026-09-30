@@ -65,7 +65,8 @@ export type ExtensionMessage =
       type: 'job:active'
       payload: { videoId: string; targetLanguage: LanguageCode }
     }
-  | { type: 'subtitle:resolve'; payload: { videoId: string } }
+  // refresh: skip the local cache, e.g. when the cached job's files are gone after deletion
+  | { type: 'subtitle:resolve'; payload: { videoId: string; refresh?: boolean } }
   | {
       type: 'subtitle:fetch-file'
       payload: { jobId: string; mode: SubtitleMode }

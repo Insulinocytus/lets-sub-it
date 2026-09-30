@@ -196,6 +196,79 @@ describe('YoutubeOverlay', () => {
     })
   })
 
+  it('re-resolves once from the backend when the cached subtitle file is gone', async () => {
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: settings })
+      .mockResolvedValueOnce({ ok: true, data: asset })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'not_found', message: 'subtitle file not found' },
+      })
+      .mockResolvedValueOnce({ ok: true, data: { ...asset, jobId: 'job_456' } })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    const wrapper = mountOverlay()
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:resolve')).toEqual([
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123', refresh: false } },
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123', refresh: true } },
+    ])
+    expect(getMessagesByType('subtitle:fetch-file').at(-1)).toEqual({
+      type: 'subtitle:fetch-file',
+      payload: { jobId: 'job_456', mode: 'translated' },
+    })
+    expect(wrapper.text()).toContain('hello')
+  })
+
+  it('does not re-resolve again when the refreshed subtitle file is also gone', async () => {
+    const missing = {
+      ok: false,
+      error: { code: 'not_found', message: 'subtitle file not found' },
+    }
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: settings })
+      .mockResolvedValueOnce({ ok: true, data: asset })
+      .mockResolvedValueOnce(missing)
+      .mockResolvedValueOnce({ ok: true, data: { ...asset, jobId: 'job_456' } })
+      .mockResolvedValueOnce(missing)
+
+    mountOverlay()
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:resolve')).toHaveLength(2)
+    expect(getMessagesByType('subtitle:fetch-file')).toHaveLength(2)
+  })
+
+  it('reloads from the backend when a mode change finds the subtitle result deleted', async () => {
+    const wrapper = await mountLoadedOverlay()
+    const missing = {
+      ok: false,
+      error: { code: 'not_found', message: 'subtitle file not found' },
+    }
+    const bilingualAsset = { ...asset, selectedMode: 'bilingual' as const }
+    sendExtensionMessage
+      .mockResolvedValueOnce({ ok: true, data: bilingualAsset })
+      .mockResolvedValueOnce(missing)
+      .mockResolvedValueOnce({ ok: true, data: bilingualAsset })
+      .mockResolvedValueOnce(missing)
+      .mockResolvedValueOnce({ ok: true, data: { ...bilingualAsset, jobId: 'job_456' } })
+      .mockResolvedValueOnce({ ok: true, data: validVtt })
+
+    sendSettingsUpdated({ ...settings, subtitleMode: 'bilingual' })
+    await flushPromises()
+
+    expect(getMessagesByType('subtitle:resolve').at(-1)).toEqual({
+      type: 'subtitle:resolve',
+      payload: { videoId: 'video_123', refresh: true },
+    })
+    expect(getMessagesByType('subtitle:fetch-file').at(-1)).toEqual({
+      type: 'subtitle:fetch-file',
+      payload: { jobId: 'job_456', mode: 'bilingual' },
+    })
+    expect(wrapper.text()).toContain('hello')
+  })
+
   it('toggles subtitle visibility from the YouTube player window event', async () => {
     const wrapper = await mountLoadedOverlay()
 

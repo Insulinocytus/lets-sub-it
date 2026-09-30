@@ -26,7 +26,7 @@ func TestCORSMiddlewareAllowsLocalhostOrigin(t *testing.T) {
 	if got, want := response.Header().Get("Access-Control-Allow-Origin"), "http://localhost:5173"; got != want {
 		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, want)
 	}
-	if got, want := response.Header().Get("Access-Control-Allow-Methods"), "GET, POST, OPTIONS"; got != want {
+	if got, want := response.Header().Get("Access-Control-Allow-Methods"), "GET, POST, DELETE, OPTIONS"; got != want {
 		t.Fatalf("Access-Control-Allow-Methods = %q, want %q", got, want)
 	}
 	if got, want := response.Header().Get("Access-Control-Allow-Headers"), "Content-Type"; got != want {
@@ -51,7 +51,7 @@ func TestCORSMiddlewareAllowsLoopbackOrigin(t *testing.T) {
 	if got, want := response.Header().Get("Access-Control-Allow-Origin"), "http://127.0.0.1:3000"; got != want {
 		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, want)
 	}
-	if got, want := response.Header().Get("Access-Control-Allow-Methods"), "GET, POST, OPTIONS"; got != want {
+	if got, want := response.Header().Get("Access-Control-Allow-Methods"), "GET, POST, DELETE, OPTIONS"; got != want {
 		t.Fatalf("Access-Control-Allow-Methods = %q, want %q", got, want)
 	}
 	if got, want := response.Header().Get("Access-Control-Allow-Headers"), "Content-Type"; got != want {

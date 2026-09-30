@@ -150,6 +150,72 @@ func TestStoreCreatesAndFindsSubtitleAsset(t *testing.T) {
 	}
 }
 
+func TestStoreDeleteSubtitleResultHidesButRetainsRecords(t *testing.T) {
+	store := openTestStore(t)
+	for _, job := range []Job{
+		NewJob("job_zh", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_zh"),
+		NewJob("job_zh_failed", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_zh_failed"),
+		NewJob("job_en", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "en", "/tmp/job_en"),
+	} {
+		if err := store.CreateJob(job); err != nil {
+			t.Fatalf("CreateJob(%s) error = %v", job.ID, err)
+		}
+	}
+	if err := store.CreateSubtitleAsset(SubtitleAsset{JobID: "job_zh", VideoID: "abc123", TargetLanguage: "zh", SourceLanguage: "ja"}); err != nil {
+		t.Fatalf("CreateSubtitleAsset() error = %v", err)
+	}
+
+	dirs, err := store.DeleteSubtitleResult("abc123", "zh")
+	if err != nil {
+		t.Fatalf("DeleteSubtitleResult() error = %v", err)
+	}
+	if strings.Join(dirs, ",") != "/tmp/job_zh,/tmp/job_zh_failed" {
+		t.Fatalf("working dirs = %v", dirs)
+	}
+
+	if _, err := store.FindReusableJob("abc123", "zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindReusableJob() error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.FindLatestJob("abc123", "zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindLatestJob() error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.FindJob("job_zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindJob() error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.FindSubtitleAsset("abc123", "zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindSubtitleAsset() error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.FindSubtitleAssetByJobID("job_zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("FindSubtitleAssetByJobID() error = %v, want ErrNotFound", err)
+	}
+	// A runner still working on a deleted job learns about it from its next status update,
+	// and an asset it writes afterwards must stay hidden.
+	if err := store.UpdateJobStatus("job_zh_failed", StatusPackaging, StatusPackaging, "生成字幕资产", ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("UpdateJobStatus() error = %v, want ErrNotFound", err)
+	}
+	if err := store.CreateSubtitleAsset(SubtitleAsset{JobID: "job_zh_failed", VideoID: "abc123", TargetLanguage: "zh", SourceLanguage: "ja"}); err != nil {
+		t.Fatalf("late CreateSubtitleAsset() error = %v", err)
+	}
+	if _, err := store.FindSubtitleAsset("abc123", "zh"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("late asset visible: FindSubtitleAsset() error = %v, want ErrNotFound", err)
+	}
+
+	if _, err := store.FindReusableJob("abc123", "en"); err != nil {
+		t.Fatalf("other language FindReusableJob() error = %v", err)
+	}
+	var retained int64
+	if err := store.db.Unscoped().Model(&Job{}).Where("video_id = ? AND target_language = ?", "abc123", "zh").Count(&retained).Error; err != nil {
+		t.Fatalf("count retained jobs error = %v", err)
+	}
+	if retained != 2 {
+		t.Fatalf("retained deleted jobs = %d, want 2", retained)
+	}
+
+	if dirs, err := store.DeleteSubtitleResult("abc123", "zh"); err != nil || len(dirs) != 0 {
+		t.Fatalf("repeat DeleteSubtitleResult() = %v, %v, want nothing to delete", dirs, err)
+	}
+}
+
 func TestStoreFindsSubtitleAssetByJobID(t *testing.T) {
 	store := openTestStore(t)
 	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")

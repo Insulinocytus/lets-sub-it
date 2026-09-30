@@ -86,8 +86,13 @@ curl http://127.0.0.1:8080/subtitle-files/JOB_ID/bilingual
 | `GET` | `/jobs/active?videoId=...&targetLanguage=...` | 查询该视频和语言的最近任务 |
 | `GET` | `/subtitle-assets?videoId=...&targetLanguage=...` | 查询生成的字幕资产 |
 | `GET` | `/subtitle-files/{jobId}/{mode}` | 下载 `source`、`translated` 或 `bilingual` VTT |
+| `DELETE` | `/subtitle-results?videoId=...&targetLanguage=...` | 删除该视频和语言的字幕结果，返回 `204`（无可删内容时同样返回） |
 
-任务依次进入 `queued` → `downloading` → `transcribing` → `translating` → `packaging` → `completed`；任一阶段出错则进入 `failed`。`task api:smoke` 只发送一次真实视频任务，**不会**等待或验证生成的字幕。
+任务依次进入 `queued` → `downloading` → `transcribing` → `translating` → `packaging` → `completed`；任一阶段出错则进入 `failed`。
+
+删除是逻辑删除：任务记录保留在数据库中作为历史，但不再参与复用、不再出现在任何查询里；工作目录（音频与 VTT）会被删掉。删除时仍在运行的任务会跑完当前步骤，在下一次更新状态时丢弃产物。之后再提交同一视频和语言会重新跑流水线。
+
+`task api:smoke` 对运行中的后端做一次真实的端到端验证：先删除测试视频（默认 19 秒的 `jNQXAC9IVRw`，可用 `LSI_SMOKE_VIDEO_ID` 覆盖；后端地址用 `LSI_BACKEND_URL`）的 `en → zh` 字幕结果，再提交任务并等待完成，打印每个阶段和三份 VTT 的开头；失败或 10 分钟未完成时退出码非 0。它会调用真实的 YouTube、STT 和 LLM，并清掉该视频已有的字幕。
 
 ## 架构与配置
 

@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 const (
 	StatusQueued       = "queued"
@@ -26,6 +30,8 @@ type Job struct {
 	WorkingDir     string  `gorm:"column:working_dir;not null"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time `gorm:"index:idx_jobs_lookup"`
+	// DeletedAt marks a Deleted Subtitle Result; the row is retained as a record (docs/adr/0001).
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 type SubtitleAsset struct {

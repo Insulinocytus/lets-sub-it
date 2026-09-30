@@ -150,43 +150,58 @@ async function loadForVideo(videoId: string | null) {
     return
   }
 
+  // A cached asset can outlive its Subtitle Result (deleted on the backend): when its file is
+  // gone, resolve once more from the backend, bypassing the cache.
+  for (const refresh of [false, true]) {
+    if (!(await resolveAsset(token, videoId, refresh))) {
+      return
+    }
+    if ((await loadVtt(token)) !== 'not_found') {
+      return
+    }
+  }
+}
+
+async function resolveAsset(token: number, videoId: string, refresh: boolean): Promise<boolean> {
   status.value = '查找字幕'
   let result
   try {
     result = await sendExtensionMessage<SubtitleAssetCacheEntry | null>({
       type: 'subtitle:resolve',
-      payload: { videoId },
+      payload: { videoId, refresh },
     })
   } catch (error) {
-    if (!canUpdate(token)) {
-      return
+    if (canUpdate(token)) {
+      status.value = readableError(error)
     }
-    status.value = readableError(error)
-    return
+    return false
   }
   if (!canUpdate(token) || currentVideoId.value !== videoId) {
-    return
+    return false
   }
 
   if (!result.ok) {
     status.value = result.error.message
-    return
+    return false
   }
 
   if (!result.data) {
+    currentAsset.value = null
     status.value = '未找到字幕'
-    return
+    return false
   }
 
   currentAsset.value = result.data
   selectedMode.value = result.data.selectedMode
-  await loadVtt(token)
+  return true
 }
 
-async function loadVtt(token = requestToken): Promise<boolean> {
+type VttLoadResult = 'loaded' | 'failed' | 'not_found'
+
+async function loadVtt(token = requestToken): Promise<VttLoadResult> {
   const asset = currentAsset.value
   if (!asset || !canUpdate(token)) {
-    return false
+    return 'failed'
   }
   const jobId = asset.jobId
   const mode = selectedMode.value
@@ -201,22 +216,22 @@ async function loadVtt(token = requestToken): Promise<boolean> {
     })
   } catch (error) {
     if (!canUpdate(token)) {
-      return false
+      return 'failed'
     }
     status.value = readableError(error)
-    return false
+    return 'failed'
   }
   if (
     !canUpdate(token) ||
     currentAsset.value?.jobId !== jobId ||
     selectedMode.value !== mode
   ) {
-    return false
+    return 'failed'
   }
 
   if (!result.ok) {
     status.value = result.error.message
-    return false
+    return result.error.code === 'not_found' ? 'not_found' : 'failed'
   }
 
   try {
@@ -224,12 +239,12 @@ async function loadVtt(token = requestToken): Promise<boolean> {
   } catch {
     resetLoadedSubtitles()
     status.value = '字幕解析失败'
-    return false
+    return 'failed'
   }
 
   status.value = '字幕已加载'
   bindVideo(token)
-  return true
+  return 'loaded'
 }
 
 async function changeMode(mode: SubtitleMode): Promise<ModeChangeResult> {
@@ -301,8 +316,13 @@ async function changeMode(mode: SubtitleMode): Promise<ModeChangeResult> {
 
   currentAsset.value = result.data
   const loaded = await loadVtt(token)
+  if (loaded === 'not_found') {
+    // The Subtitle Result was deleted meanwhile: reload from the backend in the new mode.
+    await loadForVideo(videoId)
+    return 'applied'
+  }
   if (
-    !loaded &&
+    loaded === 'failed' &&
     canUpdate(token) &&
     currentVideoId.value === videoId &&
     currentAsset.value?.jobId === jobId &&

@@ -191,20 +191,44 @@ func (s *Store) CreateSubtitleAsset(asset SubtitleAsset) error {
 	return s.db.Create(&asset).Error
 }
 
-func (s *Store) FindSubtitleAsset(videoID string, targetLanguage string) (SubtitleAsset, error) {
-	var asset SubtitleAsset
-	if err := s.db.First(&asset, "video_id = ? AND target_language = ?", videoID, targetLanguage).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return SubtitleAsset{}, ErrNotFound
-		}
-		return SubtitleAsset{}, err
+// DeleteSubtitleResult logically deletes every job for the video and target language and
+// returns their working directories. Assets stay in place and are hidden through their job.
+func (s *Store) DeleteSubtitleResult(videoID string, targetLanguage string) ([]string, error) {
+	var jobs []Job
+	if err := s.db.Where("video_id = ? AND target_language = ?", videoID, targetLanguage).Order("id").Find(&jobs).Error; err != nil {
+		return nil, err
 	}
-	return asset, nil
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, len(jobs))
+	dirs := make([]string, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+		dirs[i] = job.WorkingDir
+	}
+	if err := s.db.Where("id IN ?", ids).Delete(&Job{}).Error; err != nil {
+		return nil, err
+	}
+	return dirs, nil
+}
+
+func (s *Store) FindSubtitleAsset(videoID string, targetLanguage string) (SubtitleAsset, error) {
+	return s.findVisibleSubtitleAsset("subtitle_assets.video_id = ? AND subtitle_assets.target_language = ?", videoID, targetLanguage)
 }
 
 func (s *Store) FindSubtitleAssetByJobID(jobID string) (SubtitleAsset, error) {
+	return s.findVisibleSubtitleAsset("subtitle_assets.job_id = ?", jobID)
+}
+
+// findVisibleSubtitleAsset only returns assets whose job is not deleted, so an asset written
+// by a runner after its job was deleted never becomes visible.
+func (s *Store) findVisibleSubtitleAsset(query string, args ...any) (SubtitleAsset, error) {
 	var asset SubtitleAsset
-	if err := s.db.First(&asset, "job_id = ?", jobID).Error; err != nil {
+	err := s.db.Joins("JOIN jobs ON jobs.id = subtitle_assets.job_id AND jobs.deleted_at IS NULL").
+		Where(query, args...).
+		First(&asset).Error
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return SubtitleAsset{}, ErrNotFound
 		}

@@ -302,6 +302,42 @@ func TestRealRunnerTranslationFailed(t *testing.T) {
 	}
 }
 
+func TestRealRunnerDiscardsOutputOfJobDeletedWhileRunning(t *testing.T) {
+	testStore := openTestStore(t)
+	jobDir := filepath.Join(t.TempDir(), "job_1")
+	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
+	if err := testStore.CreateJob(job); err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
+	translator := deletingTranslator{delete: func() {
+		if _, err := testStore.DeleteSubtitleResult("abc123", "zh"); err != nil {
+			t.Fatalf("DeleteSubtitleResult() error = %v", err)
+		}
+	}}
+
+	if err := NewRealRunner(testStore, 10*time.Minute, "small", &fakeTranscriber{}, translator).Start(context.Background(), job); err != nil {
+		t.Fatalf("Start() error = %v, want nil for a deleted job", err)
+	}
+
+	if _, err := os.Stat(jobDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("job dir stat error = %v, want removed", err)
+	}
+	if _, err := testStore.FindSubtitleAsset("abc123", "zh"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("FindSubtitleAsset() error = %v, want ErrNotFound", err)
+	}
+}
+
+// deletingTranslator deletes the job's Subtitle Result mid-run, then translates normally.
+type deletingTranslator struct {
+	delete func()
+}
+
+func (t deletingTranslator) Translate(ctx context.Context, cues []Cue, sourceLanguage string, targetLanguage string) ([]string, error) {
+	t.delete()
+	return fakeTranslator{}.Translate(ctx, cues, sourceLanguage, targetLanguage)
+}
+
 type fakeTranscriber struct {
 	err error
 }

@@ -366,6 +366,57 @@ describe('handleExtensionMessage', () => {
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
 
+  const assetFor = (jobId: string) => ({
+    jobId,
+    videoId: 'video_123',
+    sourceLanguage: 'en',
+    targetLanguage: 'zh',
+    files: {
+      source: `/subtitle-files/${jobId}/source`,
+      translated: `/subtitle-files/${jobId}/translated`,
+      bilingual: `/subtitle-files/${jobId}/bilingual`,
+    },
+    createdAt: '2026-04-25T00:00:00Z',
+  })
+
+  it('refresh bypasses a stale cached asset and replaces it with the backend asset', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ asset: assetFor('job_old') }))
+      .mockResolvedValueOnce(Response.json({ asset: assetFor('job_new') }))
+    const deps = { fetchImpl, now: () => '2026-04-25T00:01:00Z' }
+    await handleExtensionMessage({ type: 'subtitle:resolve', payload: { videoId: 'video_123' } }, deps)
+
+    const result = await handleExtensionMessage(
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123', refresh: true } },
+      deps,
+    )
+
+    expect(result).toEqual({ ok: true, data: expect.objectContaining({ jobId: 'job_new' }) })
+    await expect(
+      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh'),
+    ).resolves.toMatchObject({ jobId: 'job_new' })
+  })
+
+  it('refresh drops the stale cached asset even when the backend cannot be reached', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ asset: assetFor('job_old') }))
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+    const deps = { fetchImpl, now: () => '2026-04-25T00:01:00Z' }
+    await handleExtensionMessage({ type: 'subtitle:resolve', payload: { videoId: 'video_123' } }, deps)
+
+    const result = await handleExtensionMessage(
+      { type: 'subtitle:resolve', payload: { videoId: 'video_123', refresh: true } },
+      deps,
+    )
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'network_error' } })
+    await expect(
+      getCachedSubtitleAsset(DEFAULT_SETTINGS.backendBaseUrl, 'video_123', 'zh'),
+    ).resolves.toBeNull()
+  })
+
   it('rejects subtitle file requests with invalid modes at runtime', async () => {
     const fetchImpl = vi.fn()
 

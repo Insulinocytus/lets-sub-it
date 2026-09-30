@@ -13,6 +13,7 @@ type routeHandler interface {
 	handleJobByID(http.ResponseWriter, *http.Request)
 	handleSubtitleAssets(http.ResponseWriter, *http.Request)
 	handleSubtitleFile(http.ResponseWriter, *http.Request)
+	handleSubtitleResults(http.ResponseWriter, *http.Request)
 }
 
 func Routes(handler routeHandler) http.Handler {
@@ -22,6 +23,7 @@ func Routes(handler routeHandler) http.Handler {
 	mux.HandleFunc("/jobs/", handler.handleJobByID)
 	mux.HandleFunc("/subtitle-assets", handler.handleSubtitleAssets)
 	mux.HandleFunc("/subtitle-files/", handler.handleSubtitleFile)
+	mux.HandleFunc("/subtitle-results", handler.handleSubtitleResults)
 	return withRequestLogging(withCORS(mux))
 }
 
@@ -55,7 +57,7 @@ func withCORS(next http.Handler) http.Handler {
 		if isAllowedLocalOrigin(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		}
 
