@@ -45,6 +45,7 @@ Run root tasks from the repository root (`Taskfile.yml` is authoritative):
 ## Runtime/Tooling Preferences
 
 - Use `mise` for Go 1.22 and Node 22; `task` and `actionlint` are set to `latest` in `mise.toml`. If `task` is unavailable, use `mise exec -- task <name>`; run direct module commands through `mise exec --`. Go uses modules and the extension uses npm/`package-lock.json` (not a single package-manager workspace).
+- The backend's SQLite driver (`go-sqlite3`) needs cgo: building or testing the backend requires `gcc` on `PATH` (Windows: `scoop install gcc`). Without it, Go silently sets `CGO_ENABLED=0` and every store-backed test fails with "requires cgo".
 - Local backend startup requires `yt-dlp` and `ffmpeg` on `PATH`; `task dev:backend` does not start transcription — run the `hwdsl2/whisper-server` image (Docker Compose or `docker run`) and point `LSI_STT_BASE_URL` at it (Docker: `http://whisper:9000/v1`, local: `http://127.0.0.1:9000/v1`). Real translation requires `LSI_LLM_API_KEY` and `LSI_LLM_MODEL`; keep `.env`, credentials, SQLite/work files and generated build outputs out of commits. Local transcription and external STT settings are independent of the LLM config.
 - Extension backend URLs require HTTP `localhost` or `127.0.0.1` with an explicit port: both `extension/wxt.config.ts` host permissions and `extension/src/api/backend-client.ts` validation enforce this. Change both when deliberately supporting another origin. WXT `npm run test` and `npm run typecheck` run `wxt prepare` first.
 

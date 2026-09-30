@@ -61,6 +61,7 @@ func newTestServer(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	t.Cleanup(func() { _ = testStore.Close() })
 	if err := testStore.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
 	}

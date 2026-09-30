@@ -19,7 +19,7 @@ func TestNewHTTPHandlerRequiresToolsByDefault(t *testing.T) {
 		return "/usr/bin/" + tool, nil
 	}
 
-	_, err := NewHTTPHandler(Config{
+	_, _, err := NewHTTPHandler(Config{
 		DBPath:          t.TempDir() + "/test.sqlite3",
 		WorkDir:         t.TempDir(),
 		DownloadTimeout: 0,
@@ -46,6 +46,7 @@ func TestNewHTTPHandlerMarksInterruptedJobsFailed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	t.Cleanup(func() { _ = testStore.Close() })
 	if err := testStore.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
 	}
@@ -57,7 +58,7 @@ func TestNewHTTPHandlerMarksInterruptedJobsFailed(t *testing.T) {
 		t.Fatalf("UpdateJobStatus() error = %v", err)
 	}
 
-	_, err = NewHTTPHandler(Config{
+	_, database, err := NewHTTPHandler(Config{
 		DBPath:          dbPath,
 		WorkDir:         t.TempDir(),
 		DownloadTimeout: 0,
@@ -66,11 +67,8 @@ func TestNewHTTPHandlerMarksInterruptedJobsFailed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHTTPHandler() error = %v", err)
 	}
+	t.Cleanup(func() { _ = database.Close() })
 
-	testStore, err = store.Open(dbPath)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
 	updated, err := testStore.FindJob(job.ID)
 	if err != nil {
 		t.Fatalf("FindJob() error = %v", err)

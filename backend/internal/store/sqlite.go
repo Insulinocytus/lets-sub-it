@@ -29,6 +29,14 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+func (s *Store) Close() error {
+	db, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return db.Close()
+}
+
 type gormSlogLogger struct {
 	slowThreshold time.Duration
 	level         gormlogger.LogLevel

@@ -11,15 +11,10 @@ import (
 )
 
 func TestDownloadAudioCreatesJobDir(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
+	useFakeYtDlp(t, ytDlpExitsCleanly)
 
 	tmpDir := t.TempDir()
 	// Intentionally do NOT create the job directory — downloadAudio should create it.
-
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "true")
-	}
 
 	_, err := downloadAudio(context.Background(), tmpDir, "job_newdir", "https://www.youtube.com/watch?v=abc123")
 	if err != nil {
@@ -37,15 +32,10 @@ func TestDownloadAudioCreatesJobDir(t *testing.T) {
 }
 
 func TestDownloadAudioSuccess(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	tmpDir := t.TempDir()
 	jobDir := filepath.Join(tmpDir, "job_1")
-
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "echo fake-audio-data > "+filepath.Join(jobDir, "audio.mp3"))
-	}
 
 	audioPath, err := downloadAudio(context.Background(), tmpDir, "job_1", "https://www.youtube.com/watch?v=abc123")
 	if err != nil {
@@ -65,14 +55,9 @@ func TestDownloadAudioSuccess(t *testing.T) {
 }
 
 func TestDownloadAudioVideoUnavailable(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
+	useFakeYtDlp(t, "fail:ERROR: Video unavailable")
 
 	tmpDir := t.TempDir()
-
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
-	}
 
 	_, err := downloadAudio(context.Background(), tmpDir, "job_1", "https://www.youtube.com/watch?v=deleted")
 	if err == nil {
@@ -84,14 +69,9 @@ func TestDownloadAudioVideoUnavailable(t *testing.T) {
 }
 
 func TestDownloadAudioTimeout(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
+	useFakeYtDlp(t, ytDlpHangs)
 
 	tmpDir := t.TempDir()
-
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sleep", "10")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -103,14 +83,9 @@ func TestDownloadAudioTimeout(t *testing.T) {
 }
 
 func TestDownloadAudioNetworkError(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
+	useFakeYtDlp(t, "fail:ERROR: Unable to download webpage: network error")
 
 	tmpDir := t.TempDir()
-
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Unable to download webpage: network error' >&2 && exit 1")
-	}
 
 	_, err := downloadAudio(context.Background(), tmpDir, "job_1", "https://www.youtube.com/watch?v=abc123")
 	if err == nil {

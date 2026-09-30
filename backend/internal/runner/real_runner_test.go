@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,9 +17,6 @@ import (
 )
 
 func TestRealRunnerCompletesJob(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	testStore := openTestStore(t)
 	workDir := t.TempDir()
 	jobDir := filepath.Join(workDir, "job_1")
@@ -32,14 +28,7 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 
 	translator := fakeTranslator{translations: []string{"translated one"}}
 	transcriber := &fakeTranscriber{}
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		switch name {
-		case "yt-dlp":
-			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		default:
-			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
-		}
-	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	if err := NewRealRunner(testStore, 10*time.Minute, "tiny", transcriber, translator).Start(context.Background(), job); err != nil {
 		t.Fatalf("Start() error = %v", err)
@@ -99,9 +88,6 @@ func TestRealRunnerCompletesJob(t *testing.T) {
 }
 
 func TestRealRunnerLogsJobLifecycle(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	var output bytes.Buffer
 	originalLogger := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -116,14 +102,7 @@ func TestRealRunnerLogsJobLifecycle(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		switch name {
-		case "yt-dlp":
-			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		default:
-			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
-		}
-	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	err := NewRealRunner(testStore, 10*time.Minute, "small", &fakeTranscriber{}, fakeTranslator{translations: []string{"translated"}}).Start(context.Background(), job)
 	if err != nil {
@@ -147,9 +126,6 @@ func TestRealRunnerLogsJobLifecycle(t *testing.T) {
 }
 
 func TestRealRunnerDownloadFailed(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
 	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=deleted", "ja", "zh", jobDir)
@@ -158,9 +134,7 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sh", "-c", "echo 'ERROR: Video unavailable' >&2 && exit 1")
-	}
+	useFakeYtDlp(t, "fail:ERROR: Video unavailable")
 
 	err := NewRealRunner(testStore, 10*time.Minute, "small", &fakeTranscriber{}, fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
@@ -183,9 +157,6 @@ func TestRealRunnerDownloadFailed(t *testing.T) {
 }
 
 func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	var output bytes.Buffer
 	originalLogger := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -200,14 +171,7 @@ func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		switch name {
-		case "yt-dlp":
-			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		default:
-			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
-		}
-	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "secret-key upstream echoed prompt: cue text", http.StatusUnauthorized)
@@ -244,9 +208,6 @@ func TestRealRunnerTranslationFailureDoesNotLogProviderBody(t *testing.T) {
 }
 
 func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	testStore := openTestStore(t)
 	jobDir := t.TempDir()
 	job := store.NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", jobDir)
@@ -255,9 +216,7 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sleep", "10")
-	}
+	useFakeYtDlp(t, ytDlpHangs)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -280,9 +239,6 @@ func TestRealRunnerMarksCanceledJobAsFailed(t *testing.T) {
 }
 
 func TestRealRunnerTranscriptionFailed(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	testStore := openTestStore(t)
 	workDir := t.TempDir()
 	jobDir := filepath.Join(workDir, "job_1")
@@ -292,14 +248,7 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		switch name {
-		case "yt-dlp":
-			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		default:
-			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
-		}
-	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	err := NewRealRunner(testStore, 10*time.Minute, "small", &fakeTranscriber{err: errors.New("model download error")}, fakeTranslator{}).Start(context.Background(), job)
 	if err == nil {
@@ -322,9 +271,6 @@ func TestRealRunnerTranscriptionFailed(t *testing.T) {
 }
 
 func TestRealRunnerTranslationFailed(t *testing.T) {
-	origExec := execCommand
-	t.Cleanup(func() { execCommand = origExec })
-
 	testStore := openTestStore(t)
 	workDir := t.TempDir()
 	jobDir := filepath.Join(workDir, "job_1")
@@ -334,14 +280,7 @@ func TestRealRunnerTranslationFailed(t *testing.T) {
 		t.Fatalf("CreateJob() error = %v", err)
 	}
 
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		switch name {
-		case "yt-dlp":
-			return exec.CommandContext(ctx, "sh", "-c", "mkdir -p \"$1\" && printf fake-audio-data > \"$1/audio.mp3\"", "sh", jobDir)
-		default:
-			return exec.CommandContext(ctx, "sh", "-c", "echo unexpected command >&2; exit 127")
-		}
-	}
+	useFakeYtDlp(t, ytDlpWritesAudio)
 
 	err := NewRealRunner(testStore, 10*time.Minute, "small", &fakeTranscriber{}, fakeTranslator{err: errors.New("translation unavailable")}).Start(context.Background(), job)
 	if err == nil {

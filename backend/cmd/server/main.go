@@ -12,14 +12,14 @@ func main() {
 	config := app.LoadConfig()
 	app.ConfigureLogger(config.LogLevel, os.Stdout)
 
-	handler, err := app.NewHTTPHandler(config)
+	handler, database, err := app.NewHTTPHandler(config)
 	if err != nil {
 		slog.Error("server initialization failed", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("server starting", "addr", config.Addr, "log_level", config.LogLevel)
-	if err := http.ListenAndServe(config.Addr, handler); err != nil {
-		slog.Error("server stopped", "error", err)
-		os.Exit(1)
-	}
+	err = http.ListenAndServe(config.Addr, handler)
+	_ = database.Close()
+	slog.Error("server stopped", "error", err)
+	os.Exit(1)
 }

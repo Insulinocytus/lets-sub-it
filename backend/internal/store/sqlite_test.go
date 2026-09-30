@@ -15,6 +15,7 @@ func openTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	if err := store.Migrate(); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
 	}
@@ -203,13 +204,7 @@ func TestStoreDoesNotLogExpectedRecordNotFound(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(originalLogger) })
 
-	store, err := Open(filepath.Join(t.TempDir(), "test.sqlite3"))
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	if err := store.Migrate(); err != nil {
-		t.Fatalf("Migrate() error = %v", err)
-	}
+	store := openTestStore(t)
 	logs.Reset()
 
 	if _, err := store.FindReusableJob("missing-video", "zh"); !errors.Is(err, ErrNotFound) {
@@ -229,13 +224,7 @@ func TestStoreLogsDatabaseQueriesThroughSlogAtDebug(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(originalLogger) })
 
-	store, err := Open(filepath.Join(t.TempDir(), "test.sqlite3"))
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	if err := store.Migrate(); err != nil {
-		t.Fatalf("Migrate() error = %v", err)
-	}
+	store := openTestStore(t)
 	logs.Reset()
 
 	job := NewJob("job_1", "abc123", "https://www.youtube.com/watch?v=abc123", "ja", "zh", "/tmp/job_1")
