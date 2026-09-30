@@ -27,11 +27,11 @@ Run root tasks from the repository root (`Taskfile.yml` is authoritative):
 | Typecheck extension / build all modules | `task typecheck` / `task build` |
 | Run Compose stack | Copy `.env.example` to `.env`, set `LSI_DOCKER_BIND_HOST` and `LSI_LOCAL_STT_API_KEY`, then `task docker:build`; stop with `task docker:down` |
 
-`task api:smoke` only submits a real YouTube job to a running backend; it does not wait for or verify VTT output. There is no configured `task lint` or npm lint script; use `gofmt` for changed Go files, `task typecheck` for extension types, and `actionlint` when editing workflows.
+`task api:smoke` only submits a real YouTube job to a running backend; it does not wait for or verify VTT output. There is no `task lint`; CI enforces `gofmt -l` and `go vet` (`backend-ci.yml`), extension tests and typecheck (`extension-ci.yml`), and `actionlint` plus `docker compose config` against `.env.example` (`config-ci.yml`). Run the matching command locally before pushing.
 
 ## Code Conventions & Common Patterns
 
-- Go: follow standard `gofmt`; keep wiring/config in `app`, HTTP validation and `{error:{code,message}}` responses in `api`, persistence in `store`, and pipeline/state transitions in `runner`. Constructors inject small dependencies (`NewHTTPHandler`, `NewRealRunner`, `Transcriber`, `Translator`); preserve the existing error/status handling instead of adding parallel pathways.
+- Go: keep wiring/config in `app`, HTTP validation and `{error:{code,message}}` responses in `api`, persistence in `store`, and pipeline/state transitions in `runner`. Constructors inject small dependencies (`NewHTTPHandler`, `NewRealRunner`, `Transcriber`, `Translator`); preserve the existing error/status handling instead of adding parallel pathways.
 - Transcription: the backend calls an OpenAI-compatible `POST {base}/audio/transcriptions` with `response_format=verbose_json` and requires valid `segments` (`start`, `end`, `text`) before writing `source.vtt`. There is no audio chunking or fallback to another provider.
 - Extension: use the `@` alias for `extension/src` imports. Background messaging uses discriminated `type` requests and `{ok,data}` / `{ok:false,error}` results; browser-local settings/cache and alarm-backed job monitors outlive the popup. In the overlay, invalidate outstanding asynchronous loads on video changes and clean up listeners on unmount. Prefer existing shadcn-vue primitives for UI; consult `https://www.shadcn-vue.com/llms.txt` before changing their usage.
 - Cross-component changes: update both sides of API/message contracts (`backend/internal/api/`, `extension/src/api/`) and trace VTT changes through `backend/internal/runner/vtt_cue.go` and `extension/src/subtitles/vtt.ts`.

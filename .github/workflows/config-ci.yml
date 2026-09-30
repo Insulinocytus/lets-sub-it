@@ -1,0 +1,54 @@
+name: Config CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect config changes
+    runs-on: ubuntu-latest
+    outputs:
+      config: ${{ steps.filter.outputs.config }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            config:
+              - ".github/workflows/**"
+              - "docker-compose.yml"
+              - ".env.example"
+
+  lint:
+    name: actionlint and Compose config
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.config == 'true' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Check workflow files
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color
+
+      - name: Check Compose config with example env
+        run: |
+          cp .env.example .env
+          docker compose config -q
