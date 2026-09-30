@@ -11,16 +11,15 @@ import (
 )
 
 type RealRunner struct {
-	store              Store
-	downloadTimeout    time.Duration
-	whisperModel       string
-	whisperComputeType string
-	transcriber        Transcriber
-	translator         Translator
+	store           Store
+	downloadTimeout time.Duration
+	sttModel        string
+	transcriber     Transcriber
+	translator      Translator
 }
 
-func NewRealRunner(store Store, downloadTimeout time.Duration, whisperModel string, whisperComputeType string, transcriber Transcriber, translator Translator) *RealRunner {
-	return &RealRunner{store: store, downloadTimeout: downloadTimeout, whisperModel: whisperModel, whisperComputeType: whisperComputeType, transcriber: transcriber, translator: translator}
+func NewRealRunner(store Store, downloadTimeout time.Duration, sttModel string, transcriber Transcriber, translator Translator) *RealRunner {
+	return &RealRunner{store: store, downloadTimeout: downloadTimeout, sttModel: sttModel, transcriber: transcriber, translator: translator}
 }
 
 func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
@@ -44,7 +43,7 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	logJobStageCompleted(job, store.StatusDownloading, stageStartedAt)
 
 	stageStartedAt = logJobStageStarted(job, store.StatusTranscribing)
-	if err := r.set(job.ID, store.StatusTranscribing, "正在提交音频到 Whisper 服务", ""); err != nil {
+	if err := r.set(job.ID, store.StatusTranscribing, "正在转写音频...", ""); err != nil {
 		return r.fail(job, store.StatusTranscribing, err, jobStartedAt)
 	}
 	if err := os.MkdirAll(job.WorkingDir, 0o755); err != nil {
@@ -56,15 +55,10 @@ func (r *RealRunner) Start(ctx context.Context, job store.Job) error {
 	bilingualPath := filepath.Join(job.WorkingDir, "bilingual.vtt")
 
 	if err := r.transcriber.Transcribe(ctx, TranscriptionRequest{
-		JobID:       job.ID,
-		AudioPath:   audioPath,
-		SourcePath:  sourcePath,
-		Model:       r.whisperModel,
-		ComputeType: r.whisperComputeType,
-		Language:    job.SourceLanguage,
-		OnProgress: func(text string) error {
-			return r.set(job.ID, store.StatusTranscribing, text, "")
-		},
+		AudioPath:  audioPath,
+		SourcePath: sourcePath,
+		Model:      r.sttModel,
+		Language:   job.SourceLanguage,
 	}); err != nil {
 		return r.fail(job, store.StatusTranscribing, err, jobStartedAt)
 	}

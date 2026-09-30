@@ -3,229 +3,243 @@ package runner
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestHTTPTranscriberUploadsAudioPollsDownloadsVTT(t *testing.T) {
-	audioPath := filepath.Join(t.TempDir(), "audio.mp3")
-	if err := os.WriteFile(audioPath, []byte("fake-audio"), 0o644); err != nil {
-		t.Fatalf("os.WriteFile(audio) error = %v", err)
-	}
+func TestHTTPTranscriberWritesSourceVTTFromVerboseJSON(t *testing.T) {
+	audioPath := writeTestAudio(t)
 	sourcePath := filepath.Join(t.TempDir(), "nested", "source.vtt")
 
-	var upload multipart.Form
+	var upload *multipart.Form
 	var uploadAudio string
 	var uploadContentLength int64
-	deleteCalls := 0
-	statusCalls := 0
+	var authorization string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			if r.Method != http.MethodPost {
-				t.Fatalf("method = %q, want POST", r.Method)
-			}
-			uploadContentLength = r.ContentLength
-			if err := r.ParseMultipartForm(32 << 20); err != nil {
-				t.Fatalf("ParseMultipartForm() error = %v", err)
-			}
-			upload = *r.MultipartForm
-			file, _, err := r.FormFile("audio")
-			if err != nil {
-				t.Fatalf("FormFile(audio) error = %v", err)
-			}
-			defer file.Close()
-			data, err := io.ReadAll(file)
-			if err != nil {
-				t.Fatalf("ReadAll(audio) error = %v", err)
-			}
-			uploadAudio = string(data)
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "queued"})
-		case "/transcriptions/tx_123":
-			if r.Method == http.MethodDelete {
-				deleteCalls++
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want GET or DELETE", r.Method)
-			}
-			statusCalls++
-			if statusCalls == 1 {
-				writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "running", "progressText": "正在转写音频"})
-				return
-			}
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_123", "status": "completed", "progressText": "转写完成"})
-		case "/transcriptions/tx_123/vtt":
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want GET", r.Method)
-			}
-			_, _ = w.Write([]byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nhello\n"))
-		default:
+		if r.URL.Path != "/v1/audio/transcriptions" {
 			http.NotFound(w, r)
+			return
 		}
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %q, want POST", r.Method)
+		}
+		uploadContentLength = r.ContentLength
+		authorization = r.Header.Get("Authorization")
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			t.Errorf("ParseMultipartForm() error = %v", err)
+			return
+		}
+		upload = r.MultipartForm
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			t.Errorf("FormFile(file) error = %v", err)
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			t.Errorf("ReadAll(file) error = %v", err)
+			return
+		}
+		uploadAudio = string(data)
+		writeJSON(t, w, map[string]any{
+			"task":     "transcribe",
+			"language": "ja",
+			"text":     "こんにちは",
+			"segments": []map[string]any{
+				{"id": 0, "seek": 0, "start": 0.0, "end": 1.5, "text": "こんにちは", "tokens": []int{1}, "temperature": 0.0, "avg_logprob": -0.1, "compression_ratio": 0.5, "no_speech_prob": 0.01},
+				{"id": 1, "seek": 0, "start": 1.5, "end": 3.25, "text": " 世界", "tokens": []int{2}, "temperature": 0.0, "avg_logprob": -0.1, "compression_ratio": 0.5, "no_speech_prob": 0.01},
+			},
+		})
 	}))
 	t.Cleanup(server.Close)
 
-	var progress []string
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
+	transcriber := NewHTTPTranscriber(server.URL+"/v1", "secret-key", time.Second, server.Client())
 	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:       "job_1",
-		AudioPath:   audioPath,
-		SourcePath:  sourcePath,
-		Model:       "small",
-		ComputeType: "int8",
-		Language:    "ja",
-		OnProgress: func(text string) error {
-			progress = append(progress, text)
-			return nil
-		},
+		AudioPath:  audioPath,
+		SourcePath: sourcePath,
+		Model:      "small",
+		Language:   "ja",
 	})
 	if err != nil {
 		t.Fatalf("Transcribe() error = %v", err)
 	}
 
 	assertMultipartField(t, upload.Value, "model", "small")
-	assertMultipartField(t, upload.Value, "computeType", "int8")
 	assertMultipartField(t, upload.Value, "language", "ja")
-	assertMultipartField(t, upload.Value, "jobId", "job_1")
+	assertMultipartField(t, upload.Value, "response_format", "verbose_json")
 	if uploadAudio != "fake-audio" {
 		t.Fatalf("uploaded audio = %q, want fake-audio", uploadAudio)
 	}
 	if uploadContentLength != -1 {
 		t.Fatalf("upload ContentLength = %d, want -1 for streaming upload", uploadContentLength)
 	}
-	if statusCalls != 2 {
-		t.Fatalf("statusCalls = %d, want 2", statusCalls)
+	if authorization != "Bearer secret-key" {
+		t.Fatalf("Authorization = %q, want bearer API key", authorization)
 	}
-	if deleteCalls != 1 {
-		t.Fatalf("deleteCalls = %d, want 1", deleteCalls)
-	}
+
 	data, err := os.ReadFile(sourcePath)
 	if err != nil {
 		t.Fatalf("os.ReadFile(source) error = %v", err)
 	}
-	if !strings.Contains(string(data), "hello") {
-		t.Fatalf("source VTT = %q, want downloaded content", string(data))
-	}
-	if len(progress) == 0 || progress[len(progress)-1] != "转写完成" {
-		t.Fatalf("progress = %#v, want 转写完成 callback", progress)
-	}
-	if containsString(progress, "completed") {
-		t.Fatalf("progress = %#v, must use progressText instead of status", progress)
-	}
-	if !containsString(progress, "正在转写音频") {
-		t.Fatalf("progress = %#v, want running progressText", progress)
+	want := "WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nこんにちは\n\n00:00:01.500 --> 00:00:03.250\n世界\n\n"
+	if string(data) != want {
+		t.Fatalf("source.vtt = %q, want %q", string(data), want)
 	}
 }
 
-func TestHTTPTranscriberDeletesRemoteTaskWhenContextCanceled(t *testing.T) {
+func TestHTTPTranscriberOmitsAuthorizationAndLanguageWhenUnset(t *testing.T) {
 	audioPath := writeTestAudio(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	deleteCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_cancel", "status": "queued", "progressText": "等待转写"})
-		case "/transcriptions/tx_cancel":
-			if r.Method == http.MethodDelete {
-				deleteCalls++
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			http.NotFound(w, r)
-		default:
-			http.NotFound(w, r)
+		if _, ok := r.Header["Authorization"]; ok {
+			t.Errorf("Authorization header = %#v, want none", r.Header["Authorization"])
 		}
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, 50*time.Millisecond, server.Client())
-	err := transcriber.Transcribe(ctx, TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-		OnProgress: func(text string) error {
-			cancel()
-			return nil
-		},
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want cancellation error")
-	}
-	if deleteCalls != 1 {
-		t.Fatalf("deleteCalls = %d, want 1", deleteCalls)
-	}
-}
-
-func TestHTTPTranscriberIgnoresCleanupErrorAfterSuccessfulDownload(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_cleanup", "status": "completed"})
-		case "/transcriptions/tx_cleanup/vtt":
-			_, _ = w.Write([]byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nhello\n"))
-		case "/transcriptions/tx_cleanup":
-			if r.Method == http.MethodDelete {
-				http.Error(w, `{"error":{"message":"cleanup unavailable"}}`, http.StatusServiceUnavailable)
-				return
-			}
-			http.NotFound(w, r)
-		default:
-			http.NotFound(w, r)
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			t.Errorf("ParseMultipartForm() error = %v", err)
+			return
 		}
+		if _, ok := r.MultipartForm.Value["language"]; ok {
+			t.Errorf("multipart language = %#v, want omitted", r.MultipartForm.Value["language"])
+		}
+		writeJSON(t, w, map[string]any{
+			"segments": []map[string]any{{"start": 0.0, "end": 1.0, "text": "hello"}},
+		})
 	}))
 	t.Cleanup(server.Close)
 
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
+	transcriber := NewHTTPTranscriber(server.URL, "", time.Second, server.Client())
+	if err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
 		AudioPath:  audioPath,
 		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err != nil {
-		t.Fatalf("Transcribe() error = %v, want nil after successful download", err)
+		Model:      "small",
+	}); err != nil {
+		t.Fatalf("Transcribe() error = %v", err)
 	}
 }
 
-func TestNewHTTPTranscriberDefaultsNonPositivePollInterval(t *testing.T) {
-	transcriber := NewHTTPTranscriber("http://example.test", time.Second, 0, nil)
-	if transcriber.pollInterval != 2*time.Second {
-		t.Fatalf("pollInterval = %v, want 2s", transcriber.pollInterval)
+func TestHTTPTranscriberRejectsResponseWithoutValidSegments(t *testing.T) {
+	tests := []struct {
+		name     string
+		response map[string]any
+		want     string
+	}{
+		{name: "missing segments", response: map[string]any{"text": "hello"}, want: "no segments"},
+		{name: "empty segments", response: map[string]any{"segments": []map[string]any{}}, want: "no segments"},
+		{name: "empty text", response: map[string]any{"segments": []map[string]any{{"start": 0.0, "end": 1.0, "text": "  "}}}, want: "text is empty"},
+		{name: "missing start", response: map[string]any{"segments": []map[string]any{{"end": 1.0, "text": "hello"}}}, want: "start is required"},
+		{name: "missing end", response: map[string]any{"segments": []map[string]any{{"start": 0.0, "text": "hello"}}}, want: "end is required"},
+		{name: "end before start", response: map[string]any{"segments": []map[string]any{{"start": 2.0, "end": 1.0, "text": "hello"}}}, want: "must be after start"},
+		{name: "negative start", response: map[string]any{"segments": []map[string]any{{"start": -1.0, "end": 1.0, "text": "hello"}}}, want: "negative"},
+		{name: "sub-millisecond times", response: map[string]any{"segments": []map[string]any{{"start": 0.0001, "end": 0.0002, "text": "hello"}}}, want: "not positive after rounding"},
+		{name: "non-monotonic start", response: map[string]any{"segments": []map[string]any{{"start": 1.0, "end": 2.0, "text": "hello"}, {"start": 0.5, "end": 1.5, "text": "world"}}}, want: "before previous"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			audioPath := writeTestAudio(t)
+			sourcePath := filepath.Join(t.TempDir(), "source.vtt")
+			oldContent := "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nold transcript\n"
+			if err := os.WriteFile(sourcePath, []byte(oldContent), 0o644); err != nil {
+				t.Fatalf("os.WriteFile(source) error = %v", err)
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(t, w, tt.response)
+			}))
+			t.Cleanup(server.Close)
+
+			transcriber := NewHTTPTranscriber(server.URL, "", time.Second, server.Client())
+			err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
+				AudioPath:  audioPath,
+				SourcePath: sourcePath,
+				Model:      "small",
+			})
+			if err == nil {
+				t.Fatal("Transcribe() error = nil, want invalid segment error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Transcribe() error = %v, want %q", err, tt.want)
+			}
+
+			data, readErr := os.ReadFile(sourcePath)
+			if readErr != nil {
+				t.Fatalf("os.ReadFile(source) error = %v", readErr)
+			}
+			if string(data) != oldContent {
+				t.Fatalf("source.vtt = %q, want preserved old content", string(data))
+			}
+		})
 	}
 }
 
-func TestHTTPTranscriberReturnsNon2xxStatusError(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"error":{"message":"service unavailable"}}`, http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want status error")
+func TestHTTPTranscriberPreservesSourceOnServerError(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantErr  string
+		wantLeak string
+	}{
+		{name: "docker whisper detail", status: http.StatusBadRequest, body: `{"detail":"Model small is not available"}`, wantErr: "Model small is not available"},
+		{name: "openrouter error message", status: http.StatusBadGateway, body: `{"error":{"message":"upstream failure"}}`, wantErr: "upstream failure"},
+		{name: "credentials not leaked", status: http.StatusUnauthorized, body: `{"error":{"message":"unauthorized secret-key"}}`, wantErr: "unauthorized", wantLeak: "secret-key"},
 	}
-	if !strings.Contains(err.Error(), "status 503") || !strings.Contains(err.Error(), "service unavailable") {
-		t.Fatalf("Transcribe() error = %v, want status and response message", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			audioPath := writeTestAudio(t)
+			sourcePath := filepath.Join(t.TempDir(), "source.vtt")
+			oldContent := "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nold transcript\n"
+			if err := os.WriteFile(sourcePath, []byte(oldContent), 0o644); err != nil {
+				t.Fatalf("os.WriteFile(source) error = %v", err)
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.String(), "secret-key") {
+					t.Errorf("request URL = %q, must not contain credentials", r.URL.String())
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(server.Close)
+
+			transcriber := NewHTTPTranscriber(server.URL, "secret-key", time.Second, server.Client())
+			err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
+				AudioPath:  audioPath,
+				SourcePath: sourcePath,
+				Model:      "small",
+			})
+			if err == nil {
+				t.Fatal("Transcribe() error = nil, want status error")
+			}
+			if !strings.Contains(err.Error(), "status "+strconv.Itoa(tt.status)) || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Transcribe() error = %v, want status and %q", err, tt.wantErr)
+			}
+			if tt.wantLeak != "" && strings.Contains(err.Error(), tt.wantLeak) {
+				t.Fatalf("Transcribe() error = %v, must not contain credentials", err)
+			}
+
+			data, readErr := os.ReadFile(sourcePath)
+			if readErr != nil {
+				t.Fatalf("os.ReadFile(source) error = %v", readErr)
+			}
+			if string(data) != oldContent {
+				t.Fatalf("source.vtt = %q, want preserved old content", string(data))
+			}
+		})
 	}
 }
 
-func TestHTTPTranscriberReturnsMalformedJSONError(t *testing.T) {
+func TestHTTPTranscriberReturnsDecodeError(t *testing.T) {
 	audioPath := writeTestAudio(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -233,11 +247,11 @@ func TestHTTPTranscriberReturnsMalformedJSONError(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
+	transcriber := NewHTTPTranscriber(server.URL, "", time.Second, server.Client())
 	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
 		AudioPath:  audioPath,
 		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
+		Model:      "small",
 	})
 	if err == nil {
 		t.Fatal("Transcribe() error = nil, want decode error")
@@ -247,175 +261,7 @@ func TestHTTPTranscriberReturnsMalformedJSONError(t *testing.T) {
 	}
 }
 
-func TestHTTPTranscriberRequiresResponseIDAndStatus(t *testing.T) {
-	tests := []struct {
-		name          string
-		transcription map[string]string
-		want          string
-	}{
-		{name: "missing id", transcription: map[string]string{"status": "queued"}, want: "transcription response transcription.id is required"},
-		{name: "missing status", transcription: map[string]string{"id": "tr_1"}, want: "transcription response transcription.status is required"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			audioPath := writeTestAudio(t)
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				writeTranscriptionJSON(t, w, tt.transcription)
-			}))
-			t.Cleanup(server.Close)
-
-			transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-			err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-				JobID:      "job_1",
-				AudioPath:  audioPath,
-				SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-			})
-			if err == nil {
-				t.Fatal("Transcribe() error = nil, want validation error")
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Transcribe() error = %v, want %q", err, tt.want)
-			}
-		})
-	}
-}
-
-func TestHTTPTranscriberReturnsProgressCallbackError(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeTranscriptionJSON(t, w, map[string]string{"id": "tr_1", "status": "queued", "progressText": "queued"})
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-		OnProgress: func(text string) error {
-			return errors.New("progress unavailable")
-		},
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want progress error")
-	}
-	if !strings.Contains(err.Error(), "progress unavailable") {
-		t.Fatalf("Transcribe() error = %v, want progress error", err)
-	}
-}
-
-func TestHTTPTranscriberReturnsFailedStatusErrorMessage(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_failed", "status": "queued"})
-		case "/transcriptions/tx_failed":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_failed", "status": "failed", "errorMessage": "model download error"})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "model download error") {
-		t.Fatalf("Transcribe() error = %v, want model download error", err)
-	}
-}
-
-func TestHTTPTranscriberReturnsInvalidStatusError(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tr_1", "status": "not-real", "progressText": "???"})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want invalid status error")
-	}
-	if !strings.Contains(err.Error(), `invalid transcription status "not-real"`) {
-		t.Fatalf("Transcribe() error = %v, want invalid status error", err)
-	}
-}
-
-func TestHTTPTranscriberFailsOnEmptyVTT(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_empty", "status": "completed", "progressText": "转写完成"})
-		case "/transcriptions/tx_empty/vtt":
-			_, _ = w.Write([]byte(""))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "empty source.vtt") {
-		t.Fatalf("Transcribe() error = %v, want empty source.vtt", err)
-	}
-}
-
-func TestHTTPTranscriberFailsOnInvalidVTTPrefix(t *testing.T) {
-	audioPath := writeTestAudio(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_invalid", "status": "completed", "progressText": "转写完成"})
-		case "/transcriptions/tx_invalid/vtt":
-			_, _ = w.Write([]byte("not webvtt"))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
-		AudioPath:  audioPath,
-		SourcePath: filepath.Join(t.TempDir(), "source.vtt"),
-	})
-	if err == nil {
-		t.Fatal("Transcribe() error = nil, want invalid VTT error")
-	}
-	if !strings.Contains(err.Error(), "source.vtt must start with WEBVTT") {
-		t.Fatalf("Transcribe() error = %v, want invalid VTT error", err)
-	}
-}
-
-func TestHTTPTranscriberPreservesExistingSourceOnInvalidVTT(t *testing.T) {
+func TestHTTPTranscriberReturnsContextCancellationError(t *testing.T) {
 	audioPath := writeTestAudio(t)
 	sourcePath := filepath.Join(t.TempDir(), "source.vtt")
 	oldContent := "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nold transcript\n"
@@ -423,26 +269,24 @@ func TestHTTPTranscriberPreservesExistingSourceOnInvalidVTT(t *testing.T) {
 		t.Fatalf("os.WriteFile(source) error = %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/transcriptions":
-			writeTranscriptionJSON(t, w, map[string]string{"id": "tx_invalid", "status": "completed", "progressText": "转写完成"})
-		case "/transcriptions/tx_invalid/vtt":
-			_, _ = w.Write([]byte("not webvtt"))
-		default:
-			http.NotFound(w, r)
-		}
+		t.Error("server must not be reached with a canceled context")
 	}))
 	t.Cleanup(server.Close)
 
-	transcriber := NewHTTPTranscriber(server.URL, time.Second, time.Millisecond, server.Client())
-	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
-		JobID:      "job_1",
+	transcriber := NewHTTPTranscriber(server.URL, "", time.Second, server.Client())
+	err := transcriber.Transcribe(ctx, TranscriptionRequest{
 		AudioPath:  audioPath,
 		SourcePath: sourcePath,
+		Model:      "small",
 	})
 	if err == nil {
-		t.Fatal("Transcribe() error = nil, want invalid VTT error")
+		t.Fatal("Transcribe() error = nil, want cancellation error")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("Transcribe() error = %v, want context canceled", err)
 	}
 
 	data, readErr := os.ReadFile(sourcePath)
@@ -451,6 +295,31 @@ func TestHTTPTranscriberPreservesExistingSourceOnInvalidVTT(t *testing.T) {
 	}
 	if string(data) != oldContent {
 		t.Fatalf("source.vtt = %q, want preserved old content", string(data))
+	}
+}
+
+func TestHTTPTranscriberFailsWhenAudioMissing(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "source.vtt")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	transcriber := NewHTTPTranscriber(server.URL, "", time.Second, server.Client())
+	err := transcriber.Transcribe(context.Background(), TranscriptionRequest{
+		AudioPath:  filepath.Join(t.TempDir(), "missing.mp3"),
+		SourcePath: sourcePath,
+		Model:      "small",
+	})
+	if err == nil {
+		t.Fatal("Transcribe() error = nil, want open audio error")
+	}
+	if !strings.Contains(err.Error(), "open audio file") {
+		t.Fatalf("Transcribe() error = %v, want open audio file", err)
+	}
+	if _, statErr := os.Stat(sourcePath); !os.IsNotExist(statErr) {
+		t.Fatalf("source.vtt stat error = %v, want not created", statErr)
 	}
 }
 
@@ -477,18 +346,4 @@ func writeJSON(t *testing.T, w http.ResponseWriter, value any) {
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		t.Fatalf("Encode(%#v) error = %v", value, err)
 	}
-}
-
-func writeTranscriptionJSON(t *testing.T, w http.ResponseWriter, transcription map[string]string) {
-	t.Helper()
-	writeJSON(t, w, map[string]any{"transcription": transcription})
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

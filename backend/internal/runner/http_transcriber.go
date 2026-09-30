@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,94 +15,47 @@ import (
 )
 
 type HTTPTranscriber struct {
-	baseURL      string
-	timeout      time.Duration
-	pollInterval time.Duration
-	client       *http.Client
+	baseURL string
+	apiKey  string
+	timeout time.Duration
+	client  *http.Client
 }
 
-func NewHTTPTranscriber(baseURL string, timeout time.Duration, pollInterval time.Duration, client *http.Client) *HTTPTranscriber {
+func NewHTTPTranscriber(baseURL string, apiKey string, timeout time.Duration, client *http.Client) *HTTPTranscriber {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	if pollInterval <= 0 {
-		pollInterval = 2 * time.Second
-	}
 	return &HTTPTranscriber{
-		baseURL:      strings.TrimRight(baseURL, "/"),
-		timeout:      timeout,
-		pollInterval: pollInterval,
-		client:       client,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		apiKey:  apiKey,
+		timeout: timeout,
+		client:  client,
 	}
 }
 
-func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionRequest) (resultErr error) {
+func (t *HTTPTranscriber) Transcribe(ctx context.Context, request TranscriptionRequest) error {
 	requestCtx := ctx
-	var cancel context.CancelFunc
 	if t.timeout > 0 {
+		var cancel context.CancelFunc
 		requestCtx, cancel = context.WithTimeout(ctx, t.timeout)
 		defer cancel()
 	}
-	remoteID := ""
-	defer func() {
-		if remoteID == "" {
-			return
-		}
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(requestCtx), 10*time.Second)
-		defer cleanupCancel()
-		_ = t.delete(cleanupCtx, remoteID)
-	}()
 
-	status, err := t.upload(requestCtx, request)
+	segments, err := t.transcribe(requestCtx, request)
 	if err != nil {
 		return err
 	}
-	remoteID = status.ID
-
-	for {
-		if err := reportTranscriptionProgress(request, status.ProgressText); err != nil {
-			return err
-		}
-
-		switch status.Status {
-		case "completed":
-			return t.downloadVTT(requestCtx, status.ID, request.SourcePath)
-		case "failed":
-			if status.ErrorMessage != "" {
-				return fmt.Errorf("transcription failed: %s", status.ErrorMessage)
-			}
-			return fmt.Errorf("transcription failed")
-		case "queued", "running":
-			if err := sleepContext(requestCtx, t.pollInterval); err != nil {
-				return fmt.Errorf("wait before polling transcription status: %w", err)
-			}
-			status, err = t.poll(requestCtx, status.ID)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("invalid transcription status %q", status.Status)
-		}
+	vtt, err := renderSourceVTT(segments)
+	if err != nil {
+		return err
 	}
+	if err := ensureSourceDir(request.SourcePath); err != nil {
+		return err
+	}
+	return writeFileAtomic(request.SourcePath, vtt)
 }
 
-func (t *HTTPTranscriber) delete(ctx context.Context, id string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, t.transcriptionURL(id), nil)
-	if err != nil {
-		return fmt.Errorf("create transcription delete request: %w", err)
-	}
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("delete transcription: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("delete transcription failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
-	}
-	return nil
-}
-
-func (t *HTTPTranscriber) upload(ctx context.Context, request TranscriptionRequest) (transcriptionStatus, error) {
+func (t *HTTPTranscriber) transcribe(ctx context.Context, request TranscriptionRequest) ([]transcriptionSegment, error) {
 	pipeReader, pipeWriter := io.Pipe()
 	writer := multipart.NewWriter(pipeWriter)
 	go func() {
@@ -117,26 +70,57 @@ func (t *HTTPTranscriber) upload(ctx context.Context, request TranscriptionReque
 		_ = pipeWriter.Close()
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/transcriptions", pipeReader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+"/audio/transcriptions", pipeReader)
 	if err != nil {
-		_ = pipeReader.Close()
-		return transcriptionStatus{}, fmt.Errorf("create transcription request: %w", err)
+		_ = pipeReader.CloseWithError(err)
+		return nil, fmt.Errorf("create transcription request: %w", err)
 	}
+	defer pipeReader.Close()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if t.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+t.apiKey)
+	}
 
-	return t.doStatusRequest(req)
+	resp, err := t.client.Do(req)
+	if err != nil {
+		_ = pipeReader.CloseWithError(err)
+		return nil, fmt.Errorf("send transcription request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		message := readErrorMessage(resp.Body)
+		if t.apiKey != "" {
+			message = strings.ReplaceAll(message, t.apiKey, "[redacted]")
+		}
+		return nil, fmt.Errorf("transcription request failed with status %d: %s", resp.StatusCode, message)
+	}
+
+	var response transcriptionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode transcription response: %w", err)
+	}
+	if err := validateSegments(response.Segments); err != nil {
+		return nil, err
+	}
+	return response.Segments, nil
 }
 
 func writeTranscriptionForm(writer *multipart.Writer, request TranscriptionRequest) error {
-	for _, field := range []struct {
+	fields := []struct {
 		name  string
 		value string
 	}{
 		{name: "model", value: request.Model},
-		{name: "computeType", value: request.ComputeType},
-		{name: "language", value: request.Language},
-		{name: "jobId", value: request.JobID},
-	} {
+		{name: "response_format", value: "verbose_json"},
+	}
+	if request.Language != "" {
+		fields = append(fields, struct {
+			name  string
+			value string
+		}{name: "language", value: request.Language})
+	}
+	for _, field := range fields {
 		if err := writer.WriteField(field.name, field.value); err != nil {
 			return fmt.Errorf("write transcription form field %s: %w", field.name, err)
 		}
@@ -148,7 +132,7 @@ func writeTranscriptionForm(writer *multipart.Writer, request TranscriptionReque
 	}
 	defer file.Close()
 
-	part, err := writer.CreateFormFile("audio", filepath.Base(request.AudioPath))
+	part, err := writer.CreateFormFile("file", filepath.Base(request.AudioPath))
 	if err != nil {
 		return fmt.Errorf("create audio form file: %w", err)
 	}
@@ -158,92 +142,115 @@ func writeTranscriptionForm(writer *multipart.Writer, request TranscriptionReque
 	return nil
 }
 
-func (t *HTTPTranscriber) poll(ctx context.Context, id string) (transcriptionStatus, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.transcriptionURL(id), nil)
-	if err != nil {
-		return transcriptionStatus{}, fmt.Errorf("create transcription status request: %w", err)
+func renderSourceVTT(segments []transcriptionSegment) (string, error) {
+	var b strings.Builder
+	b.WriteString("WEBVTT\n\n")
+	for _, segment := range segments {
+		text, err := formatCueText(segment.Text)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(formatTimestamp(*segment.Start))
+		b.WriteString(" --> ")
+		b.WriteString(formatTimestamp(*segment.End))
+		b.WriteString("\n")
+		b.WriteString(text)
+		b.WriteString("\n\n")
 	}
-	return t.doStatusRequest(req)
+	return b.String(), nil
 }
 
-func (t *HTTPTranscriber) downloadVTT(ctx context.Context, id string, sourcePath string) error {
-	if err := ensureSourceDir(sourcePath); err != nil {
-		return err
+func formatCueText(text string) (string, error) {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	cleaned := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			cleaned = append(cleaned, line)
+		}
 	}
+	if len(cleaned) == 0 {
+		return "", fmt.Errorf("transcription segment text is empty")
+	}
+	for _, line := range cleaned {
+		if strings.Contains(line, "-->") {
+			return "", fmt.Errorf("transcription segment text contains a timeline marker")
+		}
+	}
+	return strings.Join(cleaned, "\n"), nil
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.transcriptionURL(id)+"/vtt", nil)
-	if err != nil {
-		return fmt.Errorf("create transcription VTT request: %w", err)
+func formatTimestamp(seconds float64) string {
+	milliseconds := int64(seconds*1000 + 0.5)
+	if milliseconds < 0 {
+		milliseconds = 0
 	}
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("download transcription VTT: %w", err)
-	}
-	defer resp.Body.Close()
+	hours := milliseconds / 3600000
+	minutes := (milliseconds / 60000) % 60
+	secs := (milliseconds / 1000) % 60
+	millis := milliseconds % 1000
+	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, secs, millis)
+}
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("download transcription VTT failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
+func validateSegments(segments []transcriptionSegment) error {
+	if len(segments) == 0 {
+		return fmt.Errorf("transcription response contains no segments")
 	}
+	for i, segment := range segments {
+		if segment.Start == nil {
+			return fmt.Errorf("transcription segment %d start is required", i+1)
+		}
+		if segment.End == nil {
+			return fmt.Errorf("transcription segment %d end is required", i+1)
+		}
+		if !isFinite(*segment.Start) || !isFinite(*segment.End) {
+			return fmt.Errorf("transcription segment %d has non-finite timestamps", i+1)
+		}
+		if *segment.Start < 0 || *segment.End < 0 {
+			return fmt.Errorf("transcription segment %d has negative timestamps", i+1)
+		}
+		if *segment.End <= *segment.Start {
+			return fmt.Errorf("transcription segment %d end %v must be after start %v", i+1, *segment.End, *segment.Start)
+		}
+		if i > 0 && *segment.Start < *segments[i-1].Start {
+			return fmt.Errorf("transcription segment %d start %v is before previous segment start %v", i+1, *segment.Start, *segments[i-1].Start)
+		}
+		if strings.TrimSpace(segment.Text) == "" {
+			return fmt.Errorf("transcription segment %d text is empty", i+1)
+		}
+		if secondsToMilliseconds(*segment.End) <= secondsToMilliseconds(*segment.Start) {
+			return fmt.Errorf("transcription segment %d timestamps are not positive after rounding", i+1)
+		}
+	}
+	return nil
+}
 
-	tmp, err := os.CreateTemp(filepath.Dir(sourcePath), filepath.Base(sourcePath)+"-*.tmp")
+func secondsToMilliseconds(seconds float64) int64 {
+	return int64(seconds*1000 + 0.5)
+}
+
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func writeFileAtomic(path string, content string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temporary source.vtt: %w", err)
 	}
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
 
-	_, copyErr := io.Copy(tmp, resp.Body)
-	closeErr := tmp.Close()
-	if copyErr != nil {
-		return fmt.Errorf("write source.vtt: %w", copyErr)
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write source.vtt: %w", err)
 	}
-	if closeErr != nil {
-		return fmt.Errorf("close source.vtt: %w", closeErr)
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close source.vtt: %w", err)
 	}
-	if err := ensureValidSourceVTT(tmpPath); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, sourcePath); err != nil {
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("replace source.vtt: %w", err)
-	}
-	return nil
-}
-
-func (t *HTTPTranscriber) doStatusRequest(req *http.Request) (transcriptionStatus, error) {
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return transcriptionStatus{}, fmt.Errorf("send transcription request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return transcriptionStatus{}, fmt.Errorf("transcription request failed with status %d: %s", resp.StatusCode, readErrorMessage(resp.Body))
-	}
-
-	var transcriptionResp transcriptionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&transcriptionResp); err != nil {
-		return transcriptionStatus{}, fmt.Errorf("decode transcription response: %w", err)
-	}
-	status := transcriptionResp.Transcription
-	if status.ID == "" {
-		return transcriptionStatus{}, fmt.Errorf("transcription response transcription.id is required")
-	}
-	if status.Status == "" {
-		return transcriptionStatus{}, fmt.Errorf("transcription response transcription.status is required")
-	}
-	return status, nil
-}
-
-func (t *HTTPTranscriber) transcriptionURL(id string) string {
-	return t.baseURL + "/transcriptions/" + url.PathEscape(id)
-}
-
-func reportTranscriptionProgress(request TranscriptionRequest, status string) error {
-	if request.OnProgress == nil || status == "" {
-		return nil
-	}
-	if err := request.OnProgress(status); err != nil {
-		return fmt.Errorf("report transcription progress: %w", err)
 	}
 	return nil
 }
@@ -254,23 +261,28 @@ func readErrorMessage(body io.Reader) string {
 		return ""
 	}
 	var response struct {
-		Error struct {
+		Detail string `json:"detail"`
+		Error  struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(data, &response); err == nil && response.Error.Message != "" {
-		return response.Error.Message
+	if err := json.Unmarshal(data, &response); err == nil {
+		if message := strings.TrimSpace(response.Error.Message); message != "" {
+			return message
+		}
+		if detail := strings.TrimSpace(response.Detail); detail != "" {
+			return detail
+		}
 	}
 	return strings.TrimSpace(string(data))
 }
 
 type transcriptionResponse struct {
-	Transcription transcriptionStatus `json:"transcription"`
+	Segments []transcriptionSegment `json:"segments"`
 }
 
-type transcriptionStatus struct {
-	ID           string `json:"id"`
-	Status       string `json:"status"`
-	ProgressText string `json:"progressText"`
-	ErrorMessage string `json:"errorMessage"`
+type transcriptionSegment struct {
+	Start *float64 `json:"start"`
+	End   *float64 `json:"end"`
+	Text  string   `json:"text"`
 }

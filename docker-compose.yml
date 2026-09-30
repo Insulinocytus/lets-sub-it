@@ -6,7 +6,10 @@ services:
     env_file:
       - .env
     environment:
-      LSI_WHISPER_BASE_URL: http://whisper:8081
+      # Local speech-to-text default. Set LSI_STT_BASE_URL (and LSI_STT_API_KEY)
+      # in .env to point the backend at an external OpenAI-compatible provider.
+      LSI_STT_BASE_URL: "${LSI_STT_BASE_URL:-http://whisper:9000/v1}"
+      LSI_STT_API_KEY: "${LSI_STT_API_KEY:-${LSI_LOCAL_STT_API_KEY:?set LSI_LOCAL_STT_API_KEY in .env}}"
     ports:
       - "${LSI_DOCKER_BIND_HOST:?set LSI_DOCKER_BIND_HOST in .env}:8080:8080"
     volumes:
@@ -16,24 +19,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Local transcription service. Only the variables listed under environment
+  # reach this container; it never receives the LLM or external-STT credentials.
   whisper:
-    build:
-      context: .
-      dockerfile: whisper/Dockerfile
-    env_file:
-      - .env
+    image: hwdsl2/whisper-server@sha256:1751ee8c3c889482d0bdd1d91a42511be4a1156d9a905e860b56b474675f9d72
+    environment:
+      WHISPER_MODEL: "${WHISPER_MODEL:-small}"
+      WHISPER_COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-int8}"
+      WHISPER_API_KEY: "${LSI_LOCAL_STT_API_KEY:?set LSI_LOCAL_STT_API_KEY in .env}"
     volumes:
-      - lsi-hf-cache:/huggingface
-      - lsi-whisper-data:/data
+      - lsi-whisper-data:/var/lib/whisper
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=5).read()"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      # First start downloads the model before /health answers.
+      start_period: 10m
     restart: unless-stopped
 
 volumes:
   lsi-data:
-  lsi-hf-cache:
   lsi-whisper-data:

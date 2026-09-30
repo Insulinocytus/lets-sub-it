@@ -8,23 +8,6 @@ import (
 	"lets-sub-it-api/internal/store"
 )
 
-func TestCheckToolsDoesNotRequireWhisperCLI(t *testing.T) {
-	origLookPath := lookPath
-	t.Cleanup(func() { lookPath = origLookPath })
-
-	lookPath = func(tool string) (string, error) {
-		if tool == "whisper-cli" {
-			return "", errors.New("missing")
-		}
-		return "/usr/bin/" + tool, nil
-	}
-
-	err := checkTools()
-	if err != nil {
-		t.Fatalf("checkTools() error = %v, want nil", err)
-	}
-}
-
 func TestNewHTTPHandlerRequiresToolsByDefault(t *testing.T) {
 	origLookPath := lookPath
 	t.Cleanup(func() { lookPath = origLookPath })
@@ -37,13 +20,10 @@ func TestNewHTTPHandlerRequiresToolsByDefault(t *testing.T) {
 	}
 
 	_, err := NewHTTPHandler(Config{
-		DBPath:             t.TempDir() + "/test.sqlite3",
-		WorkDir:            t.TempDir(),
-		DownloadTimeout:    0,
-		WhisperModel:       "small",
-		WhisperComputeType: "default",
-		WhisperBaseURL:     "http://127.0.0.1:8081",
-		LLMBaseURL:         "https://api.openai.com",
+		DBPath:          t.TempDir() + "/test.sqlite3",
+		WorkDir:         t.TempDir(),
+		DownloadTimeout: 0,
+		LLMBaseURL:      "https://api.openai.com",
 	})
 	if err == nil {
 		t.Fatal("NewHTTPHandler() error = nil, want missing yt-dlp error")
@@ -78,13 +58,10 @@ func TestNewHTTPHandlerMarksInterruptedJobsFailed(t *testing.T) {
 	}
 
 	_, err = NewHTTPHandler(Config{
-		DBPath:             dbPath,
-		WorkDir:            t.TempDir(),
-		DownloadTimeout:    0,
-		WhisperModel:       "small",
-		WhisperComputeType: "default",
-		WhisperBaseURL:     "http://127.0.0.1:8081",
-		LLMBaseURL:         "https://api.openai.com",
+		DBPath:          dbPath,
+		WorkDir:         t.TempDir(),
+		DownloadTimeout: 0,
+		LLMBaseURL:      "https://api.openai.com",
 	})
 	if err != nil {
 		t.Fatalf("NewHTTPHandler() error = %v", err)

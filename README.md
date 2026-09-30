@@ -6,14 +6,14 @@
 
 </div>
 
-Lets Sub It 从 YouTube 视频下载音频，在本地用 Whisper 转写，再通过 OpenAI 兼容接口翻译。Chrome 扩展负责提交任务，并在视频播放页显示源语言、译文或双语字幕。
+Lets Sub It 从 YouTube 视频下载音频，用本地 Whisper 或兼容 OpenAI 的 STT 服务转写，再通过 OpenAI 兼容接口翻译。Chrome 扩展负责提交任务，并在视频播放页显示源语言、译文或双语字幕。
 
 ## 能做什么
 
-- 用 `faster-whisper` 本地转写，生成 `source.vtt`、`translated.vtt`、`bilingual.vtt`。
+- 用内置的 `hwdsl2/whisper-server`（faster-whisper）本地转写，生成 `source.vtt`、`translated.vtt`、`bilingual.vtt`。
 - 在 YouTube 页面跟随播放时间显示字幕；弹窗关闭后，后台仍会跟踪任务完成状态。
 - 用 SQLite 保存任务和字幕资产，复用已完成的结果。
-- 通过 Docker Compose 运行 Go 后端与 Python Whisper 服务。
+- 通过 Docker Compose 运行 Go 后端与 Whisper 转写容器的组合。
 
 > [!IMPORTANT]
 > 扩展目前只能连接**同一台机器上**带端口的 `http://127.0.0.1` 或 `http://localhost` 后端。Docker 默认也只绑定本机地址；将容器端口暴露到局域网，不会让另一台机器上的扩展获得远程连接能力。
@@ -22,14 +22,14 @@ Lets Sub It 从 YouTube 视频下载音频，在本地用 Whisper 转写，再�
 
 需要 Docker（含 Compose）、Chrome/Chromium，以及可用的 OpenAI 兼容 Chat Completions API。以下命令在仓库根目录运行。
 
-1. 复制 `.env.example` 为 `.env`。将示例值替换为真实的 `LSI_LLM_API_KEY`、`LSI_LLM_MODEL`；若使用其他服务，再设置 `LSI_LLM_BASE_URL`。保留 `LSI_DOCKER_BIND_HOST=127.0.0.1`，即可仅在本机访问后端。
+1. 复制 `.env.example` 为 `.env`。将示例值替换为真实的 `LSI_LLM_API_KEY`、`LSI_LLM_MODEL`；把 `LSI_LOCAL_STT_API_KEY` 改成自己的随机密钥（本地 whisper 容器与后端共用）；若使用其他翻译服务，再设置 `LSI_LLM_BASE_URL`。保留 `LSI_DOCKER_BIND_HOST=127.0.0.1`，即可仅在本机访问后端。
 2. 启动服务：
 
    ```bash
    docker compose up -d --build
    ```
 
-   后端位于 `http://127.0.0.1:8080`。运行 `docker compose ps` 查看状态；Whisper 首次转写时会下载模型。
+   后端位于 `http://127.0.0.1:8080`。运行 `docker compose ps` 查看状态；whisper 容器首次启动时会下载模型（`small` 约 465 MB），需要一些时间。
 
 3. 安装扩展：从构建工作流下载并解压 Chrome MV3 产物（见 [扩展安装说明](extension/README.md)）；或者安装 [mise](https://mise.jdx.dev/) 后在仓库根目录构建：
 
@@ -50,15 +50,17 @@ Lets Sub It 从 YouTube 视频下载音频，在本地用 Whisper 转写，再�
 
 ## 本地开发
 
-使用 `mise.toml` 中的 Go 1.22、Python 3.12 和 Node 22。依次运行 `mise trust`、`mise install`、`task setup` 后，在三个终端分别执行：
+使用 `mise.toml` 中的 Go 1.22、Node 22（本地转写由 Docker 提供）。依次运行 `mise trust`、`mise install`、`task setup`，再在一个终端启动转写容器和后端，另一个终端启动扩展：
 
 ```bash
-task dev:whisper   # http://127.0.0.1:8081
-task dev:backend   # http://127.0.0.1:8080
-task dev:extension # WXT 开发模式
+export LSI_STT_API_KEY='替换为自己生成的本地密钥'
+docker run -d --rm -p 127.0.0.1:9000:9000 -v whisper-data:/var/lib/whisper \
+  -e WHISPER_MODEL=small -e WHISPER_API_KEY="$LSI_STT_API_KEY" hwdsl2/whisper-server
+LSI_STT_API_KEY="$LSI_STT_API_KEY" task dev:backend   # http://127.0.0.1:8080
+# 另一个终端：task dev:extension
 ```
 
-本地后端还需要 `yt-dlp` 和 `ffmpeg` 位于 `PATH`；`task dev:backend` **不会**自动启动 Whisper。本地运行时需在进程环境中提供 `LSI_LLM_API_KEY` 和 `LSI_LLM_MODEL`，仅复制 `.env` 不会为本地进程加载配置。Taskfile 的开发命令使用 POSIX 风格的 shell 环境变量赋值。
+本地后端还需要 `yt-dlp` 和 `ffmpeg` 位于 `PATH`；`task dev:backend` **不会**自动启动 whisper，它默认连接 `http://127.0.0.1:9000/v1`（Compose 内为 `http://whisper:9000/v1`）。本地运行时需在后端进程环境中提供 `LSI_LLM_API_KEY` 和 `LSI_LLM_MODEL`，仅复制 `.env` 不会为本地进程加载配置。Taskfile 的开发命令使用 POSIX 风格的 shell 环境变量赋值。
 
 ## 使用 HTTP API
 
@@ -96,17 +98,16 @@ Chrome 扩展（弹窗 / 后台 / YouTube 内容脚本）
 Go HTTP API ── SQLite（任务、字幕资产）
       │
       ├── yt-dlp / ffmpeg 下载音频
-      ├── Python Whisper HTTP 服务转写 → source.vtt
+      ├── Whisper HTTP 服务转写（docker-whisper）→ 本地生成 source.vtt
       └── OpenAI 兼容翻译 API → translated.vtt / bilingual.vtt
 ```
 
 | 目录 | 职责 |
 | --- | --- |
-| [`backend/`](backend/) | Go API、SQLite 状态、下载/转写/翻译任务编排 |
-| [`whisper/`](whisper/) | FastAPI 转写服务与 WebVTT 生成 |
+| [`backend/`](backend/) | Go API、SQLite 状态、下载/转写/翻译任务编排、WebVTT 生成 |
 | [`extension/`](extension/) | WXT/Vue Chrome MV3 扩展、任务监控和 YouTube 字幕渲染 |
 
-Go 后端的任务不依赖原始 HTTP 连接；服务重启后，未完成的任务会标记为失败，需要重新提交。Whisper 的排队状态保存在内存中。扩展弹窗关闭后，后台会用浏览器 alarms 继续监测任务。
+Go 后端的任务不依赖原始 HTTP 连接；服务重启后，未完成的任务会标记为失败，需要重新提交。转写是一次同步的 `POST /audio/transcriptions` 调用（`response_format=verbose_json`），后端要求返回有效的 `segments`（每段含 `start`、`end`、`text`）才会写出 `source.vtt`；没有分块、没有队列、也不回退到其他服务。扩展弹窗关闭后，后台会用浏览器 alarms 继续监测任务。
 
 常用设置（完整列表及 Docker 默认值见 [`.env.example`](.env.example)；非 Docker 后端默认值见 [`backend/internal/app/config.go`](backend/internal/app/config.go)）：
 
@@ -114,9 +115,13 @@ Go 后端的任务不依赖原始 HTTP 连接；服务重启后，未完成的�
 | --- | --- |
 | `LSI_LLM_API_KEY`、`LSI_LLM_MODEL` | 翻译服务凭据与模型，实际翻译必需 |
 | `LSI_LLM_BASE_URL` | OpenAI 兼容服务地址，默认 `https://api.openai.com` |
-| `LSI_WHISPER_MODEL`、`LSI_WHISPER_COMPUTE_TYPE` | 本地转写模型及计算类型 |
+| `LSI_LOCAL_STT_API_KEY` | Compose 内 whisper 容器的密钥；后端未单独设置 `LSI_STT_API_KEY` 时也回退使用它 |
+| `WHISPER_MODEL`、`WHISPER_COMPUTE_TYPE` | 本地 whisper 容器的模型与计算类型（默认 `small` / `int8`） |
+| `LSI_STT_BASE_URL`、`LSI_STT_API_KEY`、`LSI_STT_MODEL`、`LSI_STT_TIMEOUT` | 后端转写服务配置；留空即用 Compose 内的 whisper，可改为任意 OpenAI 兼容 STT 服务 |
 | `LSI_DOCKER_BIND_HOST` | Compose 后端端口绑定地址；示例为 `127.0.0.1` |
 | `LSI_DB_PATH`、`LSI_WORK_DIR` | 后端数据库与任务文件路径 |
+
+转写配置与 LLM 配置相互独立：不设置 `LSI_STT_*` 时后端使用内置 whisper 容器；要改用外部服务（如 OpenRouter），在 `.env` 设置非空的 `LSI_STT_BASE_URL`、`LSI_STT_API_KEY`，可再设置 `LSI_STT_MODEL`。外部密钥只注入后端容器，不会传给本地 whisper 容器，也不影响 `LSI_LLM_*` 翻译配置。
 
 ## 测试与构建
 
@@ -125,17 +130,17 @@ Go 后端的任务不依赖原始 HTTP 连接；服务重启后，未完成的�
 | 命令 | 用途 |
 | --- | --- |
 | `task check` | 全部测试 + 扩展类型检查 |
-| `task test:backend` / `task test:whisper` / `task test:extension` | 单独运行 Go / pytest / Vitest |
+| `task test:backend` / `task test:extension` | 单独运行 Go / Vitest |
 | `task typecheck` | 扩展 TypeScript/Vue 类型检查 |
 | `task build` | 构建全部模块 |
 | `task build:extension` | 输出 `extension/.output/chrome-mv3` |
 | `task --list` | 查看其他任务，包括 Docker 启停与日志 |
 
-Go 测试与源码并置；Whisper 测试在 `whisper/tests/`；扩展测试与组件并置。自动化测试使用替身，不需要真实模型、YouTube 下载或 LLM 密钥。
+Go 测试与源码并置；扩展测试与组件并置。自动化测试使用替身，不需要真实模型、YouTube 下载或 LLM 密钥。
 
 ## 常见问题
 
 - **后端无法启动：** 本地安装 `yt-dlp` 和 `ffmpeg` 并加入 `PATH`，或使用 Docker 镜像。
-- **转写未开始：** 本地模式先启动 Whisper，再检查 `LSI_WHISPER_BASE_URL`；首次使用的模型下载可能较慢。
+- **转写未开始：** 确认 whisper 容器已通过健康检查（`docker compose ps`）；本地运行时检查 `LSI_STT_BASE_URL` 是否指向运行中的服务。首次启动的模型下载可能较慢。
 - **翻译失败：** 检查运行进程的 `LSI_LLM_API_KEY`、`LSI_LLM_MODEL` 和兼容接口地址。
 - **扩展连接失败：** 后端 URL 必须是带端口的本机 HTTP 地址；当前 manifest 权限和客户端校验均不支持远程主机。

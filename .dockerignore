@@ -9,13 +9,6 @@ graphify-out/
 .vscode/
 .idea/
 
-# Python caches (whisper source is needed for build)
-whisper/.venv/
-whisper/__pycache__/
-whisper/dist/
-whisper/.data/
-whisper/.cache/
-
 # Data and env
 data/
 .env
