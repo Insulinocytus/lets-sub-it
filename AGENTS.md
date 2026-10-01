@@ -14,7 +14,8 @@ Lets Sub It is a self-hosted YouTube subtitle generator and translator. A Chrome
 
 - `backend/cmd/server/`: executable; `backend/internal/app/`: configuration and assembly; `api/`: routes and responses; `store/`: GORM/SQLite; `runner/`: download, transcription, translation, VTT packaging.
 - `extension/entrypoints/`: WXT popup, background and YouTube content-script entry points; `extension/src/api/`, `storage/`, `subtitles/`, `content/`, `youtube/`: messaging/network, persistence, VTT parsing, overlay and navigation. `extension/src/components/ui/` contains shared shadcn-vue primitives.
-- `.github/workflows/`: module-specific CI and build/image publishing; see `README.md` for API/deployment details and `extension/README.md` for installing the extension.
+- `.github/workflows/`: module-specific CI and build/image publishing; see `README.md` for API/deployment details and installing the extension.
+- `README.md` (English) and `README.zh-CN.md` (Simplified Chinese) are translations of each other: change both in the same commit, keeping structure, commands and links identical. Other docs are English-only.
 
 ## Development Commands
 
